@@ -24,7 +24,24 @@
     const db = getFirestore(app);
     window.__submitApplication = async function(data) {
       try {
+        // Save to buildingSubmissions (existing)
         await addDoc(collection(db, 'buildingSubmissions'), { ...data, submittedAt: serverTimestamp(), source: 'amenityfit.app' });
+        // Trigger email notification via Firebase Extension
+        await addDoc(collection(db, 'emailTriggers'), {
+          to: 'itmakesenzfitness@gmail.com',
+          message: {
+            subject: 'New AmenityFit Application — ' + (data.buildingName || 'Unknown Building'),
+            html:
+              '<h2>New Building Application</h2>' +
+              '<p><strong>Name:</strong> ' + (data.firstName || '') + ' ' + (data.lastName || '') + '</p>' +
+              '<p><strong>Email:</strong> ' + (data.email || '') + '</p>' +
+              '<p><strong>Building:</strong> ' + (data.buildingName || '') + '</p>' +
+              '<p><strong>City:</strong> ' + (data.city || '') + '</p>' +
+              '<p><strong>Units:</strong> ' + (data.units || '') + '</p>' +
+              '<p><strong>Role:</strong> ' + (data.role || '') + '</p>' +
+              '<p><strong>Notes:</strong> ' + (data.notes || 'None') + '</p>'
+          }
+        });
         return { success: true };
       } catch(err) { return { success: false, error: err.message }; }
     };
@@ -69,7 +86,6 @@
     }
     .nav-logo-icon { display: flex; align-items: center; }
     .nav-logo-icon img { height: 34px; }
-    /* Centered wordmark - absolutely centered in nav */
     .nav-wordmark-center {
       position: absolute; left: 50%; transform: translateX(-50%);
       font-family: var(--ff-display); font-size: 22px; font-weight: 600;
@@ -186,7 +202,6 @@
     }
     .btn-primary:hover { background: #174fa8; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(30,95,190,0.5); }
     .btn-primary:active { transform: translateY(0); }
-    /* WATCH VIDEO BUTTON */
     .btn-watch {
       display: flex; align-items: center; gap: 10px; cursor: pointer;
       background: none; border: none; padding: 0;
@@ -205,7 +220,6 @@
       backdrop-filter: blur(6px);
     }
     .btn-watch:hover .watch-play-icon { background: rgba(255,255,255,0.28); }
-    /* VIDEO MODAL */
     .video-modal {
       position: fixed; inset: 0; z-index: 500;
       background: rgba(0,0,0,0.92); backdrop-filter: blur(8px);
@@ -298,7 +312,6 @@
     .lead { font-size: clamp(14px,1.4vw,15px); color: var(--muted); line-height: 1.68; font-weight: 300; }
     .lead.light { color: rgba(255,255,255,0.65); }
 
-    /* SCROLL ANIMATIONS - content visible by default, animated when JS loads */
     .reveal { opacity: 1; transform: none; }
     .reveal-scale { opacity: 1; transform: none; }
     body.js-ready .reveal { opacity: 0; transform: translateY(32px); transition: opacity 0.7s var(--ease-out), transform 0.7s var(--ease-out); }
@@ -389,18 +402,13 @@
     .phone-main { width: 192px; height: 384px; left: 0; top: 28px; z-index: 3; }
     .phone-mid  { width: 184px; height: 368px; left: 142px; top: 40px; z-index: 2; transform: rotate(5deg); }
     .phone-back { width: 176px; height: 352px; left: 278px; top: 54px; z-index: 1; transform: rotate(10deg); }
-
-    /* Expand on hover/click: bring to front, unrotate, scale up slightly */
     .phone-frame:hover, .phone-frame.expanded {
       z-index: 10 !important;
       transform: rotate(0deg) scale(1.06) !important;
       box-shadow: 0 40px 80px rgba(26,26,46,0.35) !important;
     }
-    /* Mid phone expanded position */
     .phone-mid:hover, .phone-mid.expanded { left: 134px !important; top: 20px !important; }
-    /* Back phone expanded position */
     .phone-back:hover, .phone-back.expanded { left: 266px !important; top: 20px !important; }
-
     .phone-screen { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
     .phone-notch {
       position: absolute; top: 0; left: 50%; transform: translateX(-50%);
@@ -420,46 +428,6 @@
     .app-feat-text p { font-size: 13px; color: var(--muted); line-height: 1.6; font-weight: 300; }
 
     /* MANAGER DASHBOARD */
-    #manager { background: var(--text); scroll-margin-top: 100px; }
-    .manager-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 52px; align-items: center; }
-    .manager-dashboard {
-      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 14px; overflow: hidden; max-width: 500px;
-    }
-    .dash-header {
-      background: rgba(255,255,255,0.05); padding: 14px 20px;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .dash-header-left { display: flex; flex-direction: column; gap: 1px; }
-    .dash-building-label { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.35); }
-    .dash-building-name { font-family: var(--ff-display); font-size: 18px; font-weight: 600; color: #fff; }
-    .dash-tabs { display: flex; gap: 0; border-bottom: 1px solid rgba(255,255,255,0.08); padding: 0 20px; }
-    .dash-tab { font-size: 12px; font-weight: 400; color: rgba(255,255,255,0.35); padding: 10px 12px; cursor: default; border-bottom: 2px solid transparent; }
-    .dash-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
-    .dash-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
-    .dash-section-label { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 8px; }
-    .dash-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .dash-stat-card {
-      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 8px; padding: 14px 14px;
-    }
-    .dash-stat-val {
-      font-family: var(--ff-display); font-size: 28px; font-weight: 700; line-height: 1;
-      margin-bottom: 3px;
-    }
-    .dash-stat-val.green { color: #4ade80; }
-    .dash-stat-val.blue { color: var(--accent); }
-    .dash-stat-val.orange { color: #fb923c; }
-    .dash-stat-val.purple { color: #a78bfa; }
-    .dash-stat-label { font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.3); }
-    .dash-stat-sub { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 300; margin-top: 1px; }
-    .dash-stat-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-    .dash-report-card {
-      background: rgba(30,95,190,0.1); border: 1px solid rgba(74,144,217,0.22);
-      border-radius: 8px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
-    }
-    /* MANAGER DASHBOARD - TABBED SLIDER */
     #manager { background: var(--text); scroll-margin-top: 100px; }
     .manager-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 52px; align-items: center; }
     .manager-dashboard {
@@ -637,8 +605,6 @@
       transition: opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out), box-shadow 0.3s;
     }
     .watch-card.visible { opacity: 1 !important; transform: translateY(0) !important; }
-    .watch-card:nth-child(1) { transition-delay: 0s; }
-    .watch-card:nth-child(2) { transition-delay: 0.1s; }
     .watch-card-wide {
       background: #0a0a14; border: 1px solid rgba(255,255,255,0.1);
       border-radius: 10px; overflow: hidden;
@@ -856,22 +822,15 @@
       .nav-cta { display: none; }
     }
 
-
-
-    /* Shared mobile typography and spacing */
     @media (max-width: 768px) {
       section { padding: clamp(36px,6vw,56px) 0; }
       h2 { font-size: clamp(26px,7vw,38px); }
       .lead { font-size: 14px; }
-
-      /* NAV */
       #nav { height: 58px; padding: 0 18px; background: rgba(13,13,26,0.95) !important; }
       #nav.scrolled { background: rgba(255,255,255,0.98) !important; }
       .nav-logo-icon img { height: 28px; }
       .nav-wordmark-center { font-size: 18px; }
       .nav-cta { font-size: 12px; padding: 8px 14px; }
-
-      /* HERO */
       #hero { min-height: 100svh; }
       .hero-h1 { font-size: clamp(32px,9vw,52px); max-width: 100%; }
       .hero-inner { margin-left: 0; }
@@ -880,18 +839,12 @@
       .btn-primary { font-size: 14px; padding: 13px 24px; width: 100%; text-align: center; }
       .btn-watch { font-size: 13px; }
       .hero-unmute { top: 68px; right: 16px; }
-
-      /* PROBLEM */
       .problem-header { padding: 28px 18px 16px; }
       .problem-grid { grid-template-columns: 1fr; gap: 2px; }
       .problem-panel { height: clamp(220px,50vw,300px); }
-
-      /* FEATURES */
       .features-top { grid-template-columns: 1fr; gap: 16px; margin-bottom: 24px; }
       .feature-cards { grid-template-columns: 1fr; gap: 12px; }
       .feature-card { padding: 22px 20px; }
-
-      /* APP EXPERIENCE */
       .app-grid { grid-template-columns: 1fr; gap: 36px; }
       .phone-stack { height: 280px; margin: 0 auto; width: 100%; }
       .phone-main { width: 140px; height: 280px; left: 0; top: 0; }
@@ -899,30 +852,20 @@
       .phone-back { width: 124px; height: 248px; left: 194px; top: 32px; }
       .app-feat-item { padding: 14px 0; gap: 12px; }
       .app-feat-num { font-size: 26px; min-width: 34px; }
-
-      /* MANAGER DASHBOARD */
       .manager-grid { grid-template-columns: 1fr; gap: 32px; }
       .manager-dashboard { max-width: 100%; }
       .dash-stat-val { font-size: 24px; }
       .dash-stat-3 { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
       .dash-stat-card { padding: 12px 10px; }
-
-      /* NUTRITION */
       .nutrition-inner { grid-template-columns: 1fr; gap: 36px; }
       .smoothie-showcase { max-width: 100%; }
       .smoothie-img-wrap { height: 200px; }
-
-      /* ASSISTANT */
       .assistant-grid { grid-template-columns: 1fr; gap: 36px; }
-
-      /* WEARABLES */
       .wearables-grid { grid-template-columns: 1fr; gap: 36px; }
       .watch-showcase { order: -1; }
       .watch-row-top { grid-template-columns: 1fr 1fr; gap: 10px; }
       .watch-img-wrap { aspect-ratio: 1/0.85; }
       .watch-img-wide { height: 130px; }
-
-      /* PRICING */
       .pricing-head { margin-bottom: 24px; }
       .calc-card { padding: 24px 20px; }
       .calc-result { grid-template-columns: 1fr; gap: 14px; }
@@ -932,24 +875,17 @@
       .tier-pill { min-width: 0; padding: 8px 6px; }
       .tier-pill strong { font-size: 13px; }
       .tier-pill span { font-size: 10px; }
-
-      /* CREDIBILITY */
       .cred-grid { grid-template-columns: 1fr; gap: 32px; }
       .cred-photo-wrap { max-width: 280px; margin: 0 auto; aspect-ratio: 2/3; }
       .cred-certs { grid-template-columns: 1fr 1fr; gap: 6px; }
       .cred-cert { padding: 9px 12px; }
-
-      /* APPLY */
       .apply-grid { grid-template-columns: 1fr; gap: 32px; }
       .form-row { grid-template-columns: 1fr; }
       .apply-form-wrap { padding: 18px; }
-
-      /* FOOTER */
       .footer-inner { flex-direction: column; align-items: center; text-align: center; gap: 16px; }
       .footer-links { justify-content: center; flex-wrap: wrap; gap: 16px; }
     }
 
-    /* Small phones — 390px and below */
     @media (max-width: 390px) {
       .hero-h1 { font-size: 30px; }
       .phone-main { width: 120px; height: 240px; }
@@ -962,7 +898,6 @@
       .nav-cta { font-size: 11px; padding: 7px 11px; letter-spacing: 0.02em; }
     }
 
-    /* Tablet — 769px to 960px */
     @media (min-width: 769px) and (max-width: 960px) {
       .problem-grid { grid-template-columns: 1fr 1fr; }
       .features-top { grid-template-columns: 1fr 1fr; gap: 32px; }
@@ -981,7 +916,6 @@
       .calc-result { grid-template-columns: 1fr 1fr; }
     }
 
-    /* iOS TOUCH FIXES */
     * { -webkit-tap-highlight-color: transparent; }
     button, [onclick], .dash-tab, .tier-pill, .phone-frame,
     .nav-hamburger, .mobile-menu a, .btn-primary, .btn-watch,
@@ -989,7 +923,6 @@
       cursor: pointer;
       touch-action: manipulation;
     }
-    /* iOS range input */
     input[type="range"] { -webkit-appearance: none; }
     input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; }
   </style>
@@ -1025,7 +958,7 @@
   </div>
   <video id="hero-video" autoplay muted loop playsinline webkit-playsinline preload="auto">
     <source src="https://res.cloudinary.com/dk5g9itw8/video/upload/q_auto/AMENITYFIT_AD_dtvkic.mp4" type="video/mp4" />
-      <source src="https://res.cloudinary.com/dk5g9itw8/video/upload/AMENITYFIT_AD_dtvkic.mov" type="video/quicktime" />
+    <source src="https://res.cloudinary.com/dk5g9itw8/video/upload/AMENITYFIT_AD_dtvkic.mov" type="video/quicktime" />
   </video>
   <div class="hero-overlay"></div>
   <div class="hero-logo-watermark">
@@ -1691,10 +1624,8 @@
 </footer>
 
 <script>
-  // Mark body as JS ready for animations
   document.body.classList.add('js-ready');
 
-  // NAV SCROLL
   const nav = document.getElementById('nav');
   function handleNavScroll() {
     nav.classList.toggle('scrolled', window.scrollY > 40);
@@ -1702,7 +1633,6 @@
   window.addEventListener('scroll', handleNavScroll, { passive: true });
   handleNavScroll();
 
-  // HERO VIDEO
   const vid = document.getElementById('hero-video');
   const unmuteBtn = document.getElementById('unmute-btn');
   if (vid) {
@@ -1715,7 +1645,6 @@
     unmuteBtn.innerHTML = vid.muted ? '&#128264; Unmute' : '&#128266; Mute';
   }
 
-  // VIDEO MODAL
   const modal = document.getElementById('video-modal');
   const modalVid = document.getElementById('modal-video');
   function openVideoModal() {
@@ -1733,30 +1662,23 @@
   }
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeVideoModal(); });
 
-  // SCROLL REVEAL
   const revealEls = document.querySelectorAll('.reveal, .reveal-scale, .watch-card, .watch-card-wide');
   const revealObs = new IntersectionObserver((entries) => {
     entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); revealObs.unobserve(e.target); } });
   }, { threshold: 0.01, rootMargin: '0px 0px 0px 0px' });
   revealEls.forEach(el => revealObs.observe(el));
 
-  // DASHBOARD TABS
   let dashAutoTimer = null;
-  let dashProgressAnim = null;
   const dashTabs = ['overview', 'equipment', 'report'];
   let dashCurrentIdx = 0;
   const DASH_INTERVAL = 4000;
-
   let dashPaused = false;
-  let dashHeld = false;
 
-  // Press and hold to pause the slider
   function setupDashHold() {
     const dash = document.querySelector('.manager-dashboard');
     if (!dash) return;
-    const pause = () => { dashHeld = true; dashPaused = true; };
+    const pause = () => { dashPaused = true; };
     const resume = () => {
-      dashHeld = false;
       dashPaused = false;
       clearTimeout(window._dashResumeTimer);
       startDashAuto();
@@ -1769,7 +1691,7 @@
   }
 
   function switchTab(tabId, resetAuto = true) {
-    dashPaused = true; // user clicked, pause
+    dashPaused = true;
     document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.dash-panel').forEach(p => p.classList.remove('active'));
     const tabEl = document.querySelector(`[data-tab="${tabId}"]`);
@@ -1777,13 +1699,11 @@
     if (tabEl) tabEl.classList.add('active');
     if (panelEl) panelEl.classList.add('active');
     dashCurrentIdx = dashTabs.indexOf(tabId);
-    // Trigger counters if switching to overview
     if (tabId === 'overview') {
       panelEl.querySelectorAll('[data-count]').forEach(animateCount);
     }
     if (resetAuto) {
       startDashAuto();
-      // Resume auto after 8s of no interaction
       clearTimeout(window._dashResumeTimer);
       window._dashResumeTimer = setTimeout(() => { dashPaused = false; startDashAuto(); }, 8000);
     }
@@ -1805,7 +1725,6 @@
       if (dashPaused) return;
       dashCurrentIdx = (dashCurrentIdx + 1) % dashTabs.length;
       switchTab(dashTabs[dashCurrentIdx], false);
-      // Restart bar
       const f = document.getElementById('dash-progress');
       if (f) { f.style.transition = 'none'; f.style.width = '0%'; }
       requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -1816,7 +1735,6 @@
 
   setupDashHold();
 
-  // Start auto when dashboard enters viewport
   const dashObs = new IntersectionObserver((entries) => {
     entries.forEach(e => {
       if (e.isIntersecting) {
@@ -1828,10 +1746,8 @@
   }, { threshold: 0.3 });
   const dashEl = document.querySelector('.manager-dashboard');
   if (dashEl) dashObs.observe(dashEl);
-  // Trigger counters immediately if dashboard already visible
   setTimeout(() => { document.querySelectorAll('#panel-overview [data-count]').forEach(animateCount); }, 800);
 
-  // COUNTER ANIMATION
   function animateCount(el) {
     const target = parseInt(el.dataset.count);
     const suffix = el.dataset.suffix || '';
@@ -1847,10 +1763,8 @@
     }, step);
   }
 
-  // PHONE PARALLAX + HOVER EXPAND
   const phoneStack = document.querySelector('.phone-stack');
   if (phoneStack) {
-    // Subtle parallax on scroll
     window.addEventListener('scroll', () => {
       const rect = phoneStack.getBoundingClientRect();
       const mid = window.innerHeight / 2;
@@ -1859,7 +1773,6 @@
     }, { passive: true });
   }
 
-  // SMOOTH SCROLL WITH OFFSET for mobile nav links
   function scrollToSection(id) {
     closeMobileMenu();
     setTimeout(() => {
@@ -1872,7 +1785,6 @@
     }, 50);
   }
 
-  // MOBILE MENU
   function toggleMobileMenu() {
     const menu = document.getElementById('mobile-menu');
     const btn = document.getElementById('nav-hamburger');
@@ -1887,9 +1799,7 @@
     btn.classList.remove('open');
     document.body.style.overflow = '';
   }
-  // Close mobile menu on resize to desktop
   window.addEventListener('resize', () => { if (window.innerWidth > 768) closeMobileMenu(); });
-
 
   const tiers = [
     { max: 50,  monthly: 599,  id: 'tp1' },
@@ -1909,13 +1819,11 @@
     if (isNaN(val) || val < 1) val = 1;
     if (val > 300) val = 300;
     document.getElementById('unit-display').textContent = val + ' units';
-    // Find correct tier
     let tier = null;
     for (let i = 0; i < tiers.length; i++) {
       if (val <= tiers[i].max) { tier = tiers[i]; break; }
     }
     if (!tier) tier = tiers[tiers.length - 1];
-    // Highlight correct pill - always safe
     tiers.forEach(function(t) {
       const el = document.getElementById(t.id);
       if (el) el.classList.remove('active');
@@ -1930,12 +1838,10 @@
     } else {
       if (calcResult) calcResult.style.display = 'grid';
       if (customWrap) customWrap.classList.remove('show');
-      // Clear custom result when leaving custom tier
       const customRes = document.getElementById('custom-result');
       const customInput = document.getElementById('custom-units');
       if (customRes) customRes.innerHTML = '';
       if (customInput) customInput.value = '';
-      // Only update text if tier actually changed (avoids jitter while sliding within same tier)
       if (tier.monthly !== _lastTierMonthly) {
         _lastTierMonthly = tier.monthly;
         const mEl = document.getElementById('monthly-val');
@@ -1964,18 +1870,14 @@
     }
   }
 
-  // Initialize pricing calculator at default value
   updateCalc(100);
 
-  // IOS TOUCH FIXES — wire touch events for all interactive elements
-  // Slider — add touchmove handler for iOS
   const slider = document.getElementById('unit-slider');
   if (slider) {
     slider.addEventListener('input', function() { updateCalc(this.value); });
     slider.addEventListener('change', function() { updateCalc(this.value); });
   }
 
-  // Tier pills — add touchend as backup for iOS
   document.querySelectorAll('.tier-pill').forEach(pill => {
     pill.addEventListener('touchend', function(e) {
       e.preventDefault();
@@ -1984,7 +1886,6 @@
     });
   });
 
-  // Dashboard tabs — touchend backup
   document.querySelectorAll('.dash-tab').forEach(tab => {
     tab.addEventListener('touchend', function(e) {
       e.preventDefault();
@@ -1993,23 +1894,21 @@
     });
   });
 
-  // Form role select — change fires on iOS but just in case
   const roleSelect = document.getElementById('f-role');
   if (roleSelect) {
     roleSelect.addEventListener('change', function() { handleRoleChange(this.value); });
   }
 
-  // Form submit button touch
   const formBtn = document.getElementById('form-btn');
   if (formBtn) {
     formBtn.addEventListener('touchend', function(e) { e.preventDefault(); submitApp(); });
   }
 
-
   function handleRoleChange(val) {
     const wrap = document.getElementById('other-role-wrap');
     wrap.classList.toggle('show', val === 'Other');
   }
+
   async function submitApp() {
     const btn = document.getElementById('form-btn');
     const first = document.getElementById('f-first').value.trim();
