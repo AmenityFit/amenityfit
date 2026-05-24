@@ -1833,7 +1833,7 @@
       const el = document.getElementById(id);
       if (!el) return;
       const navH = document.getElementById('nav').offsetHeight;
-      const extra = id === 'pricing' ? 20 : 0;
+      const extra = id === 'pricing' ? -30 : 0;
       const top = el.getBoundingClientRect().top + window.pageYOffset - navH - extra;
       window.scrollTo({ top, behavior: 'smooth' });
     }, 50);
