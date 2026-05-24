@@ -1829,11 +1829,13 @@
   // SMOOTH SCROLL WITH OFFSET for mobile nav links
   function scrollToSection(id) {
     closeMobileMenu();
-    const el = document.getElementById(id);
-    if (!el) return;
-    const navH = document.getElementById('nav').offsetHeight;
-    const top = el.getBoundingClientRect().top + window.pageYOffset - navH - 16;
-    window.scrollTo({ top, behavior: 'smooth' });
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const navH = document.getElementById('nav').offsetHeight;
+      const top = el.getBoundingClientRect().top + window.pageYOffset - navH;
+      window.scrollTo({ top, behavior: 'smooth' });
+    }, 50);
   }
 
   // MOBILE MENU
