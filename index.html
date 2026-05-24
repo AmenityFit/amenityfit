@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AmenityFit — The Fitness Amenity Your Residents Will Actually Use</title>
+  <meta name="description" content="Personalized 30-day programs, a Fitness Assistant built by real coaching intelligence, and progress tracking built into your building." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet" />
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    const firebaseConfig = {
+      apiKey: "AIzaSyDPLHQBFzTQDzJr6E0FNIeOaFHuqXpB9w8",
+      authDomain: "amenityfit-31276.firebaseapp.com",
+      projectId: "amenityfit-31276",
+      storageBucket: "amenityfit-31276.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "1:123456789:web:abcdef"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    window.__submitApplication = async function(data) {
+      try {
+        await addDoc(collection(db, 'buildingSubmissions'), { ...data, submittedAt: serverTimestamp(), source: 'amenityfit.app' });
+        return { success: true };
+      } catch(err) { return { success: false, error: err.message }; }
+    };
+  </script>
+
+  <style>
+    :root {
+      --primary: #1E5FBE;
+      --accent: #4A90D9;
+      --text: #1A1A2E;
+      --muted: #5a5a72;
+      --light: #9090a8;
+      --bg: #ffffff;
+      --subtle: #f7f8fa;
+      --grey: #f0f1f4;
+      --border: #e2e4ea;
+      --white: #ffffff;
+      --ff-display: 'Cormorant Garamond', Georgia, serif;
+      --ff-body: 'DM Sans', system-ui, sans-serif;
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--ff-body); color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+    img { display: block; max-width: 100%; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 clamp(20px,5vw,60px); }
+
+    /* NAV */
+    #nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      height: 68px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 clamp(20px,4vw,52px);
+      transition: background 0.4s var(--ease-out), backdrop-filter 0.4s, border-color 0.4s;
+      border-bottom: 1px solid transparent;
+      background: transparent;
+    }
+    #nav.scrolled {
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(20px) saturate(1.4);
+      -webkit-backdrop-filter: blur(20px) saturate(1.4);
+      border-bottom-color: rgba(226,228,234,0.5);
+    }
+    .nav-logo-icon { display: flex; align-items: center; }
+    .nav-logo-icon img { height: 34px; }
+    /* Centered wordmark - absolutely centered in nav */
+    .nav-wordmark-center {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      font-family: var(--ff-display); font-size: 22px; font-weight: 600;
+      color: #fff; letter-spacing: 0.02em; line-height: 1;
+      transition: color 0.4s;
+      white-space: nowrap; pointer-events: none;
+    }
+    #nav.scrolled .nav-wordmark-center { color: var(--text); }
+    .nav-cta {
+      background: rgba(255,255,255,0.14); color: #fff; text-decoration: none;
+      font-family: var(--ff-body); font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
+      padding: 10px 22px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.28);
+      transition: background 0.2s, transform 0.15s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
+      backdrop-filter: blur(8px);
+    }
+    #nav.scrolled .nav-cta {
+      background: var(--primary); border-color: transparent; color: #fff;
+      box-shadow: 0 2px 12px rgba(30,95,190,0.28); backdrop-filter: none;
+    }
+    .nav-cta:hover { transform: translateY(-1px); }
+    #nav:not(.scrolled) .nav-cta:hover { background: rgba(255,255,255,0.24); }
+    #nav.scrolled .nav-cta:hover { background: #174fa8; }
+
+    /* HERO */
+    #hero {
+      position: relative; min-height: 100svh;
+      display: flex; align-items: flex-end;
+      overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute; inset: 0; z-index: 0;
+      background: #0d0d1a;
+    }
+    .hero-bg-img {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #0d1220 0%, #162040 50%, #0d1830 100%);
+      opacity: 1;
+    }
+    #hero-video {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; object-position: center center; z-index: 1;
+      opacity: 1;
+      filter: brightness(0.55) contrast(1.05);
+    }
+    #hero-video.loaded { opacity: 1; }
+    .hero-overlay {
+      position: absolute; inset: 0; z-index: 2;
+      background: linear-gradient(
+        105deg,
+        rgba(10,10,26,0.72) 0%,
+        rgba(10,10,26,0.45) 45%,
+        rgba(10,10,26,0.2) 100%
+      ),
+      linear-gradient(
+        to bottom,
+        rgba(10,10,26,0.15) 0%,
+        rgba(10,10,26,0.1) 50%,
+        rgba(10,10,26,0.75) 85%,
+        rgba(10,10,26,0.9) 100%
+      );
+    }
+    .hero-logo-watermark { display: none; }
+    .hero-unmute {
+      position: absolute; top: 80px; right: clamp(20px,4vw,52px); z-index: 10;
+      background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.28);
+      color: white; font-family: var(--ff-body); font-size: 11px; letter-spacing: 0.08em;
+      text-transform: uppercase; padding: 7px 13px; border-radius: 3px; cursor: pointer;
+      backdrop-filter: blur(8px); transition: background 0.2s; display: none;
+    }
+    .hero-unmute:hover { background: rgba(255,255,255,0.22); }
+    .hero-unmute.show { display: block; }
+    .hero-content {
+      position: relative; z-index: 5; width: 100%;
+      padding-bottom: clamp(48px,7vh,80px);
+    }
+    .hero-inner { display: flex; flex-direction: column; gap: 0; max-width: 580px; margin-left: -20px; }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 10px;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+      color: rgba(255,255,255,0.6); margin-bottom: 16px;
+      opacity: 0; transform: translateY(16px);
+      animation: fadeUp 0.7s var(--ease-out) 0.2s forwards;
+    }
+    .hero-eyebrow::before { content: ''; display: block; width: 24px; height: 1px; background: var(--accent); }
+    .hero-h1 {
+      font-family: var(--ff-display); font-size: clamp(42px,5.5vw,80px);
+      font-weight: 600; line-height: 0.98; color: #fff; letter-spacing: -0.015em;
+      max-width: 560px; margin-bottom: 20px;
+    }
+    .hero-h1 .word {
+      display: inline-block;
+      opacity: 0; transform: translateY(26px);
+      animation: fadeUp 0.6s var(--ease-out) forwards;
+    }
+    .hero-h1 em { font-style: italic; color: var(--accent); }
+    .hero-sub {
+      font-size: clamp(14px,1.5vw,16px); color: rgba(255,255,255,0.72);
+      max-width: 460px; line-height: 1.6; font-weight: 300;
+      margin-bottom: 28px;
+      opacity: 0; transform: translateY(18px);
+      animation: fadeUp 0.6s var(--ease-out) 0.9s forwards;
+    }
+    .hero-actions {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      opacity: 0; transform: translateY(18px);
+      animation: fadeUp 0.6s var(--ease-out) 1.05s forwards;
+    }
+    .btn-primary {
+      background: var(--primary); color: #fff; text-decoration: none;
+      font-family: var(--ff-body); font-size: 14px; font-weight: 500; letter-spacing: 0.03em;
+      padding: 13px 28px; border-radius: 4px; border: none; cursor: pointer;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 18px rgba(30,95,190,0.4); display: inline-block;
+    }
+    .btn-primary:hover { background: #174fa8; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(30,95,190,0.5); }
+    .btn-primary:active { transform: translateY(0); }
+    /* WATCH VIDEO BUTTON */
+    .btn-watch {
+      display: flex; align-items: center; gap: 10px; cursor: pointer;
+      background: none; border: none; padding: 0;
+      color: rgba(255,255,255,0.82); font-family: var(--ff-body);
+      font-size: 14px; font-weight: 400; letter-spacing: 0.02em;
+      transition: color 0.2s;
+    }
+    .btn-watch:hover { color: #fff; }
+    .btn-watch:hover .watch-play-icon { transform: scale(1.08); }
+    .watch-play-icon {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35);
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.2s, background 0.2s;
+      flex-shrink: 0;
+      backdrop-filter: blur(6px);
+    }
+    .btn-watch:hover .watch-play-icon { background: rgba(255,255,255,0.28); }
+    /* VIDEO MODAL */
+    .video-modal {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,0.92); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .video-modal.open { opacity: 1; pointer-events: all; }
+    .video-modal-inner {
+      position: relative; width: min(90vw, 1100px);
+      aspect-ratio: 16/9;
+    }
+    .video-modal video {
+      width: 100%; height: 100%; border-radius: 8px;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.6);
+    }
+    .video-modal-close {
+      position: absolute; top: -48px; right: 0;
+      background: none; border: none; cursor: pointer;
+      color: rgba(255,255,255,0.7); font-size: 14px; font-family: var(--ff-body);
+      font-weight: 400; letter-spacing: 0.08em; text-transform: uppercase;
+      display: flex; align-items: center; gap: 8px; transition: color 0.2s;
+    }
+    .video-modal-close:hover { color: #fff; }
+    .btn-ghost-hero {
+      color: rgba(255,255,255,0.75); font-size: 14px; text-decoration: none;
+      display: flex; align-items: center; gap: 7px; font-weight: 400; letter-spacing: 0.02em;
+      transition: color 0.2s;
+    }
+    .btn-ghost-hero:hover { color: #fff; }
+    .btn-ghost-hero .arrow { transition: transform 0.2s; display: inline-block; }
+    .btn-ghost-hero:hover .arrow { transform: translateX(4px); }
+    .hero-h1 .word {
+      display: inline-block;
+      opacity: 0; transform: translateY(30px);
+      animation: fadeUp 0.65s var(--ease-out) forwards;
+    }
+    .hero-h1 em { font-style: italic; color: var(--accent); }
+    .hero-sub {
+      font-size: clamp(15px,1.8vw,18px); color: rgba(255,255,255,0.75);
+      max-width: 520px; line-height: 1.65; font-weight: 300;
+      margin-bottom: 36px;
+      opacity: 0; transform: translateY(20px);
+      animation: fadeUp 0.65s var(--ease-out) 0.9s forwards;
+    }
+    .hero-actions {
+      display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+      opacity: 0; transform: translateY(20px);
+      animation: fadeUp 0.65s var(--ease-out) 1.05s forwards;
+    }
+    .btn-primary {
+      background: var(--primary); color: #fff; text-decoration: none;
+      font-family: var(--ff-body); font-size: 15px; font-weight: 500; letter-spacing: 0.03em;
+      padding: 15px 32px; border-radius: 4px; border: none; cursor: pointer;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(30,95,190,0.4); display: inline-block;
+    }
+    .btn-primary:hover { background: #174fa8; transform: translateY(-2px); box-shadow: 0 8px 28px rgba(30,95,190,0.5); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-ghost-hero {
+      color: rgba(255,255,255,0.75); font-size: 14px; text-decoration: none;
+      display: flex; align-items: center; gap: 7px; font-weight: 400; letter-spacing: 0.02em;
+      transition: color 0.2s;
+    }
+    .btn-ghost-hero:hover { color: #fff; }
+    .btn-ghost-hero .arrow { transition: transform 0.2s; display: inline-block; }
+    .btn-ghost-hero:hover .arrow { transform: translateX(4px); }
+
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* SECTION SHARED */
+    section { padding: clamp(48px,6vh,80px) 0; }
+    .section-label {
+      display: inline-flex; align-items: center; gap: 10px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--primary); margin-bottom: 12px;
+    }
+    .section-label::after { content: ''; display: block; width: 28px; height: 1px; background: var(--accent); }
+    .section-label.light { color: rgba(255,255,255,0.5); }
+    .section-label.light::after { background: rgba(255,255,255,0.3); }
+    h2 {
+      font-family: var(--ff-display); font-size: clamp(30px,3.8vw,52px);
+      font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; color: var(--text);
+    }
+    h2 em { font-style: italic; color: var(--primary); }
+    h2.light { color: #fff; }
+    h2.light em { color: var(--accent); }
+    .lead { font-size: clamp(14px,1.4vw,15px); color: var(--muted); line-height: 1.68; font-weight: 300; }
+    .lead.light { color: rgba(255,255,255,0.65); }
+
+    /* SCROLL ANIMATIONS - content visible by default, animated when JS loads */
+    .reveal { opacity: 1; transform: none; }
+    .reveal-scale { opacity: 1; transform: none; }
+    body.js-ready .reveal { opacity: 0; transform: translateY(32px); transition: opacity 0.7s var(--ease-out), transform 0.7s var(--ease-out); }
+    body.js-ready .reveal.visible { opacity: 1; transform: translateY(0); }
+    body.js-ready .reveal-d1 { transition-delay: 0.1s; }
+    body.js-ready .reveal-d2 { transition-delay: 0.2s; }
+    body.js-ready .reveal-d3 { transition-delay: 0.3s; }
+    body.js-ready .reveal-d4 { transition-delay: 0.4s; }
+    body.js-ready .reveal-scale { opacity: 0; transform: scale(0.96) translateY(20px); transition: opacity 0.7s var(--ease-out), transform 0.7s var(--ease-out); }
+    body.js-ready .reveal-scale.visible { opacity: 1; transform: scale(1) translateY(0); }
+
+    /* PROBLEM */
+    #problem { background: var(--text); padding: 0; }
+    .problem-header { padding: clamp(24px,3vh,40px) clamp(20px,5vw,60px) clamp(14px,1.8vh,22px); }
+    .problem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+    .problem-panel {
+      position: relative; overflow: hidden;
+      height: clamp(260px,36vh,380px);
+      display: flex; flex-direction: column; justify-content: flex-end;
+      padding: 20px 24px;
+      cursor: default;
+    }
+    .problem-panel-img {
+      position: absolute; inset: 0;
+      background-size: cover; background-position: center;
+      transition: transform 7s ease;
+    }
+    .problem-panel:hover .problem-panel-img { transform: scale(1.05); }
+    .problem-panel-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to top, rgba(10,10,26,0.94) 0%, rgba(10,10,26,0.45) 55%, rgba(10,10,26,0.08) 100%);
+    }
+    .problem-panel-content { position: relative; z-index: 2; }
+    .problem-num {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.14em;
+      color: var(--accent); margin-bottom: 6px; font-family: var(--ff-body);
+    }
+    .problem-panel h3 {
+      font-family: var(--ff-display); font-size: clamp(16px,1.8vw,22px);
+      font-weight: 600; color: #fff; line-height: 1.2; margin-bottom: 6px;
+    }
+    .problem-panel p { font-size: 12px; color: rgba(255,255,255,0.6); line-height: 1.55; font-weight: 300; max-width: 360px; }
+
+    /* FEATURES */
+    #features { background: var(--subtle); padding-bottom: clamp(64px,8vh,100px); }
+    .features-top { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: end; margin-bottom: 44px; }
+    .feature-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+    .feature-card {
+      background: var(--white); border: 1px solid var(--border); border-radius: 10px;
+      padding: 36px 28px; position: relative; overflow: hidden;
+      transition: transform 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out), border-color 0.3s;
+    }
+    .feature-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(to right, var(--primary), var(--accent));
+      transform: scaleX(0); transform-origin: left;
+      transition: transform 0.35s var(--ease-out);
+    }
+    .feature-card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(26,26,46,0.09); border-color: transparent; }
+    .feature-card:hover::before { transform: scaleX(1); }
+    .feature-icon {
+      width: 44px; height: 44px; border-radius: 10px;
+      background: linear-gradient(135deg,var(--primary),var(--accent));
+      display: flex; align-items: center; justify-content: center; margin-bottom: 18px;
+    }
+    .feature-card h3 { font-family: var(--ff-display); font-size: 20px; font-weight: 600; margin-bottom: 10px; line-height: 1.2; }
+    .feature-card p { font-size: 13px; color: var(--muted); line-height: 1.68; font-weight: 300; }
+
+    /* APP EXPERIENCE */
+    #app-experience { background: var(--bg); overflow: hidden; }
+    .app-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+    .phone-stack {
+      position: relative; height: 440px;
+      perspective: 1200px;
+    }
+    .phone-frame {
+      position: absolute;
+      border-radius: 26px; overflow: hidden;
+      box-shadow: 0 28px 56px rgba(26,26,46,0.2), 0 8px 18px rgba(26,26,46,0.1);
+      background: #0a0a18;
+      cursor: pointer;
+      transition: transform 0.45s cubic-bezier(0.16,1,0.3,1),
+                  box-shadow 0.45s cubic-bezier(0.16,1,0.3,1),
+                  left 0.45s cubic-bezier(0.16,1,0.3,1),
+                  top 0.45s cubic-bezier(0.16,1,0.3,1),
+                  z-index 0s;
+    }
+    .phone-main { width: 192px; height: 384px; left: 0; top: 28px; z-index: 3; }
+    .phone-mid  { width: 184px; height: 368px; left: 142px; top: 40px; z-index: 2; transform: rotate(5deg); }
+    .phone-back { width: 176px; height: 352px; left: 278px; top: 54px; z-index: 1; transform: rotate(10deg); }
+
+    /* Expand on hover/click: bring to front, unrotate, scale up slightly */
+    .phone-frame:hover, .phone-frame.expanded {
+      z-index: 10 !important;
+      transform: rotate(0deg) scale(1.06) !important;
+      box-shadow: 0 40px 80px rgba(26,26,46,0.35) !important;
+    }
+    /* Mid phone expanded position */
+    .phone-mid:hover, .phone-mid.expanded { left: 134px !important; top: 20px !important; }
+    /* Back phone expanded position */
+    .phone-back:hover, .phone-back.expanded { left: 266px !important; top: 20px !important; }
+
+    .phone-screen { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+    .phone-notch {
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 64px; height: 18px; background: #000; border-radius: 0 0 11px 11px; z-index: 10;
+    }
+    .app-features { display: flex; flex-direction: column; }
+    .app-feat-item {
+      display: flex; gap: 16px; align-items: flex-start;
+      padding: 18px 0; border-bottom: 1px solid var(--border);
+    }
+    .app-feat-item:last-child { border-bottom: none; }
+    .app-feat-num {
+      font-family: var(--ff-display); font-size: 32px; font-weight: 700;
+      color: var(--grey); line-height: 1; min-width: 42px; letter-spacing: -0.03em;
+    }
+    .app-feat-text h4 { font-family: var(--ff-display); font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+    .app-feat-text p { font-size: 13px; color: var(--muted); line-height: 1.6; font-weight: 300; }
+
+    /* MANAGER DASHBOARD */
+    #manager { background: var(--text); }
+    .manager-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 52px; align-items: center; }
+    .manager-dashboard {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px; overflow: hidden; max-width: 500px;
+    }
+    .dash-header {
+      background: rgba(255,255,255,0.05); padding: 14px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .dash-header-left { display: flex; flex-direction: column; gap: 1px; }
+    .dash-building-label { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.35); }
+    .dash-building-name { font-family: var(--ff-display); font-size: 18px; font-weight: 600; color: #fff; }
+    .dash-tabs { display: flex; gap: 0; border-bottom: 1px solid rgba(255,255,255,0.08); padding: 0 20px; }
+    .dash-tab { font-size: 12px; font-weight: 400; color: rgba(255,255,255,0.35); padding: 10px 12px; cursor: default; border-bottom: 2px solid transparent; }
+    .dash-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+    .dash-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+    .dash-section-label { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 8px; }
+    .dash-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .dash-stat-card {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 8px; padding: 14px 14px;
+    }
+    .dash-stat-val {
+      font-family: var(--ff-display); font-size: 28px; font-weight: 700; line-height: 1;
+      margin-bottom: 3px;
+    }
+    .dash-stat-val.green { color: #4ade80; }
+    .dash-stat-val.blue { color: var(--accent); }
+    .dash-stat-val.orange { color: #fb923c; }
+    .dash-stat-val.purple { color: #a78bfa; }
+    .dash-stat-label { font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.3); }
+    .dash-stat-sub { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 300; margin-top: 1px; }
+    .dash-stat-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .dash-report-card {
+      background: rgba(30,95,190,0.1); border: 1px solid rgba(74,144,217,0.22);
+      border-radius: 8px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
+    }
+    /* MANAGER DASHBOARD - TABBED SLIDER */
+    #manager { background: var(--text); }
+    .manager-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 52px; align-items: center; }
+    .manager-dashboard {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px; overflow: hidden; max-width: 500px;
+    }
+    .dash-header {
+      background: rgba(255,255,255,0.05); padding: 14px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .dash-header-left { display: flex; flex-direction: column; gap: 1px; }
+    .dash-building-label { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.35); }
+    .dash-building-name { font-family: var(--ff-display); font-size: 18px; font-weight: 600; color: #fff; }
+    .dash-tabs { display: flex; gap: 0; border-bottom: 1px solid rgba(255,255,255,0.08); padding: 0 20px; }
+    .dash-tab {
+      font-size: 12px; font-weight: 400; color: rgba(255,255,255,0.35);
+      padding: 10px 12px; cursor: pointer; border-bottom: 2px solid transparent;
+      transition: color 0.2s; user-select: none;
+    }
+    .dash-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+    .dash-tab:hover:not(.active) { color: rgba(255,255,255,0.6); }
+    .dash-progress-bar { height: 2px; background: rgba(255,255,255,0.06); }
+    .dash-progress-fill { height: 100%; background: var(--accent); width: 0%; }
+    .dash-panel { display: none; padding: 18px 20px; flex-direction: column; gap: 14px; }
+    .dash-panel.active { display: flex; animation: panelIn 0.3s var(--ease-out); }
+    @keyframes panelIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+    .dash-section-label { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 6px; }
+    .dash-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .dash-stat-card {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 8px; padding: 16px 14px;
+    }
+    .dash-stat-val {
+      font-family: var(--ff-display); font-size: 30px; font-weight: 700; line-height: 1; margin-bottom: 4px;
+    }
+    .dash-stat-val.green { color: #4ade80; }
+    .dash-stat-val.blue { color: var(--accent); }
+    .dash-stat-val.orange { color: #fb923c; }
+    .dash-stat-val.purple { color: #a78bfa; }
+    .dash-stat-label { font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.3); }
+    .dash-stat-sub { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 300; margin-top: 1px; }
+    .dash-stat-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .dash-report-card {
+      background: rgba(30,95,190,0.1); border: 1px solid rgba(74,144,217,0.22);
+      border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .dash-report-text strong { display: block; font-size: 13px; font-weight: 500; color: #fff; margin-bottom: 1px; }
+    .dash-report-text span { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 300; }
+    .dash-report-badge {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      background: rgba(74,144,217,0.18); color: var(--accent); border: 1px solid rgba(74,144,217,0.28);
+      padding: 4px 9px; border-radius: 3px;
+    }
+    .equip-group { margin-bottom: 4px; }
+    .equip-group-label { font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 6px; }
+    .equip-items { display: flex; flex-wrap: wrap; gap: 5px; }
+    .equip-item {
+      display: flex; align-items: center; gap: 5px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 5px; padding: 5px 9px; font-size: 11px; color: rgba(255,255,255,0.65); font-weight: 300;
+    }
+    .equip-check {
+      width: 13px; height: 13px; border-radius: 3px; background: var(--primary);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .report-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .report-row:last-child { border-bottom: none; }
+    .report-row-label { font-size: 12px; color: rgba(255,255,255,0.45); font-weight: 300; }
+    .report-row-val { font-size: 13px; font-weight: 500; color: #fff; }
+    .report-row-val.positive { color: #4ade80; }
+    .manager-content { display: flex; flex-direction: column; gap: 20px; }
+    .manager-point { display: flex; gap: 14px; align-items: flex-start; }
+    .manager-point-icon {
+      width: 32px; height: 32px; border-radius: 7px; flex-shrink: 0;
+      background: rgba(74,144,217,0.13); border: 1px solid rgba(74,144,217,0.22);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .manager-point-text strong { display: block; font-size: 14px; font-weight: 500; color: #fff; margin-bottom: 3px; }
+    .manager-point-text span { font-size: 12px; color: rgba(255,255,255,0.45); font-weight: 300; line-height: 1.55; }
+
+    /* NUTRITION */
+    #nutrition {
+      position: relative; overflow: hidden;
+      background: #0d1a2e;
+    }
+    .nutrition-bg {
+      position: absolute; left: 0; right: 0; top: 0; bottom: -120px;
+      background: url('https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_1600/p24Header_hkelnv') bottom center/cover no-repeat;
+      opacity: 0.5;
+    }
+    .nutrition-bg::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(to bottom, rgba(13,26,46,0.7) 0%, rgba(13,26,46,0.3) 60%, rgba(13,26,46,0.1) 100%);
+    }
+    .nutrition-inner { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 72px; align-items: center; }
+    .smoothie-showcase {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px; overflow: hidden; backdrop-filter: blur(12px);
+    }
+    .smoothie-img-wrap {
+      width: 100%; height: 220px; overflow: hidden; position: relative;
+    }
+    .smoothie-img-wrap img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      transition: transform 6s ease;
+    }
+    .smoothie-showcase:hover .smoothie-img-wrap img { transform: scale(1.04); }
+    .smoothie-img-overlay {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 60px;
+      background: linear-gradient(to top, rgba(13,26,46,0.85), transparent);
+    }
+    .smoothie-text-wrap { padding: 24px 28px 28px; }
+    .smoothie-label { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.45); margin-bottom: 6px; }
+    .smoothie-title { font-family: var(--ff-display); font-size: 28px; font-weight: 600; color: #fff; margin-bottom: 12px; line-height: 1.15; }
+    .smoothie-desc { font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.7; font-weight: 300; margin-bottom: 18px; }
+    .smoothie-pills { display: flex; flex-wrap: wrap; gap: 7px; }
+    .smoothie-pill {
+      font-size: 11px; font-weight: 400; padding: 5px 11px; border-radius: 20px;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.75);
+    }
+    .nutrition-points { display: flex; flex-direction: column; gap: 18px; margin-top: 28px; }
+    .nutrition-point { display: flex; align-items: flex-start; gap: 12px; font-size: 15px; color: rgba(255,255,255,0.8); font-weight: 300; line-height: 1.55; }
+    .nutrition-point::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin-top: 9px; }
+
+    /* ASSISTANT */
+    #assistant { background: var(--subtle); }
+    .assistant-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+    .chat-window {
+      background: var(--white); border: 1px solid var(--border); border-radius: 18px;
+      overflow: hidden; box-shadow: 0 24px 64px rgba(26,26,46,0.08);
+    }
+    .chat-top {
+      background: var(--text); padding: 18px 20px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .chat-avatar-wrap {
+      width: 42px; height: 42px; border-radius: 10px; overflow: hidden; flex-shrink: 0;
+      background: #fff;
+      display: flex; align-items: center; justify-content: center;
+      padding: 4px;
+    }
+    .chat-avatar-wrap img { width: 36px; height: 36px; object-fit: contain; filter: none; }
+    .chat-top-text strong { display: block; font-size: 14px; font-weight: 500; color: #fff; }
+    .chat-top-text span { font-size: 11px; color: rgba(255,255,255,0.45); font-weight: 300; }
+    .chat-status { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #4ade80; font-weight: 400; }
+    .chat-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; animation: pulse-dot 2s infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+    .chat-msgs { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .msg { display: flex; gap: 10px; }
+    .msg.user { flex-direction: row-reverse; }
+    .bubble {
+      max-width: 82%; padding: 12px 16px; border-radius: 14px;
+      font-size: 13px; line-height: 1.58; font-weight: 300;
+    }
+    .msg:not(.user) .bubble { background: var(--grey); color: var(--text); border-bottom-left-radius: 4px; }
+    .msg.user .bubble { background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+    .assistant-points { display: flex; flex-direction: column; gap: 14px; margin-top: 32px; }
+    .assistant-point { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; color: var(--muted); font-weight: 300; line-height: 1.6; }
+    .assistant-point-dash { color: var(--primary); font-weight: 600; font-size: 16px; line-height: 1.4; }
+
+    /* WEARABLES */
+    #wearables { background: var(--text); }
+    .wearables-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+    .watch-showcase { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; }
+    .watch-row-top { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .watch-card {
+      background: #0a0a14; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; overflow: hidden;
+      opacity: 1; transform: none;
+      transition: opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out), box-shadow 0.3s;
+    }
+    .watch-card.visible { opacity: 1 !important; transform: translateY(0) !important; }
+    .watch-card:nth-child(1) { transition-delay: 0s; }
+    .watch-card:nth-child(2) { transition-delay: 0.1s; }
+    .watch-card-wide {
+      background: #0a0a14; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; overflow: hidden;
+      opacity: 1; transform: none;
+      transition: opacity 0.6s var(--ease-out) 0.2s, transform 0.6s var(--ease-out) 0.2s, box-shadow 0.3s;
+    }
+    .watch-card-wide.visible { opacity: 1; transform: translateY(0); }
+    .watch-card:hover, .watch-card-wide:hover { box-shadow: 0 10px 28px rgba(0,0,0,0.35); }
+    .watch-img-wrap {
+      width: 100%; aspect-ratio: 1/0.78; overflow: hidden;
+      background: #0a0a14;
+    }
+    .watch-img-wide {
+      width: 100%; height: 220px; overflow: hidden;
+      background: #f9f1e4;
+    }
+    .watch-img-wrap img { width: 100%; height: 100%; object-fit: cover; object-position: center center; display: block; }
+    .watch-img-wrap img[alt="Apple Watch"] { object-fit: contain; background: #fdfdfd; }
+    .watch-img-wide img { width: 100%; height: 100%; object-fit: contain; object-position: center center; display: block; background: #f9f1e4; }
+    .watch-card-info {
+      padding: 10px 13px; display: flex; align-items: center; justify-content: space-between;
+      background: rgba(15,15,30,0.95); border-top: 1px solid rgba(255,255,255,0.07);
+    }
+    .watch-card-name { font-size: 13px; font-weight: 500; color: #fff; }
+    .watch-live {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #4ade80;
+    }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; animation: pulse-dot 2s infinite; }
+    .wearable-content { display: flex; flex-direction: column; gap: 0; }
+    .wearable-feature { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .wearable-feature:first-child { padding-top: 0; }
+    .wearable-feature:last-child { border-bottom: none; padding-bottom: 0; }
+    .wearable-feature h4 { font-family: var(--ff-display); font-size: 17px; font-weight: 600; color: #fff; margin-bottom: 3px; }
+    .wearable-feature p { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.55; font-weight: 300; }
+
+    /* PRICING */
+    #pricing { background: var(--subtle); }
+    .pricing-head { text-align: center; max-width: 520px; margin: 0 auto 36px; }
+    .pricing-head .section-label { justify-content: center; }
+    .pricing-head .section-label::after { display: none; }
+    .calc-card {
+      background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+      padding: 32px 40px; max-width: 740px; margin: 0 auto;
+      box-shadow: 0 6px 32px rgba(26,26,46,0.05);
+    }
+    .calc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .calc-top-label { font-size: 13px; font-weight: 500; color: var(--text); }
+    .calc-unit-display {
+      font-family: var(--ff-display); font-size: 26px; font-weight: 700; color: var(--primary);
+    }
+    input[type="range"] {
+      -webkit-appearance: none; width: 100%; height: 4px;
+      background: var(--border); border-radius: 2px; outline: none; margin-bottom: 24px; cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 20px; height: 20px;
+      background: var(--primary); border-radius: 50%; cursor: pointer;
+      box-shadow: 0 2px 10px rgba(30,95,190,0.4);
+      transition: transform 0.15s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+    .calc-result { background: var(--subtle); border-radius: 8px; padding: 20px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: center; margin-bottom: 18px; }
+    .calc-price-col { display: flex; flex-direction: column; gap: 3px; }
+    .calc-freq { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--light); }
+    .calc-price { font-family: var(--ff-display); font-size: 48px; font-weight: 700; color: var(--text); line-height: 1; }
+    .calc-price sup { font-size: 20px; vertical-align: super; }
+    .calc-annual-col { border-left: 1px solid var(--border); padding-left: 20px; display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+    .calc-annual-label { font-size: 12px; color: var(--muted); font-weight: 300; }
+    .calc-annual-price { font-family: var(--ff-display); font-size: 28px; font-weight: 600; color: var(--text); }
+    .calc-save { background: rgba(30,95,190,0.1); color: var(--primary); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 9px; border-radius: 3px; }
+    .custom-input-wrap { display: none; margin-bottom: 18px; }
+    .custom-input-wrap.show { display: block; }
+    .custom-input-inner { display: flex; gap: 12px; align-items: center; }
+    .custom-input-inner input[type="number"] {
+      flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 6px;
+      font-family: var(--ff-body); font-size: 14px; color: var(--text); outline: none;
+    }
+    .custom-input-inner input[type="number"]:focus { border-color: var(--accent); }
+    .custom-input-inner .btn-primary { padding: 10px 20px; font-size: 13px; }
+    .custom-result { font-size: 13px; color: var(--muted); margin-top: 8px; font-weight: 300; }
+    .tier-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tier-pill {
+      flex: 1; min-width: 100px; padding: 10px 8px; border-radius: 7px;
+      border: 1px solid var(--border); text-align: center; transition: all 0.2s; cursor: pointer;
+    }
+    .tier-pill:hover { border-color: var(--accent); background: rgba(74,144,217,0.06); }
+    .tier-pill.active { border-color: var(--primary); background: rgba(30,95,190,0.05); }
+    .tier-pill strong { display: block; font-family: var(--ff-display); font-size: 15px; font-weight: 600; color: var(--text); }
+    .tier-pill span { font-size: 11px; color: var(--muted); font-weight: 300; }
+
+    /* CREDIBILITY */
+    #credibility { background: var(--bg); }
+    .cred-grid { display: grid; grid-template-columns: 0.7fr 1.3fr; gap: 56px; align-items: center; }
+    .cred-photo-wrap {
+      position: relative; border-radius: 10px; overflow: hidden;
+      aspect-ratio: 2/3; box-shadow: 0 20px 48px rgba(26,26,46,0.14);
+    }
+    .cred-photo-wrap img { width: 100%; height: 100%; object-fit: cover; object-position: center 15%; display: block; }
+    .cred-content { display: flex; flex-direction: column; gap: 18px; }
+    .cred-certs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+    .cred-cert {
+      padding: 11px 14px; border-radius: 7px;
+      border-left: 2px solid var(--primary);
+      background: var(--subtle); transition: background 0.2s;
+    }
+    .cred-cert:hover { background: var(--grey); }
+    .cred-cert p { font-size: 12px; font-weight: 500; color: var(--text); line-height: 1.35; }
+
+    /* APPLY */
+    #apply { background: var(--text); }
+    .apply-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start; }
+    .apply-steps { display: flex; flex-direction: column; gap: 20px; margin-top: 32px; }
+    .apply-step { display: flex; gap: 14px; align-items: flex-start; }
+    .step-num {
+      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(74,144,217,0.14); border: 1px solid rgba(74,144,217,0.28);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--ff-display); font-size: 14px; font-weight: 600; color: var(--accent);
+    }
+    .step-text strong { display: block; font-size: 14px; font-weight: 500; color: #fff; margin-bottom: 5px; }
+    .step-text span { font-size: 13px; color: rgba(255,255,255,0.45); font-weight: 300; line-height: 1.55; }
+    .apply-form-wrap { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 24px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.35); }
+    .form-group input, .form-group select, .form-group textarea {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 5px; padding: 10px 13px;
+      font-family: var(--ff-body); font-size: 13px; font-weight: 300; color: #fff; outline: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); background: rgba(255,255,255,0.09); }
+    .form-group input::placeholder, .form-group textarea::placeholder { color: rgba(255,255,255,0.2); }
+    .form-group select option { background: #1A1A2E; color: #fff; }
+    .form-group textarea { resize: none; height: 72px; }
+    .other-role-wrap { display: none; }
+    .other-role-wrap.show { display: flex; }
+    .form-submit {
+      width: 100%; background: var(--primary); color: #fff; border: none; border-radius: 5px;
+      padding: 13px; font-family: var(--ff-body); font-size: 14px; font-weight: 500;
+      letter-spacing: 0.03em; cursor: pointer; margin-top: 6px;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .form-submit:hover { background: #174fa8; transform: translateY(-1px); }
+    .form-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .form-success { display: none; text-align: center; padding: 40px 20px; }
+    .form-success.show { display: block; }
+    .success-icon {
+      width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 16px;
+      background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .form-success h3 { font-family: var(--ff-display); font-size: 26px; font-weight: 600; color: #fff; margin-bottom: 8px; }
+    .form-success p { font-size: 13px; color: rgba(255,255,255,0.45); font-weight: 300; }
+
+    /* FOOTER */
+    footer { background: #0d0d1a; border-top: 1px solid rgba(255,255,255,0.06); padding: 48px 0; }
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; }
+    footer .footer-logo img { height: 30px; opacity: 0.65; }
+    .footer-copy { font-size: 13px; color: rgba(255,255,255,0.25); font-weight: 300; }
+    .footer-links { display: flex; gap: 28px; }
+    .footer-links a { font-size: 13px; color: rgba(255,255,255,0.3); text-decoration: none; font-weight: 300; transition: color 0.2s; }
+    .footer-links a:hover { color: rgba(255,255,255,0.7); }
+
+    /* MOBILE NAV HAMBURGER */
+    .nav-hamburger {
+      display: none; flex-direction: column; justify-content: center; gap: 5px;
+      width: 36px; height: 36px; cursor: pointer; background: none; border: none;
+      padding: 4px; border-radius: 4px; transition: background 0.2s;
+    }
+    .nav-hamburger span {
+      display: block; width: 22px; height: 1.5px; border-radius: 2px;
+      background: #fff; transition: background 0.4s, transform 0.3s, opacity 0.3s;
+    }
+    #nav.scrolled .nav-hamburger span { background: var(--text); }
+    .nav-hamburger.open span:nth-child(1) { transform: translateY(6.5px) rotate(45deg); }
+    .nav-hamburger.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+    .nav-hamburger.open span:nth-child(3) { transform: translateY(-6.5px) rotate(-45deg); }
+    .mobile-menu {
+      display: none; position: fixed; top: 58px; left: 0; right: 0; z-index: 199;
+      background: rgba(13,13,26,0.97); backdrop-filter: blur(20px);
+      padding: 20px 24px 28px; border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-direction: column; gap: 4px;
+    }
+    .mobile-menu.open { display: flex; }
+    .mobile-menu a {
+      font-family: var(--ff-body); font-size: 16px; font-weight: 400; color: rgba(255,255,255,0.75);
+      text-decoration: none; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.07);
+      transition: color 0.2s;
+    }
+    .mobile-menu a:last-child { border-bottom: none; }
+    .mobile-menu a:hover { color: #fff; }
+    .mobile-menu .mobile-cta {
+      margin-top: 12px; background: var(--primary); color: #fff; text-align: center;
+      padding: 13px; border-radius: 5px; font-weight: 500; border-bottom: none;
+      font-size: 14px; letter-spacing: 0.03em;
+    }
+    @media (max-width: 768px) {
+      .nav-hamburger { display: flex; }
+      .nav-cta { display: none; }
+    }
+
+
+
+    /* Shared mobile typography and spacing */
+    @media (max-width: 768px) {
+      section { padding: clamp(36px,6vw,56px) 0; }
+      h2 { font-size: clamp(26px,7vw,38px); }
+      .lead { font-size: 14px; }
+
+      /* NAV */
+      #nav { height: 58px; padding: 0 18px; }
+      .nav-logo-icon img { height: 28px; }
+      .nav-wordmark-center { font-size: 18px; }
+      .nav-cta { font-size: 12px; padding: 8px 14px; }
+
+      /* HERO */
+      #hero { min-height: 100svh; }
+      .hero-h1 { font-size: clamp(32px,9vw,52px); max-width: 100%; }
+      .hero-inner { margin-left: 0; }
+      .hero-sub { font-size: 14px; max-width: 100%; }
+      .hero-actions { flex-direction: column; align-items: flex-start; gap: 14px; }
+      .btn-primary { font-size: 14px; padding: 13px 24px; width: 100%; text-align: center; }
+      .btn-watch { font-size: 13px; }
+      .hero-unmute { top: 68px; right: 16px; }
+
+      /* PROBLEM */
+      .problem-header { padding: 28px 18px 16px; }
+      .problem-grid { grid-template-columns: 1fr; gap: 2px; }
+      .problem-panel { height: clamp(220px,50vw,300px); }
+
+      /* FEATURES */
+      .features-top { grid-template-columns: 1fr; gap: 16px; margin-bottom: 24px; }
+      .feature-cards { grid-template-columns: 1fr; gap: 12px; }
+      .feature-card { padding: 22px 20px; }
+
+      /* APP EXPERIENCE */
+      .app-grid { grid-template-columns: 1fr; gap: 36px; }
+      .phone-stack { height: 280px; margin: 0 auto; width: 100%; }
+      .phone-main { width: 140px; height: 280px; left: 0; top: 0; }
+      .phone-mid  { width: 132px; height: 264px; left: 100px; top: 16px; }
+      .phone-back { width: 124px; height: 248px; left: 194px; top: 32px; }
+      .app-feat-item { padding: 14px 0; gap: 12px; }
+      .app-feat-num { font-size: 26px; min-width: 34px; }
+
+      /* MANAGER DASHBOARD */
+      .manager-grid { grid-template-columns: 1fr; gap: 32px; }
+      .manager-dashboard { max-width: 100%; }
+      .dash-stat-val { font-size: 24px; }
+      .dash-stat-3 { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+      .dash-stat-card { padding: 12px 10px; }
+
+      /* NUTRITION */
+      .nutrition-inner { grid-template-columns: 1fr; gap: 36px; }
+      .smoothie-showcase { max-width: 100%; }
+      .smoothie-img-wrap { height: 200px; }
+
+      /* ASSISTANT */
+      .assistant-grid { grid-template-columns: 1fr; gap: 36px; }
+
+      /* WEARABLES */
+      .wearables-grid { grid-template-columns: 1fr; gap: 36px; }
+      .watch-showcase { order: -1; }
+      .watch-row-top { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .watch-img-wrap { aspect-ratio: 1/0.85; }
+      .watch-img-wide { height: 130px; }
+
+      /* PRICING */
+      .pricing-head { margin-bottom: 24px; }
+      .calc-card { padding: 24px 20px; }
+      .calc-result { grid-template-columns: 1fr; gap: 14px; }
+      .calc-annual-col { border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 14px; }
+      .calc-price { font-size: 40px; }
+      .tier-pills { gap: 6px; }
+      .tier-pill { min-width: 0; padding: 8px 6px; }
+      .tier-pill strong { font-size: 13px; }
+      .tier-pill span { font-size: 10px; }
+
+      /* CREDIBILITY */
+      .cred-grid { grid-template-columns: 1fr; gap: 32px; }
+      .cred-photo-wrap { max-width: 280px; margin: 0 auto; aspect-ratio: 2/3; }
+      .cred-certs { grid-template-columns: 1fr 1fr; gap: 6px; }
+      .cred-cert { padding: 9px 12px; }
+
+      /* APPLY */
+      .apply-grid { grid-template-columns: 1fr; gap: 32px; }
+      .form-row { grid-template-columns: 1fr; }
+      .apply-form-wrap { padding: 18px; }
+
+      /* FOOTER */
+      .footer-inner { flex-direction: column; align-items: center; text-align: center; gap: 16px; }
+      .footer-links { justify-content: center; flex-wrap: wrap; gap: 16px; }
+    }
+
+    /* Small phones — 390px and below */
+    @media (max-width: 390px) {
+      .hero-h1 { font-size: 30px; }
+      .phone-main { width: 120px; height: 240px; }
+      .phone-mid  { width: 114px; height: 228px; left: 86px; }
+      .phone-back { width: 108px; height: 216px; left: 166px; }
+      .phone-stack { height: 240px; }
+      .dash-stat-3 { grid-template-columns: 1fr 1fr; gap: 6px; }
+      .tier-pills { grid-template-columns: 1fr 1fr; display: grid; }
+      .cred-certs { grid-template-columns: 1fr; }
+      .nav-cta { font-size: 11px; padding: 7px 11px; letter-spacing: 0.02em; }
+    }
+
+    /* Tablet — 769px to 960px */
+    @media (min-width: 769px) and (max-width: 960px) {
+      .problem-grid { grid-template-columns: 1fr 1fr; }
+      .features-top { grid-template-columns: 1fr 1fr; gap: 32px; }
+      .feature-cards { grid-template-columns: 1fr 1fr 1fr; }
+      .app-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
+      .phone-stack { height: 360px; }
+      .phone-main { width: 160px; height: 320px; }
+      .phone-mid  { width: 152px; height: 304px; left: 120px; }
+      .phone-back { width: 144px; height: 288px; left: 234px; }
+      .manager-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
+      .nutrition-inner { grid-template-columns: 1fr 1fr; gap: 40px; }
+      .assistant-grid { grid-template-columns: 1fr 1fr; gap: 40px; }
+      .wearables-grid { grid-template-columns: 1fr 1fr; gap: 40px; }
+      .cred-grid { grid-template-columns: 0.6fr 1.4fr; gap: 40px; }
+      .apply-grid { grid-template-columns: 1fr 1fr; gap: 40px; }
+      .calc-result { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* iOS TOUCH FIXES */
+    * { -webkit-tap-highlight-color: transparent; }
+    button, [onclick], .dash-tab, .tier-pill, .phone-frame,
+    .nav-hamburger, .mobile-menu a, .btn-primary, .btn-watch,
+    .btn-ghost-hero, .nav-cta, .form-submit {
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    /* iOS range input */
+    input[type="range"] { -webkit-appearance: none; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="nav">
+  <a href="#" class="nav-logo-icon">
+    <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/f_png,q_auto/Logo_rkq0cv" alt="AmenityFit" />
+  </a>
+  <span class="nav-wordmark-center">AmenityFit</span>
+  <a href="#apply" class="nav-cta">Apply for Your Building</a>
+  <button class="nav-hamburger" id="nav-hamburger" onclick="toggleMobileMenu()" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- MOBILE MENU -->
+<div class="mobile-menu" id="mobile-menu">
+  <a href="#problem" onclick="closeMobileMenu()">The Problem</a>
+  <a href="#features" onclick="closeMobileMenu()">Features</a>
+  <a href="#app-experience" onclick="closeMobileMenu()">App</a>
+  <a href="#manager" onclick="closeMobileMenu()">For Managers</a>
+  <a href="#pricing" onclick="closeMobileMenu()">Pricing</a>
+  <a href="#apply" class="mobile-cta" onclick="closeMobileMenu()">Apply for Your Building</a>
+</div>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="hero-bg">
+    <div class="hero-bg-img"></div>
+  </div>
+  <video id="hero-video" autoplay muted loop playsinline webkit-playsinline preload="auto">
+    <source src="https://res.cloudinary.com/dk5g9itw8/video/upload/q_auto/AMENITYFIT_AD_dtvkic.mp4" type="video/mp4" />
+      <source src="https://res.cloudinary.com/dk5g9itw8/video/upload/AMENITYFIT_AD_dtvkic.mov" type="video/quicktime" />
+  </video>
+  <div class="hero-overlay"></div>
+  <div class="hero-logo-watermark">
+    <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/f_png,q_auto/Logo_rkq0cv" alt="AmenityFit" />
+  </div>
+  <button class="hero-unmute" id="unmute-btn" onclick="toggleMute()">&#128264; Unmute</button>
+  <div class="hero-content">
+    <div class="container">
+      <div class="hero-inner">
+        <div class="hero-eyebrow">Residential Fitness Amenity</div>
+        <h1 class="hero-h1" id="hero-headline">
+          <span class="word" style="animation-delay:0.35s">The&nbsp;</span><span class="word" style="animation-delay:0.45s">fitness&nbsp;</span><span class="word" style="animation-delay:0.55s">amenity&nbsp;</span><span class="word" style="animation-delay:0.65s">your&nbsp;</span><span class="word" style="animation-delay:0.75s">residents&nbsp;</span><span class="word" style="animation-delay:0.85s">will&nbsp;</span><span class="word" style="animation-delay:0.93s"><em>actually&nbsp;use.</em></span>
+        </h1>
+        <p class="hero-sub">Personalized 30-day programs, a Fitness Assistant built by real coaching intelligence, and progress tracking built into your building.</p>
+        <div class="hero-actions">
+          <a href="#apply" class="btn-primary">Apply for Your Building</a>
+          <button class="btn-watch" onclick="openVideoModal()">
+            <div class="watch-play-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </div>
+            Watch the full video
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- VIDEO MODAL -->
+<div class="video-modal" id="video-modal" onclick="handleModalClick(event)">
+  <div class="video-modal-inner">
+    <button class="video-modal-close" onclick="closeVideoModal()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Close
+    </button>
+    <video id="modal-video" controls playsinline>
+      <source src="https://res.cloudinary.com/dk5g9itw8/video/upload/q_auto/AMENITYFIT_AD_dtvkic.mp4" type="video/mp4" />
+      <source src="https://res.cloudinary.com/dk5g9itw8/video/upload/AMENITYFIT_AD_dtvkic.mov" type="video/quicktime" />
+    </video>
+  </div>
+</div>
+
+<!-- PROBLEM -->
+<section id="problem">
+  <div class="container">
+    <div class="problem-header reveal">
+      <div class="section-label light">The Problem</div>
+      <h2 class="light">Most building gyms <em>never get used.</em></h2>
+    </div>
+    <div class="problem-grid">
+      <div class="problem-panel reveal">
+        <div class="problem-panel-img" style="background-image:url('https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_1400/DSC00709_qgqt22')"></div>
+        <div class="problem-panel-overlay"></div>
+        <div class="problem-panel-content">
+          <div class="problem-num">01</div>
+          <h3>Quality equipment, zero guidance</h3>
+          <p>Residents show up motivated but have no organized way to maximize the facility. Without direction, newcomers can feel lost and stop coming. A room full of machines is not a fitness amenity.</p>
+        </div>
+      </div>
+      <div class="problem-panel reveal reveal-d1">
+        <div class="problem-panel-img" style="background-image:url('https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_1400/DSC00856_lnynbb')"></div>
+        <div class="problem-panel-overlay"></div>
+        <div class="problem-panel-content">
+          <div class="problem-num">02</div>
+          <h3>No accountability, no results</h3>
+          <p>Without structure and follow-through, residents stop before they start. The gym sees less engagement and the amenity quietly loses its value to the building.</p>
+        </div>
+      </div>
+      <div class="problem-panel reveal reveal-d2">
+        <div class="problem-panel-img" style="background-image:url('https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_1400/DSC00993_rtofgy')"></div>
+        <div class="problem-panel-overlay"></div>
+        <div class="problem-panel-content">
+          <div class="problem-num">03</div>
+          <h3>A clear separator from buildings with gyms</h3>
+          <p>Prospective residents might ask what makes your building different. A personalized fitness app tied to actual programming modeled after the exact equipment in your gym is a real answer.</p>
+        </div>
+      </div>
+      <div class="problem-panel reveal reveal-d3">
+        <div class="problem-panel-img" style="background-image:url('https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_1400/DSC01072_qipwla')"></div>
+        <div class="problem-panel-overlay"></div>
+        <div class="problem-panel-content">
+          <div class="problem-num">04</div>
+          <h3>One-size-fits-all doesn't fit anyone</h3>
+          <p>A beginner and a former athlete need completely different programs. AmenityFit adjusts automatically with no added equipment or manual input required from building staff.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <div class="features-top">
+      <div class="reveal">
+        <div class="section-label">What It Does</div>
+        <h2>Everything a personal trainer would do and more. <em>Built in.</em></h2>
+      </div>
+      <p class="lead reveal reveal-d1">AmenityFit delivers a complete fitness experience with personalized programs, expert guidance, nutrition, and wearable integration. No physical installations. No added headcount.</p>
+    </div>
+    <div class="feature-cards">
+      <div class="feature-card reveal">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        </div>
+        <h3>Personalized 30-Day Programs</h3>
+        <p>Every resident gets a program built around their fitness level, available equipment, and injury history. Programs evolve every cycle so residents never plateau.</p>
+      </div>
+      <div class="feature-card reveal reveal-d1">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h3>Fitness Assistant</h3>
+        <p>A real-time coaching assistant that answers form questions, adjusts recommendations, and keeps residents on track. Built on certified coaching expertise across strength, conditioning, corrective exercise, and life coaching.</p>
+      </div>
+      <div class="feature-card reveal reveal-d2">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <h3>Progress Tracking</h3>
+        <p>Residents track workouts completed, streaks, level-ups, and cycle history. Body measurements and weight logged over time so they can see exactly what is changing. Visible results drive retention and referrals.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- APP EXPERIENCE -->
+<section id="app-experience">
+  <div class="container">
+    <div class="app-grid">
+      <div class="phone-stack reveal-scale">
+        <div class="phone-frame phone-back">
+          <div class="phone-notch"></div>
+          <img class="phone-screen" src="https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_1000/DSC01500_wdgoih" alt="App screen" />
+        </div>
+        <div class="phone-frame phone-mid">
+          <div class="phone-notch"></div>
+          <img class="phone-screen" src="https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_1000/DSC01308_fogdzx" style="object-fit:cover;object-position:center 15%;" alt="App screen" />
+        </div>
+        <div class="phone-frame phone-main">
+          <div class="phone-notch"></div>
+          <img class="phone-screen" src="https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_1000/DSC01222_bbrcny" alt="App screen" />
+        </div>
+      </div>
+      <div class="app-features">
+        <div class="reveal">
+          <div class="section-label">App Experience</div>
+          <h2>Built for residents who actually show up.</h2>
+        </div>
+        <div class="app-feat-item reveal reveal-d1">
+          <div class="app-feat-num">01</div>
+          <div class="app-feat-text">
+            <h4>Access via building invite code</h4>
+            <p>Residents sign up with their building's unique code. No app store browsing, no searching. One link from management and they're in.</p>
+          </div>
+        </div>
+        <div class="app-feat-item reveal reveal-d2">
+          <div class="app-feat-num">02</div>
+          <div class="app-feat-text">
+            <h4>Video-guided workouts for every exercise</h4>
+            <p>Over 1,000 exercises each with an individual demonstration video. Over 10,000 unique workouts available, with programming that continuously evolves so residents never plateau.</p>
+          </div>
+        </div>
+        <div class="app-feat-item reveal reveal-d3">
+          <div class="app-feat-num">03</div>
+          <div class="app-feat-text">
+            <h4>Injury-aware from day one</h4>
+            <p>Residents note their injuries during onboarding. Every exercise, every program, every cycle automatically filters around them with no manual input needed.</p>
+          </div>
+        </div>
+        <div class="app-feat-item reveal reveal-d4">
+          <div class="app-feat-num">04</div>
+          <div class="app-feat-text">
+            <h4>Body measurement tracking built in</h4>
+            <p>Weight, waist, hips, arms, chest logged over time with visual charts. Residents see exactly what is changing across each 30-day cycle.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BUILDING MANAGER DASHBOARD -->
+<section id="manager">
+  <div class="container">
+    <div class="manager-grid">
+      <div class="manager-dashboard reveal-scale">
+        <div class="dash-header">
+          <div class="dash-header-left">
+            <span class="dash-building-label">Building Manager</span>
+            <span class="dash-building-name">One Manhattan Square</span>
+          </div>
+          <span style="font-size:11px;color:rgba(255,255,255,0.3);font-weight:300;">July 2026</span>
+        </div>
+        <div class="dash-tabs" id="dash-tabs">
+          <div class="dash-tab active" data-tab="overview" onclick="switchTab('overview')">Overview</div>
+          <div class="dash-tab" data-tab="equipment" onclick="switchTab('equipment')">Equipment</div>
+          <div class="dash-tab" data-tab="report" onclick="switchTab('report')">Report</div>
+        </div>
+        <div class="dash-progress-bar"><div class="dash-progress-fill" id="dash-progress"></div></div>
+
+        <!-- OVERVIEW TAB -->
+        <div class="dash-panel active" id="panel-overview">
+          <div>
+            <div class="dash-section-label">Adoption</div>
+            <div class="dash-stat-grid">
+              <div class="dash-stat-card">
+                <div class="dash-stat-val green" data-count="147" data-suffix="/200">0/200</div>
+                <div class="dash-stat-label">Signed Up</div>
+                <div class="dash-stat-sub">74% adoption rate</div>
+              </div>
+              <div class="dash-stat-card">
+                <div class="dash-stat-val blue" data-count="89">0</div>
+                <div class="dash-stat-label">Active This Month</div>
+                <div class="dash-stat-sub">logged a workout</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="dash-section-label">Engagement &mdash; July 2026</div>
+            <div class="dash-stat-3">
+              <div class="dash-stat-card">
+                <div class="dash-stat-val orange" data-count="312">0</div>
+                <div class="dash-stat-label">Workouts Done</div>
+              </div>
+              <div class="dash-stat-card">
+                <div class="dash-stat-val blue" style="font-size:22px">3.2</div>
+                <div class="dash-stat-label">Avg/User/Wk</div>
+              </div>
+              <div class="dash-stat-card">
+                <div class="dash-stat-val purple" data-count="204">0</div>
+                <div class="dash-stat-label">Coach Sessions</div>
+              </div>
+            </div>
+          </div>
+          <div class="dash-report-card">
+            <div class="dash-report-text">
+              <strong>Monthly Amenity Report</strong>
+              <span>Auto-generated. Share with ownership.</span>
+            </div>
+            <div class="dash-report-badge">PDF</div>
+          </div>
+        </div>
+
+        <!-- EQUIPMENT TAB -->
+        <div class="dash-panel" id="panel-equipment">
+          <div style="background:rgba(74,144,217,0.1);border:1px solid rgba(74,144,217,0.2);border-radius:6px;padding:10px 12px;margin-bottom:8px">
+            <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:3px">Gym Equipment Setup</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.5);font-weight:300;line-height:1.5">Resident programs only include exercises that match your equipment. Keep this updated as your gym changes.</div>
+          </div>
+          <div style="margin-bottom:8px">
+            <div class="equip-group-label">Start with a preset</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px">
+              <div style="border:1.5px solid var(--accent);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--accent);font-weight:500">Full Gym</div>
+              <div style="border:1px solid rgba(255,255,255,0.18);border-radius:20px;padding:4px 10px;font-size:11px;color:rgba(255,255,255,0.5);font-weight:300">Free Weights and Cardio</div>
+              <div style="border:1px solid rgba(255,255,255,0.18);border-radius:20px;padding:4px 10px;font-size:11px;color:rgba(255,255,255,0.5);font-weight:300">Dumbbells and Cardio</div>
+              <div style="border:1px solid rgba(255,255,255,0.18);border-radius:20px;padding:4px 10px;font-size:11px;color:rgba(255,255,255,0.5);font-weight:300">Resistance Bands Only</div>
+            </div>
+          </div>
+          <div class="equip-group">
+            <div class="equip-group-label">Free Weights</div>
+            <div class="equip-items">
+              <div class="equip-item"><div class="equip-check"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Dumbbells</div>
+              <div class="equip-item"><div class="equip-check"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Barbell</div>
+              <div class="equip-item"><div class="equip-check"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>EZ Bar</div>
+              <div class="equip-item"><div class="equip-check"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Kettlebell</div>
+            </div>
+          </div>
+          <div class="equip-group">
+            <div class="equip-group-label">Machines</div>
+            <div class="equip-items">
+              <div class="equip-item"><div class="equip-check"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Cable Machine</div>
+              <div class="equip-item"><div class="equip-check"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Lat Pulldown</div>
+              <div class="equip-item"><div class="equip-check"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Leg Press</div>
+              <div class="equip-item"><div class="equip-check"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Smith Machine</div>
+            </div>
+          </div>
+          <div class="equip-group">
+            <div class="equip-group-label">Cardio</div>
+            <div class="equip-items">
+              <div class="equip-item"><div class="equip-check"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Treadmill</div>
+              <div class="equip-item"><div class="equip-check"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Rowing Machine</div>
+              <div class="equip-item"><div class="equip-check"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Jump Rope</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.3);font-weight:300;margin-top:4px">Resident programs automatically filter to your specific equipment.</div>
+        </div>
+
+        <!-- REPORT TAB -->
+        <div class="dash-panel" id="panel-report">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div style="font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.3)">Monthly Amenity Report &mdash; July 2026</div>
+            <div class="dash-report-badge">PDF</div>
+          </div>
+          <div class="report-row"><span class="report-row-label">Residents Invited</span><span class="report-row-val">200</span></div>
+          <div class="report-row"><span class="report-row-label">Residents Signed Up</span><span class="report-row-val positive">147 (74%)</span></div>
+          <div class="report-row"><span class="report-row-label">Active This Month</span><span class="report-row-val positive">89</span></div>
+          <div class="report-row"><span class="report-row-label">Total Workouts Completed</span><span class="report-row-val positive">312</span></div>
+          <div class="report-row"><span class="report-row-label">Avg Workouts / User / Week</span><span class="report-row-val">3.2</span></div>
+          <div class="report-row"><span class="report-row-label">Fitness Assistant Sessions</span><span class="report-row-val">204</span></div>
+          <div class="report-row"><span class="report-row-label">Month-over-Month Growth</span><span class="report-row-val positive">+18%</span></div>
+        </div>
+      </div>
+      <div class="manager-content">
+        <div class="reveal">
+          <div class="section-label light">Building Manager Portal</div>
+          <h2 class="light">Complete visibility into your amenity's performance.</h2>
+        </div>
+        <p class="lead light reveal reveal-d1">Property managers get a dedicated dashboard with real-time data on adoption, engagement, and resident activity. Know exactly whether the investment is working.</p>
+        <div class="reveal reveal-d2">
+          <div class="manager-point">
+            <div class="manager-point-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4A90D9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div class="manager-point-text">
+              <strong>Adoption and engagement tracking</strong>
+              <span>See how many residents signed up, how many are actively training, and how that changes month over month.</span>
+            </div>
+          </div>
+          <div class="manager-point" style="margin-top:16px">
+            <div class="manager-point-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4A90D9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+            </div>
+            <div class="manager-point-text">
+              <strong>Equipment configuration</strong>
+              <span>Tell the platform exactly what your gym has. Resident programs automatically match what is available in your specific facility.</span>
+            </div>
+          </div>
+          <div class="manager-point" style="margin-top:16px">
+            <div class="manager-point-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4A90D9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="manager-point-text">
+              <strong>Monthly amenity report</strong>
+              <span>A clean PDF generated automatically each month. Forward it to ownership or use it in lease renewal conversations.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- NUTRITION -->
+<section id="nutrition">
+  <div class="nutrition-bg"></div>
+  <div class="container">
+    <div class="nutrition-inner">
+      <div class="reveal">
+        <div class="section-label light">Nutrition</div>
+        <h2 class="light">Fitness without nutrition is half the picture.</h2>
+        <p class="lead light" style="margin-top:18px">AmenityFit includes the Power 24 Smoothie Pack, a curated collection of 24 recipes built around hydration, natural protein, and recovery. Designed to complement every phase of the 30-day program.</p>
+        <div class="nutrition-points">
+          <div class="nutrition-point">24 unique recipes covering every training phase and goal</div>
+          <div class="nutrition-point">Natural protein from whole food sources to support muscle repair and growth</div>
+          <div class="nutrition-point">Hydration-focused formulas using structured water from fruits and vegetables</div>
+          <div class="nutrition-point">Works as a post-workout recovery drink, meal replacement, or daily snack</div>
+          <div class="nutrition-point">No calorie counting, no complicated rules. Practical nutrition that fits a busy schedule.</div>
+        </div>
+      </div>
+      <div class="smoothie-showcase reveal reveal-d2">
+        <div class="smoothie-img-wrap">
+          <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_700/Power_24_GREENHYDRA.pdf-image-027_fbipqv" alt="Green Hydra Smoothie" />
+          <div class="smoothie-img-overlay"></div>
+        </div>
+        <div class="smoothie-text-wrap">
+          <div class="smoothie-label">Power 24 Smoothie Pack</div>
+          <div class="smoothie-title">Green Hydra</div>
+          <div class="smoothie-desc">Cucumber, spinach, green apple, avocado, and coconut water. A nutrient-dense blend that hydrates at the cellular level and supports active recovery.</div>
+          <div class="smoothie-pills">
+            <div class="smoothie-pill">289 calories</div>
+            <div class="smoothie-pill">Natural protein</div>
+            <div class="smoothie-pill">Antioxidant-rich</div>
+            <div class="smoothie-pill">Hydrating</div>
+          </div>
+          <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1)">
+            <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.35);margin-bottom:8px">24 recipes included</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px">
+              <span style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:300">Berry Bliss</span>
+              <span style="color:rgba(255,255,255,0.18);font-size:12px">&#183;</span>
+              <span style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:300">Tropical Reviver</span>
+              <span style="color:rgba(255,255,255,0.18);font-size:12px">&#183;</span>
+              <span style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:300">Beet Boost</span>
+              <span style="color:rgba(255,255,255,0.18);font-size:12px">&#183;</span>
+              <span style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:300">+ 21 more</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FITNESS ASSISTANT -->
+<section id="assistant">
+  <div class="container">
+    <div class="assistant-grid">
+      <div class="reveal">
+        <div class="section-label">Fitness Assistant</div>
+        <h2>Real coaching intelligence. <em>On demand.</em></h2>
+        <p class="lead" style="margin-top:20px;margin-bottom:28px">The Fitness Assistant knows each resident's program, injury history, equipment access, and training phase. It gives the right answer for that resident in the moment, not a generic response.</p>
+        <div class="assistant-points">
+          <div class="assistant-point"><span class="assistant-point-dash">&#8212;</span>Answers form and technique questions with context specific to that resident's program</div>
+          <div class="assistant-point"><span class="assistant-point-dash">&#8212;</span>Explains why each exercise is in the program and how it fits the broader goal</div>
+          <div class="assistant-point"><span class="assistant-point-dash">&#8212;</span>Adjusts based on wearable recovery data when connected</div>
+          <div class="assistant-point"><span class="assistant-point-dash">&#8212;</span>Trained on certified expertise spanning strength, conditioning, corrective exercise, performance, nutrition, and life coaching</div>
+        </div>
+      </div>
+      <div class="chat-window reveal reveal-d2">
+        <div class="chat-top">
+          <div class="chat-avatar-wrap">
+            <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/f_png,q_auto/Logo_rkq0cv" alt="AmenityFit" />
+          </div>
+          <div class="chat-top-text">
+            <strong>Fitness Assistant</strong>
+            <span>Powered by real coaching expertise</span>
+          </div>
+          <div style="margin-left:auto"><div class="chat-status">Online</div></div>
+        </div>
+        <div class="chat-msgs">
+          <div class="msg user"><div class="bubble">Can I skip the Romanian deadlifts today? My hamstrings are still sore.</div></div>
+          <div class="msg"><div class="bubble">Soreness from yesterday is expected. That is muscle adaptation, not injury. The RDLs today are lighter and actually help flush the soreness. Go through them. Reduce range of motion on the first set if it feels sharp and you will feel better by set two.</div></div>
+          <div class="msg user"><div class="bubble">That actually makes sense. How much weight should I use?</div></div>
+          <div class="msg"><div class="bubble">Start at 60 to 65% of what felt challenging last week. You are in a volume phase. The goal is reps at controlled tempo, not max load. 3 sets of 10.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WEARABLES -->
+<section id="wearables">
+  <div class="container">
+    <div class="wearables-grid">
+      <div class="wearable-content">
+        <div class="reveal">
+          <div class="section-label light">Wearables</div>
+          <h2 class="light">Training that responds to your <em>actual recovery.</em></h2>
+          <p class="lead light" style="margin-top:14px;margin-bottom:20px">AmenityFit connects to residents' wearables and uses real recovery data to automatically adjust workout intensity in the background. No manual input. No guesswork.</p>
+        </div>
+        <div class="wearable-feature reveal reveal-d1">
+          <h4>Recovery-adjusted intensity</h4>
+          <p>When recovery is low, the program pulls back automatically. When it is strong, full intensity loads. The workout adapts to the person on that specific day.</p>
+        </div>
+        <div class="wearable-feature reveal reveal-d2">
+          <h4>Fitness Assistant context</h4>
+          <p>The coaching assistant reads recovery, strain, and sleep data to give more informed guidance. Residents get advice that reflects how their body actually feels.</p>
+        </div>
+        <div class="wearable-feature reveal reveal-d3">
+          <h4>Whoop, Apple Watch, and Fitbit</h4>
+          <p>All three integrations supported. Residents connect in one tap from their profile and the platform handles the rest.</p>
+        </div>
+      </div>
+      <div class="watch-showcase" id="watch-trio">
+        <div class="watch-row-top">
+          <div class="watch-card" id="watch-1">
+            <div class="watch-img-wrap">
+              <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_600/Screen_Shot_2026-05-23_at_12.48.33_PM_qn5tnu" alt="Whoop" />
+            </div>
+            <div class="watch-card-info">
+              <span class="watch-card-name">Whoop</span>
+              <div class="watch-live"><div class="live-dot"></div>Live</div>
+            </div>
+          </div>
+          <div class="watch-card" id="watch-2">
+            <div class="watch-img-wrap">
+              <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_600/Screen_Shot_2026-05-22_at_8.57.53_PM_o2mbgb" alt="Apple Watch" />
+            </div>
+            <div class="watch-card-info">
+              <span class="watch-card-name">Apple Watch</span>
+              <div class="watch-live"><div class="live-dot"></div>Live</div>
+            </div>
+          </div>
+        </div>
+        <div class="watch-card-wide" id="watch-3">
+          <div class="watch-img-wide">
+            <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_800/Screen_Shot_2026-05-23_at_12.46.31_PM_ihd27y" alt="Fitbit" />
+          </div>
+          <div class="watch-card-info">
+            <span class="watch-card-name">Fitbit</span>
+            <div class="watch-live"><div class="live-dot"></div>Live</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing">
+  <div class="container">
+    <div class="pricing-head reveal">
+      <div class="section-label">Pricing</div>
+      <h2>Simple, transparent pricing.</h2>
+      <p class="lead" style="margin-top:16px">Billed per building. No per-resident fees, no usage caps.</p>
+    </div>
+    <div class="calc-card reveal reveal-d1">
+      <div class="calc-top">
+        <span class="calc-top-label">Building size</span>
+        <span class="calc-unit-display" id="unit-display">100 units</span>
+      </div>
+      <input type="range" id="unit-slider" min="1" max="300" value="100" oninput="updateCalc(this.value)" onchange="updateCalc(this.value)" />
+      <div class="calc-result" id="calc-result">
+        <div class="calc-price-col">
+          <div class="calc-freq">Monthly</div>
+          <div class="calc-price" id="monthly-price"><sup>$</sup><span id="monthly-val">999</span></div>
+        </div>
+        <div class="calc-annual-col">
+          <div class="calc-annual-label">Billed annually</div>
+          <div class="calc-annual-price" id="annual-price">$9,990</div>
+          <div class="calc-save" id="save-badge">Save ~15%</div>
+        </div>
+      </div>
+      <div class="custom-input-wrap" id="custom-wrap">
+        <div class="custom-input-inner">
+          <input type="number" id="custom-units" placeholder="Enter exact unit count" min="201" />
+          <button class="btn-primary" onclick="calcCustom()">Calculate</button>
+        </div>
+        <div class="custom-result" id="custom-result"></div>
+      </div>
+      <div class="tier-pills" id="tier-pills">
+        <div class="tier-pill" id="tp1" onclick="selectTierPill(25)"><strong>$599/mo</strong><span>Up to 50 units</span></div>
+        <div class="tier-pill active" id="tp2" onclick="selectTierPill(75)"><strong>$999/mo</strong><span>51 to 100 units</span></div>
+        <div class="tier-pill" id="tp3" onclick="selectTierPill(150)"><strong>$1,499/mo</strong><span>101 to 200 units</span></div>
+        <div class="tier-pill" id="tp4" onclick="selectTierPill(250)"><strong>Custom</strong><span>200+ units</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CREDIBILITY -->
+<section id="credibility">
+  <div class="container">
+    <div class="cred-grid">
+      <div class="cred-photo-wrap reveal-scale">
+        <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_700/IMG_9496_uofbki" alt="AmenityFit founder" />
+        <div class="cred-photo-accent"></div>
+      </div>
+      <div class="cred-content">
+        <div class="reveal">
+          <div class="section-label">Built by</div>
+          <h2>Credentials that show up in every workout.</h2>
+        </div>
+        <p class="lead reveal reveal-d1">AmenityFit was built by a certified strength and conditioning coach, corrective exercise specialist, performance enhancement specialist, nutrition coach, life coach, and former professional athlete. Every program, every exercise selection, and every piece of guidance reflects that depth of expertise.</p>
+        <div class="cred-certs reveal reveal-d2">
+          <div class="cred-cert"><p>Certified Personal Trainer</p></div>
+          <div class="cred-cert"><p>Strength &amp; Conditioning Coach</p></div>
+          <div class="cred-cert"><p>Corrective Exercise Specialist</p></div>
+          <div class="cred-cert"><p>Performance Enhancement Specialist</p></div>
+          <div class="cred-cert"><p>Nutrition Coach</p></div>
+          <div class="cred-cert"><p>Life Coach</p></div>
+          <div class="cred-cert"><p>Former Professional Athlete</p></div>
+          <div class="cred-cert"><p>Ivy League Education</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- APPLY -->
+<section id="apply">
+  <div class="container">
+    <div class="apply-grid">
+      <div>
+        <div class="reveal">
+          <div class="section-label light">Apply</div>
+          <h2 class="light">Apply for your building.</h2>
+          <p class="lead light" style="margin-top:18px">Tell us about your property. We review every application and follow up within 2 business days.</p>
+        </div>
+        <div class="apply-steps reveal reveal-d1">
+          <div class="apply-step">
+            <div class="step-num">1</div>
+            <div class="step-text"><strong>Submit your application</strong><span>Takes 2 minutes. Building name, size, and your contact info.</span></div>
+          </div>
+          <div class="apply-step">
+            <div class="step-num">2</div>
+            <div class="step-text"><strong>We reach out within 2 business days</strong><span>Review call, any questions answered, pricing confirmed.</span></div>
+          </div>
+          <div class="apply-step">
+            <div class="step-num">3</div>
+            <div class="step-text"><strong>Residents get access</strong><span>Building invite codes distributed. Setup is instant.</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="reveal reveal-d2">
+        <div class="apply-form-wrap" id="apply-form-wrap">
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div class="form-row">
+              <div class="form-group"><label>First Name</label><input type="text" id="f-first" placeholder="Jane" /></div>
+              <div class="form-group"><label>Last Name</label><input type="text" id="f-last" placeholder="Smith" /></div>
+            </div>
+            <div class="form-group"><label>Email</label><input type="email" id="f-email" placeholder="jane@building.com" /></div>
+            <div class="form-group"><label>Building Name</label><input type="text" id="f-building" placeholder="One Manhattan Square" /></div>
+            <div class="form-row">
+              <div class="form-group"><label>City</label><input type="text" id="f-city" placeholder="New York" /></div>
+              <div class="form-group"><label>Number of Units</label><input type="number" id="f-units" placeholder="300" min="1" /></div>
+            </div>
+            <div class="form-group">
+              <label>Your Role</label>
+              <select id="f-role" onchange="handleRoleChange(this.value)">
+                <option value="" disabled selected>Select your role</option>
+                <option>Property Manager</option>
+                <option>Building Owner</option>
+                <option>Amenities Director</option>
+                <option>Resident Services</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group other-role-wrap" id="other-role-wrap">
+              <label>Please specify your role</label>
+              <input type="text" id="f-other-role" placeholder="Your role" />
+            </div>
+            <div class="form-group"><label>Anything else?</label><textarea id="f-notes" placeholder="Optional. Any context about your building or timing."></textarea></div>
+            <button class="form-submit" id="form-btn" onclick="submitApp()">Submit Application</button>
+          </div>
+        </div>
+        <div class="form-success" id="form-success">
+          <div class="success-icon">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h3>Application received.</h3>
+          <p>We will be in touch within 2 business days.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <a href="#" class="footer-logo"><img src="https://res.cloudinary.com/dk5g9itw8/image/upload/f_png,q_auto/Logo_rkq0cv" alt="AmenityFit" /></a>
+      <p class="footer-copy">&copy; 2026 Fitmakesenz LLC. All rights reserved.</p>
+      <div class="footer-links">
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#apply">Apply</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Mark body as JS ready for animations
+  document.body.classList.add('js-ready');
+
+  // NAV SCROLL
+  const nav = document.getElementById('nav');
+  function handleNavScroll() {
+    nav.classList.toggle('scrolled', window.scrollY > 40);
+  }
+  window.addEventListener('scroll', handleNavScroll, { passive: true });
+  handleNavScroll();
+
+  // HERO VIDEO
+  const vid = document.getElementById('hero-video');
+  const unmuteBtn = document.getElementById('unmute-btn');
+  if (vid) {
+    vid.addEventListener('canplay', () => { vid.classList.add('loaded'); unmuteBtn.classList.add('show'); });
+    vid.addEventListener('error', () => {});
+  }
+  function toggleMute() {
+    if (!vid) return;
+    vid.muted = !vid.muted;
+    unmuteBtn.innerHTML = vid.muted ? '&#128264; Unmute' : '&#128266; Mute';
+  }
+
+  // VIDEO MODAL
+  const modal = document.getElementById('video-modal');
+  const modalVid = document.getElementById('modal-video');
+  function openVideoModal() {
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    if (modalVid) { modalVid.currentTime = 0; modalVid.play().catch(() => {}); }
+  }
+  function closeVideoModal() {
+    modal.classList.remove('open');
+    document.body.style.overflow = '';
+    if (modalVid) { modalVid.pause(); }
+  }
+  function handleModalClick(e) {
+    if (e.target === modal) closeVideoModal();
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeVideoModal(); });
+
+  // SCROLL REVEAL
+  const revealEls = document.querySelectorAll('.reveal, .reveal-scale, .watch-card, .watch-card-wide');
+  const revealObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); revealObs.unobserve(e.target); } });
+  }, { threshold: 0.01, rootMargin: '0px 0px 0px 0px' });
+  revealEls.forEach(el => revealObs.observe(el));
+
+  // DASHBOARD TABS
+  let dashAutoTimer = null;
+  let dashProgressAnim = null;
+  const dashTabs = ['overview', 'equipment', 'report'];
+  let dashCurrentIdx = 0;
+  const DASH_INTERVAL = 4000;
+
+  let dashPaused = false;
+  let dashHeld = false;
+
+  // Press and hold to pause the slider
+  function setupDashHold() {
+    const dash = document.querySelector('.manager-dashboard');
+    if (!dash) return;
+    const pause = () => { dashHeld = true; dashPaused = true; };
+    const resume = () => {
+      dashHeld = false;
+      dashPaused = false;
+      clearTimeout(window._dashResumeTimer);
+      startDashAuto();
+    };
+    dash.addEventListener('mousedown', pause);
+    dash.addEventListener('touchstart', pause, { passive: true });
+    dash.addEventListener('mouseup', resume);
+    dash.addEventListener('mouseleave', resume);
+    dash.addEventListener('touchend', resume);
+  }
+
+  function switchTab(tabId, resetAuto = true) {
+    dashPaused = true; // user clicked, pause
+    document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.dash-panel').forEach(p => p.classList.remove('active'));
+    const tabEl = document.querySelector(`[data-tab="${tabId}"]`);
+    const panelEl = document.getElementById(`panel-${tabId}`);
+    if (tabEl) tabEl.classList.add('active');
+    if (panelEl) panelEl.classList.add('active');
+    dashCurrentIdx = dashTabs.indexOf(tabId);
+    // Trigger counters if switching to overview
+    if (tabId === 'overview') {
+      panelEl.querySelectorAll('[data-count]').forEach(animateCount);
+    }
+    if (resetAuto) {
+      startDashAuto();
+      // Resume auto after 8s of no interaction
+      clearTimeout(window._dashResumeTimer);
+      window._dashResumeTimer = setTimeout(() => { dashPaused = false; startDashAuto(); }, 8000);
+    }
+  }
+
+  function startDashAuto() {
+    clearInterval(dashAutoTimer);
+    const fill = document.getElementById('dash-progress');
+    if (fill) { fill.style.transition = 'none'; fill.style.width = '0%'; }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (fill) {
+          fill.style.transition = `width ${DASH_INTERVAL}ms linear`;
+          fill.style.width = '100%';
+        }
+      });
+    });
+    dashAutoTimer = setInterval(() => {
+      if (dashPaused) return;
+      dashCurrentIdx = (dashCurrentIdx + 1) % dashTabs.length;
+      switchTab(dashTabs[dashCurrentIdx], false);
+      // Restart bar
+      const f = document.getElementById('dash-progress');
+      if (f) { f.style.transition = 'none'; f.style.width = '0%'; }
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (f) { f.style.transition = `width ${DASH_INTERVAL}ms linear`; f.style.width = '100%'; }
+      }));
+    }, DASH_INTERVAL);
+  }
+
+  setupDashHold();
+
+  // Start auto when dashboard enters viewport
+  const dashObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.querySelectorAll('[data-count]').forEach(animateCount);
+        startDashAuto();
+        dashObs.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.3 });
+  const dashEl = document.querySelector('.manager-dashboard');
+  if (dashEl) dashObs.observe(dashEl);
+  // Trigger counters immediately if dashboard already visible
+  setTimeout(() => { document.querySelectorAll('#panel-overview [data-count]').forEach(animateCount); }, 800);
+
+  // COUNTER ANIMATION
+  function animateCount(el) {
+    const target = parseInt(el.dataset.count);
+    const suffix = el.dataset.suffix || '';
+    if (!target) return;
+    const dur = 1200; const step = 16;
+    const steps = dur / step;
+    let cur = 0;
+    const inc = target / steps;
+    const timer = setInterval(() => {
+      cur = Math.min(cur + inc, target);
+      el.textContent = Math.floor(cur) + suffix;
+      if (cur >= target) { el.textContent = target + suffix; clearInterval(timer); }
+    }, step);
+  }
+
+  // PHONE PARALLAX + HOVER EXPAND
+  const phoneStack = document.querySelector('.phone-stack');
+  if (phoneStack) {
+    // Subtle parallax on scroll
+    window.addEventListener('scroll', () => {
+      const rect = phoneStack.getBoundingClientRect();
+      const mid = window.innerHeight / 2;
+      const offset = (rect.top + rect.height / 2 - mid) * 0.03;
+      document.querySelector('.phone-main').style.transform = `translateY(${offset}px)`;
+    }, { passive: true });
+  }
+
+  // MOBILE MENU
+  function toggleMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    const btn = document.getElementById('nav-hamburger');
+    const open = menu.classList.toggle('open');
+    btn.classList.toggle('open', open);
+    document.body.style.overflow = open ? 'hidden' : '';
+  }
+  function closeMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    const btn = document.getElementById('nav-hamburger');
+    menu.classList.remove('open');
+    btn.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  // Close mobile menu on resize to desktop
+  window.addEventListener('resize', () => { if (window.innerWidth > 768) closeMobileMenu(); });
+
+
+  const tiers = [
+    { max: 50,  monthly: 599,  id: 'tp1' },
+    { max: 100, monthly: 999,  id: 'tp2' },
+    { max: 200, monthly: 1499, id: 'tp3' },
+    { max: Infinity, monthly: null, id: 'tp4' }
+  ];
+  let _lastTierMonthly = null;
+  function selectTierPill(units) {
+    var slider = document.getElementById('unit-slider');
+    if (slider) { slider.value = units; }
+    updateCalc(units);
+  }
+
+  function updateCalc(val) {
+    val = parseInt(val);
+    if (isNaN(val) || val < 1) val = 1;
+    if (val > 300) val = 300;
+    document.getElementById('unit-display').textContent = val + ' units';
+    // Find correct tier
+    let tier = null;
+    for (let i = 0; i < tiers.length; i++) {
+      if (val <= tiers[i].max) { tier = tiers[i]; break; }
+    }
+    if (!tier) tier = tiers[tiers.length - 1];
+    // Highlight correct pill - always safe
+    tiers.forEach(function(t) {
+      const el = document.getElementById(t.id);
+      if (el) el.classList.remove('active');
+    });
+    const activeEl = document.getElementById(tier.id);
+    if (activeEl) activeEl.classList.add('active');
+    const customWrap = document.getElementById('custom-wrap');
+    const calcResult = document.getElementById('calc-result');
+    if (!tier.monthly) {
+      if (calcResult) calcResult.style.display = 'none';
+      if (customWrap) customWrap.classList.add('show');
+    } else {
+      if (calcResult) calcResult.style.display = 'grid';
+      if (customWrap) customWrap.classList.remove('show');
+      // Only update text if tier actually changed (avoids jitter while sliding within same tier)
+      if (tier.monthly !== _lastTierMonthly) {
+        _lastTierMonthly = tier.monthly;
+        const mEl = document.getElementById('monthly-val');
+        if (mEl) mEl.textContent = tier.monthly.toLocaleString();
+        const annual = tier.monthly * 10;
+        const annEl = document.getElementById('annual-price');
+        if (annEl) annEl.textContent = '$' + annual.toLocaleString();
+        const saveEl = document.getElementById('save-badge');
+        if (saveEl) saveEl.textContent = 'Save ~15%';
+      }
+    }
+  }
+  function calcCustom() {
+    const units = parseInt(document.getElementById('custom-units').value);
+    const res = document.getElementById('custom-result');
+    if (!units || units < 1) { res.textContent = 'Please enter a valid unit count.'; return; }
+    let base, label;
+    if (units <= 300) { base = 1999; label = '201 to 300 units'; }
+    else if (units <= 500) { base = 2799; label = '301 to 500 units'; }
+    else if (units <= 1000) { base = 3999; label = '501 to 1,000 units'; }
+    else { base = null; label = 'enterprise portfolio'; }
+    if (base) {
+      res.innerHTML = `Estimated for ${units} units (${label}): <strong>$${base.toLocaleString()}/mo</strong> &middot; <strong>$${(base*10).toLocaleString()}/yr</strong> billed annually. Final pricing confirmed after review.`;
+    } else {
+      res.innerHTML = `For a portfolio of ${units}+ units, pricing is determined after a review call. Apply below and we will follow up within 2 business days.`;
+    }
+  }
+
+  // Initialize pricing calculator at default value
+  updateCalc(100);
+
+  // IOS TOUCH FIXES — wire touch events for all interactive elements
+  // Slider — add touchmove handler for iOS
+  const slider = document.getElementById('unit-slider');
+  if (slider) {
+    slider.addEventListener('input', function() { updateCalc(this.value); });
+    slider.addEventListener('change', function() { updateCalc(this.value); });
+  }
+
+  // Tier pills — add touchend as backup for iOS
+  document.querySelectorAll('.tier-pill').forEach(pill => {
+    pill.addEventListener('touchend', function(e) {
+      e.preventDefault();
+      const onclick = this.getAttribute('onclick');
+      if (onclick) { const match = onclick.match(/selectTierPill\((\d+)\)/); if (match) selectTierPill(parseInt(match[1])); }
+    });
+  });
+
+  // Dashboard tabs — touchend backup
+  document.querySelectorAll('.dash-tab').forEach(tab => {
+    tab.addEventListener('touchend', function(e) {
+      e.preventDefault();
+      const tabId = this.getAttribute('data-tab');
+      if (tabId) switchTab(tabId);
+    });
+  });
+
+  // Form role select — change fires on iOS but just in case
+  const roleSelect = document.getElementById('f-role');
+  if (roleSelect) {
+    roleSelect.addEventListener('change', function() { handleRoleChange(this.value); });
+  }
+
+  // Form submit button touch
+  const formBtn = document.getElementById('form-btn');
+  if (formBtn) {
+    formBtn.addEventListener('touchend', function(e) { e.preventDefault(); submitApp(); });
+  }
+
+
+  function handleRoleChange(val) {
+    const wrap = document.getElementById('other-role-wrap');
+    wrap.classList.toggle('show', val === 'Other');
+  }
+  async function submitApp() {
+    const btn = document.getElementById('form-btn');
+    const first = document.getElementById('f-first').value.trim();
+    const email = document.getElementById('f-email').value.trim();
+    const building = document.getElementById('f-building').value.trim();
+    const units = document.getElementById('f-units').value.trim();
+    const role = document.getElementById('f-role').value;
+    const otherRole = document.getElementById('f-other-role').value.trim();
+    if (!first || !email || !building || !units) { alert('Please fill in the required fields.'); return; }
+    btn.disabled = true; btn.textContent = 'Submitting...';
+    const result = await window.__submitApplication({
+      firstName: first, lastName: document.getElementById('f-last').value.trim(),
+      email, buildingName: building, city: document.getElementById('f-city').value.trim(),
+      units: parseInt(units) || 0, role: role === 'Other' ? otherRole || 'Other' : role,
+      notes: document.getElementById('f-notes').value.trim()
+    });
+    if (result.success) {
+      document.getElementById('apply-form-wrap').style.display = 'none';
+      const s = document.getElementById('form-success');
+      s.classList.add('show'); s.style.display = 'block';
+    } else {
+      btn.disabled = false; btn.textContent = 'Submit Application';
+      alert('There was an issue submitting. Please try again.');
+    }
+  }
+</script>
+</body>
+</html>
