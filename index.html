@@ -311,7 +311,7 @@
     body.js-ready .reveal-scale.visible { opacity: 1; transform: scale(1) translateY(0); }
 
     /* PROBLEM */
-    #problem { background: var(--text); padding: 0; scroll-margin-top: 70px; }
+    #problem { background: var(--text); padding: 0; scroll-margin-top: 100px; }
     .problem-header { padding: clamp(24px,3vh,40px) clamp(20px,5vw,60px) clamp(14px,1.8vh,22px); }
     .problem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
     .problem-panel {
@@ -343,7 +343,7 @@
     .problem-panel p { font-size: 12px; color: rgba(255,255,255,0.6); line-height: 1.55; font-weight: 300; max-width: 360px; }
 
     /* FEATURES */
-    #features { background: var(--subtle); padding-bottom: clamp(64px,8vh,100px); scroll-margin-top: 70px; }
+    #features { background: var(--subtle); padding-bottom: clamp(64px,8vh,100px); scroll-margin-top: 100px; }
     .features-top { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: end; margin-bottom: 44px; }
     .feature-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
     .feature-card {
@@ -368,7 +368,7 @@
     .feature-card p { font-size: 13px; color: var(--muted); line-height: 1.68; font-weight: 300; }
 
     /* APP EXPERIENCE */
-    #app-experience { background: var(--bg); overflow: hidden; scroll-margin-top: 70px; }
+    #app-experience { background: var(--bg); overflow: hidden; scroll-margin-top: 100px; }
     .app-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
     .phone-stack {
       position: relative; height: 440px;
@@ -420,7 +420,7 @@
     .app-feat-text p { font-size: 13px; color: var(--muted); line-height: 1.6; font-weight: 300; }
 
     /* MANAGER DASHBOARD */
-    #manager { background: var(--text); scroll-margin-top: 70px; }
+    #manager { background: var(--text); scroll-margin-top: 100px; }
     .manager-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 52px; align-items: center; }
     .manager-dashboard {
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
@@ -460,7 +460,7 @@
       border-radius: 8px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
     }
     /* MANAGER DASHBOARD - TABBED SLIDER */
-    #manager { background: var(--text); scroll-margin-top: 70px; }
+    #manager { background: var(--text); scroll-margin-top: 100px; }
     .manager-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 52px; align-items: center; }
     .manager-dashboard {
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
@@ -677,7 +677,7 @@
     .wearable-feature p { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.55; font-weight: 300; }
 
     /* PRICING */
-    #pricing { background: var(--subtle); scroll-margin-top: 70px; }
+    #pricing { background: var(--subtle); scroll-margin-top: 100px; }
     .pricing-head { text-align: center; max-width: 520px; margin: 0 auto 36px; }
     .pricing-head .section-label { justify-content: center; }
     .pricing-head .section-label::after { display: none; }
@@ -750,7 +750,7 @@
     .cred-cert p { font-size: 12px; font-weight: 500; color: var(--text); line-height: 1.35; }
 
     /* APPLY */
-    #apply { background: var(--text); scroll-margin-top: 70px; }
+    #apply { background: var(--text); scroll-margin-top: 100px; }
     .apply-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start; }
     .apply-steps { display: flex; flex-direction: column; gap: 20px; margin-top: 32px; }
     .apply-step { display: flex; gap: 14px; align-items: flex-start; }
@@ -852,7 +852,8 @@
       .lead { font-size: 14px; }
 
       /* NAV */
-      #nav { height: 58px; padding: 0 18px; }
+      #nav { height: 58px; padding: 0 18px; background: rgba(13,13,26,0.95) !important; }
+      #nav.scrolled { background: rgba(255,255,255,0.98) !important; }
       .nav-logo-icon img { height: 28px; }
       .nav-wordmark-center { font-size: 18px; }
       .nav-cta { font-size: 12px; padding: 8px 14px; }
@@ -996,12 +997,12 @@
 
 <!-- MOBILE MENU -->
 <div class="mobile-menu" id="mobile-menu">
-  <a href="#problem" onclick="closeMobileMenu()">The Problem</a>
-  <a href="#features" onclick="closeMobileMenu()">Features</a>
-  <a href="#app-experience" onclick="closeMobileMenu()">App</a>
-  <a href="#manager" onclick="closeMobileMenu()">For Managers</a>
-  <a href="#pricing" onclick="closeMobileMenu()">Pricing</a>
-  <a href="#apply" class="mobile-cta" onclick="closeMobileMenu()">Apply for Your Building</a>
+  <a href="#problem" onclick="event.preventDefault();scrollToSection('problem')">The Problem</a>
+  <a href="#features" onclick="event.preventDefault();scrollToSection('features')">Features</a>
+  <a href="#app-experience" onclick="event.preventDefault();scrollToSection('app-experience')">App</a>
+  <a href="#manager" onclick="event.preventDefault();scrollToSection('manager')">For Managers</a>
+  <a href="#pricing" onclick="event.preventDefault();scrollToSection('pricing')">Pricing</a>
+  <a href="#apply" class="mobile-cta" onclick="event.preventDefault();scrollToSection('apply')">Apply for Your Building</a>
 </div>
 
 <!-- HERO -->
@@ -1823,6 +1824,16 @@
       const offset = (rect.top + rect.height / 2 - mid) * 0.03;
       document.querySelector('.phone-main').style.transform = `translateY(${offset}px)`;
     }, { passive: true });
+  }
+
+  // SMOOTH SCROLL WITH OFFSET for mobile nav links
+  function scrollToSection(id) {
+    closeMobileMenu();
+    const el = document.getElementById(id);
+    if (!el) return;
+    const navH = document.getElementById('nav').offsetHeight;
+    const top = el.getBoundingClientRect().top + window.pageYOffset - navH - 16;
+    window.scrollTo({ top, behavior: 'smooth' });
   }
 
   // MOBILE MENU
