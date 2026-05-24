@@ -26,7 +26,7 @@
     window.__submitApplication = async function(data) {
       try {
         // Save to buildingSubmissions (existing)
-        await addDoc(collection(db, 'buildingSubmissions'), { ...data, submittedAt: serverTimestamp(), source: 'amenityfit.app' });
+        await addDoc(collection(db, 'buildingSubmissions'), { ...data, submittedAt: serverTimestamp(), source: 'amenityfit.app', status: 'pending' });
         // Trigger email notification via Firebase Extension
         await addDoc(collection(db, 'emailTriggers'), {
           to: 'itmakesenzfitness@gmail.com',
