@@ -5,6 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AmenityFit — The Fitness Amenity Your Residents Will Actually Use</title>
   <meta name="description" content="Personalized 30-day programs, a Fitness Assistant built by real coaching intelligence, and progress tracking built into your building." />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="https://res.cloudinary.com/dk5g9itw8/image/upload/f_png,q_auto,w_64/Logo_rkq0cv" />
+  <link rel="apple-touch-icon" href="https://res.cloudinary.com/dk5g9itw8/image/upload/f_png,q_auto,w_180/Logo_rkq0cv" />
+
+  <!-- Open Graph / Social sharing -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://amenityfit.app/" />
+  <meta property="og:title" content="AmenityFit — The Fitness Amenity Your Residents Will Actually Use" />
+  <meta property="og:description" content="Personalized 30-day programs, a Fitness Assistant built by real coaching intelligence, and progress tracking built into your building." />
+  <meta property="og:image" content="https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_1200/DSC01222_bbrcny" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="AmenityFit — The Fitness Amenity Your Residents Will Actually Use" />
+  <meta name="twitter:description" content="Personalized 30-day programs, a Fitness Assistant built by real coaching intelligence, and progress tracking built into your building." />
+  <meta name="twitter:image" content="https://res.cloudinary.com/dk5g9itw8/image/upload/q_auto,f_jpg,w_1200/DSC01222_bbrcny" />
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-4TNLEVZ25E"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-4TNLEVZ25E');
+  </script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet" />
@@ -26,7 +51,16 @@
     window.__submitApplication = async function(data) {
       try {
         // Save to buildingSubmissions (existing)
-        await addDoc(collection(db, 'buildingSubmissions'), { ...data, submittedAt: serverTimestamp(), source: 'amenityfit.app', status: 'pending' });
+        await addDoc(collection(db, 'buildingSubmissions'), {
+          ...data,
+          // Aliases to match superadmin field names
+          contactName: (data.firstName || '') + ' ' + (data.lastName || ''),
+          managerEmail: data.email,
+          location: data.city,
+          submittedAt: serverTimestamp(),
+          source: 'amenityfit.app',
+          status: 'pending'
+        });
         // Trigger email notification via Firebase Extension
         await addDoc(collection(db, 'emailTriggers'), {
           to: 'itmakesenzfitness@gmail.com',
@@ -41,6 +75,19 @@
               '<p><strong>Units:</strong> ' + (data.units || '') + '</p>' +
               '<p><strong>Role:</strong> ' + (data.role || '') + '</p>' +
               '<p><strong>Notes:</strong> ' + (data.notes || 'None') + '</p>'
+          }
+        });
+        // Confirmation email back to applicant
+        await addDoc(collection(db, 'emailTriggers'), {
+          to: data.email,
+          message: {
+            subject: 'We received your AmenityFit application',
+            html:
+              '<p>Hi ' + (data.firstName || '') + ',</p>' +
+              '<p>We received your application for <strong>' + (data.buildingName || '') + '</strong>. Someone from our team will be in touch within 2 business days.</p>' +
+              '<p>Feel free to reply to this email with any questions.</p>' +
+              '<p>— The AmenityFit Team</p>' +
+              '<p style="font-size:11px;color:#999;margin-top:24px;">AmenityFit · amenityfit.app</p>'
           }
         });
         return { success: true };
