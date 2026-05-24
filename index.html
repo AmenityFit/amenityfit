@@ -677,7 +677,7 @@
     .wearable-feature p { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.55; font-weight: 300; }
 
     /* PRICING */
-    #pricing { background: var(--subtle); scroll-margin-top: 100px; }
+    #pricing { background: var(--subtle); scroll-margin-top: 58px; }
     .pricing-head { text-align: center; max-width: 520px; margin: 0 auto 36px; }
     .pricing-head .section-label { justify-content: center; }
     .pricing-head .section-label::after { display: none; }
@@ -1528,7 +1528,7 @@
       </div>
       <div class="custom-input-wrap" id="custom-wrap">
         <div class="custom-input-inner">
-          <input type="number" id="custom-units" placeholder="Enter exact unit count" min="201" />
+          <input type="number" id="custom-units" placeholder="Enter exact unit count" min="201" oninput="if(!this.value){document.getElementById('custom-result').innerHTML=''}" />
           <button class="btn-primary" onclick="calcCustom()">Calculate</button>
         </div>
         <div class="custom-result" id="custom-result"></div>
@@ -1896,6 +1896,11 @@
     } else {
       if (calcResult) calcResult.style.display = 'grid';
       if (customWrap) customWrap.classList.remove('show');
+      // Clear custom result when leaving custom tier
+      const customRes = document.getElementById('custom-result');
+      const customInput = document.getElementById('custom-units');
+      if (customRes) customRes.innerHTML = '';
+      if (customInput) customInput.value = '';
       // Only update text if tier actually changed (avoids jitter while sliding within same tier)
       if (tier.monthly !== _lastTierMonthly) {
         _lastTierMonthly = tier.monthly;
