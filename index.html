@@ -73,6 +73,7 @@
               '<p><strong>Building:</strong> ' + (data.buildingName || '') + '</p>' +
               '<p><strong>City:</strong> ' + (data.city || '') + '</p>' +
               '<p><strong>Units:</strong> ' + (data.units || '') + '</p>' +
+              '<p><strong>Phone:</strong> ' + (data.phone || 'Not provided') + '</p>' +
               '<p><strong>Role:</strong> ' + (data.role || '') + '</p>' +
               '<p><strong>Notes:</strong> ' + (data.notes || 'None') + '</p>'
           }
@@ -1600,6 +1601,7 @@
               <div class="form-group"><label>Last Name</label><input type="text" id="f-last" placeholder="Smith" /></div>
             </div>
             <div class="form-group"><label>Email</label><input type="email" id="f-email" placeholder="jane@building.com" /></div>
+            <div class="form-group"><label>Phone Number</label><input type="tel" id="f-phone" placeholder="+1 (212) 555-0100" /></div>
             <div class="form-group"><label>Building Name</label><input type="text" id="f-building" placeholder="One Manhattan Square" /></div>
             <div class="form-row">
               <div class="form-group"><label>City</label><input type="text" id="f-city" placeholder="New York" /></div>
@@ -1971,6 +1973,7 @@
       firstName: first, lastName: document.getElementById('f-last').value.trim(),
       email, buildingName: building, city: document.getElementById('f-city').value.trim(),
       units: parseInt(units) || 0, role: role === 'Other' ? otherRole || 'Other' : role,
+      phone: document.getElementById('f-phone').value.trim(),
       notes: document.getElementById('f-notes').value.trim()
     });
     if (result.success) {
