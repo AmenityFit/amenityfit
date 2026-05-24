@@ -798,6 +798,19 @@
 
     /* FOOTER */
     footer { background: #0d0d1a; border-top: 1px solid rgba(255,255,255,0.06); padding: 48px 0; }
+    .footer-app-store { text-align: center; margin-bottom: 36px; padding-bottom: 36px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .footer-app-label { font-size: 12px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 16px; }
+    .footer-app-buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .app-store-btn {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; padding: 10px 20px; text-decoration: none; color: #fff;
+      transition: background 0.2s, border-color 0.2s; min-width: 150px;
+    }
+    .app-store-btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+    .app-store-btn div { display: flex; flex-direction: column; }
+    .app-store-sub { font-size: 10px; color: rgba(255,255,255,0.45); font-weight: 300; line-height: 1; margin-bottom: 2px; }
+    .app-store-name { font-size: 15px; font-weight: 500; line-height: 1; }
     .footer-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; }
     footer .footer-logo img { height: 30px; opacity: 0.65; }
     .footer-copy { font-size: 13px; color: rgba(255,255,255,0.25); font-weight: 300; }
@@ -1213,7 +1226,7 @@
           <div class="dash-tab" data-tab="report" onclick="switchTab('report')">Report</div>
         </div>
         <div class="dash-progress-bar"><div class="dash-progress-fill" id="dash-progress"></div></div>
-
+        <div style="min-height:380px;">
         <!-- OVERVIEW TAB -->
         <div class="dash-panel active" id="panel-overview">
           <div>
@@ -1315,6 +1328,7 @@
           <div class="report-row"><span class="report-row-label">Fitness Assistant Sessions</span><span class="report-row-val">204</span></div>
           <div class="report-row"><span class="report-row-label">Month-over-Month Growth</span><span class="report-row-val positive">+18%</span></div>
         </div>
+        </div><!-- end panels wrap -->
       </div>
       <div class="manager-content">
         <div class="reveal">
@@ -1644,6 +1658,25 @@
 <!-- FOOTER -->
 <footer>
   <div class="container">
+    <div class="footer-app-store">
+      <p class="footer-app-label">Download the resident app</p>
+      <div class="footer-app-buttons">
+        <a href="#" class="app-store-btn" id="ios-app-link">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          <div>
+            <span class="app-store-sub">Download on the</span>
+            <span class="app-store-name">App Store</span>
+          </div>
+        </a>
+        <a href="#" class="app-store-btn" id="android-app-link">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.3.17.64.18.96.04l11.34-6.55-2.44-2.44-9.86 8.95zM.54 1.7C.2 2.03 0 2.57 0 3.28v17.44c0 .71.2 1.25.54 1.58l.08.08 9.77-9.77v-.23L.62 1.62l-.08.08zM20.3 10.27l-2.63-1.52-2.74 2.74 2.74 2.74 2.65-1.53c.76-.43.76-1.14-.02-1.43zM3.18.24L14.04 6.79l-2.44 2.44L2.22.28c.28-.17.62-.19.96-.04z"/></svg>
+          <div>
+            <span class="app-store-sub">Get it on</span>
+            <span class="app-store-name">Google Play</span>
+          </div>
+        </a>
+      </div>
+    </div>
     <div class="footer-inner">
       <a href="#" class="footer-logo"><img src="https://res.cloudinary.com/dk5g9itw8/image/upload/f_png,q_auto/Logo_rkq0cv" alt="AmenityFit" /></a>
       <p class="footer-copy">&copy; 2026 Fitmakesenz LLC. All rights reserved.</p>
