@@ -2172,7 +2172,38 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
       return { ...group, exercises: newExercises };
     });
 
-    return { ...day, groups: deduplicatedGroups };
+    // Regenerate title and focus based on actual muscle groups after all swaps
+    const allMuscles: string[] = [];
+    deduplicatedGroups.forEach((g: any) => {
+      if (g.type === "cardio") { allMuscles.push("Cardio"); return; }
+      (g.exercises || []).forEach((ex: any) => {
+        const m = (EXERCISES_DATA as any)[ex.id]?.muscle;
+        if (m && !allMuscles.includes(m)) allMuscles.push(m);
+      });
+    });
+    const hasCardio = allMuscles.includes("Cardio");
+    const muscleGroups = allMuscles.filter(m => m !== "Cardio");
+    // Map muscle names to display labels
+    const muscleToLabel: Record<string, string> = {
+      "Chest": "Chest", "Back": "Back", "Shoulders": "Shoulders",
+      "Triceps": "Triceps", "Biceps": "Biceps", "Quads": "Legs",
+      "Hamstrings": "Legs", "Glutes": "Glutes", "Core": "Abs",
+      "Full Body": "Full Body", "Cardio": "Cardio", "Calves": "Calves",
+    };
+    const uniqueLabels = [...new Set(muscleGroups.map(m => muscleToLabel[m] || m))];
+    // Build concise title — max 3 muscle groups
+    const titleParts = uniqueLabels.slice(0, 3);
+    if (hasCardio && !titleParts.includes("Cardio") && titleParts.length < 3) titleParts.push("Cardio");
+    const newTitle = titleParts.length > 0
+      ? `Day ${dayNum} — ${titleParts.join(" & ")}`
+      : `Day ${dayNum} — Full Body`;
+    const newFocus = [...uniqueLabels.slice(0, 4), ...(hasCardio && !uniqueLabels.includes("Cardio") ? ["Cardio"] : [])].join(", ");
+    // Determine type from dominant muscle groups
+    const hasUpper = muscleGroups.some(m => ["Chest","Back","Shoulders","Triceps","Biceps"].includes(m));
+    const hasLower = muscleGroups.some(m => ["Quads","Hamstrings","Glutes","Calves"].includes(m));
+    const hasCore = muscleGroups.includes("Core");
+    const newType = hasUpper && hasLower ? "full-body" : hasUpper ? "upper-body" : hasLower ? "lower-body" : hasCore ? "core" : "full-body";
+    return { ...day, title: newTitle, focus: newFocus, type: newType, groups: deduplicatedGroups };
   }).filter(Boolean);
 
   // Clean up _swapped markers
@@ -2895,7 +2926,8 @@ const getMasteryBadge = (cycleNumber: number) => {
 };
 
 const WelcomeBackScreen = ({ profile, onContinue }) => {
-  const userName = profile.name || "Athlete";
+  const rawUserName = (profile.name || "Athlete").split(" ")[0];
+  const userName = rawUserName.charAt(0).toUpperCase() + rawUserName.slice(1).toLowerCase();
   const daysGone = profile.lastSessionDate
     ? Math.floor((new Date().getTime() - new Date(profile.lastSessionDate).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
@@ -2910,7 +2942,7 @@ const WelcomeBackScreen = ({ profile, onContinue }) => {
       </div>
       <h1 style={{ color: COLORS.white, fontSize: 32, fontWeight: 900, margin: "0 0 10px", letterSpacing: -0.8, lineHeight: 1.1 }}>{userName}</h1>
       <p style={{ color: COLORS.textSecondary, fontSize: 15, margin: "0 0 8px", lineHeight: 1.6 }}>
-        You've been away for {daysGone} day{daysGone !== 1 ? "s" : ""}. No judgment — we've adjusted your program to ease you back in.
+        You've been away for {daysGone} day{daysGone !== 1 ? "s" : ""}. No judgment. We've adjusted your program to ease you back in.
       </p>
       <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>
         Hit {reEntryTarget} sessions over the next two weeks and you'll reclaim your full programming.
@@ -3173,7 +3205,7 @@ const NutritionScreen = ({ onBack, onNavigate = (s) => {} }) => {
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto" }}>
         {/* Hero header with smoothie image */}
-        <div style={{ position: "relative", minHeight: 260, overflow: "hidden" }}>
+        <div style={{ position: "relative", minHeight: "auto", overflow: "visible" }}>
           {selectedRecipe.image && (
             <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${selectedRecipe.image})`, backgroundSize: selectedRecipe.id === 7 ? "120%" : "cover", backgroundPosition: "center" }} />
           )}
@@ -3654,7 +3686,8 @@ const Dashboard = ({ profile, onStartWorkout, workoutDoneToday = false, isInProg
     return "✓";
   };
 
-  const userName = (profile.name || "Athlete").split(" ")[0];
+  const rawFirst = (profile.name || "Athlete").split(" ")[0];
+  const userName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
   const sessionLength = profile.sessionLength || 45;
   const frequency = profile.frequency || 4;
   const experience = EXPERIENCE_LABELS[profile.experience] || "Intermediate";
@@ -8912,7 +8945,7 @@ onSaveState={(round: number, exerciseIndex: number, cells?: string[]) => {
     <SessionCompleteScreen
       totalSets={totalSetsCompleted}
       timeSeconds={Math.floor((Date.now() - startTime) / 1000)}
-      userName={profile?.name ? profile.name.split(" ")[0] : ""}
+      userName={profile?.name ? (profile.name.split(" ")[0].charAt(0).toUpperCase() + profile.name.split(" ")[0].slice(1).toLowerCase()) : ""}
       sessionCount={profile?.sessionsCompleted || 0}
       onDone={() => onComplete({ groups: workoutGroups, sessionLength, weightsLogged: workoutFlowWeightsRef.current })}
     />
@@ -8938,7 +8971,7 @@ const getSuggestedQuestions = (profile: any): string[] => {
   const frequency = profile?.frequency || 3;
   const streak = profile?.streak || 0;
   const cycleNumber = profile?.cycleNumber || 1;
-  const isEvolvedProgramming = cycleNumber >= 4 || profile?.progressionPhase === "Month6+";
+  const isEvolvedProgramming = cycleNumber >= 4 || profile?.progressionPhase === "month6+" || profile?.progressionPhase === "Month6+";
 
   const isRestDay = (() => {
     const day = getProgramDay(programKey, programDay, profile?.generatedDays);
@@ -9064,7 +9097,7 @@ const getProgramParts = (label: string): { name: string; levelTag: string } => {
 const getProgramDisplayName = (label: string): string => getProgramParts(label).name || label;
 
 const buildSystemPrompt = (profile: any) => {
-  const name = profile?.name || "there";
+  const name = profile?.name ? profile.name.split(" ").map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ") : "there";
   const goal = {
     fat_loss: "fat loss", muscle_gain: "muscle gain", tone: "toning up",
     general_fitness: "general fitness", athletic_performance: "athletic performance"
@@ -9085,7 +9118,7 @@ const buildSystemPrompt = (profile: any) => {
   const sessionsThisWeek = profile?.sessionsThisWeek || 0;
   const streak = profile?.streak || 0;
   const gender = profile?.gender || "prefer_not";
-  const isEvolvedProgramming = (profile?.cycleNumber || 1) >= 4 || profile?.progressionPhase === "Month6+";
+  const isEvolvedProgramming = (profile?.cycleNumber || 1) >= 4 || profile?.progressionPhase === "month6+" || profile?.progressionPhase === "Month6+";
 
   const workoutDoneToday = profile?.lastSessionDate === new Date().toDateString();
 
@@ -9325,7 +9358,8 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
   })();
 
   const openingMessage = (() => {
-    const firstName = profile?.name ? ` ${profile.name}` : "";
+    const rawName = profile?.name ? profile.name.split(" ")[0] : "";
+    const firstName = rawName ? ` ${rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase()}` : "";
     if (isRestDay) return `Hey${firstName}. Today's a rest day. Your body is doing the work right now. Recovery is when you grow. What's on your mind?`;
     if (workoutDoneToday && todayFocus) return `Hey${firstName}. You got it done. ${todayFocus} is in the books. How are you feeling? Anything you want to talk through on the recovery side, or what's coming next?`;
     if (todayFocus) return `Hey${firstName}. Day ${programDay} • ${todayFocus} on deck. What do you need?`;
@@ -11526,7 +11560,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
           />
           <div>
             <h1 style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: "0 0 4px", letterSpacing: -0.5 }}>
-              {profile?.name || "Athlete"}
+              {(profile?.name || "Athlete").split(" ").map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ")}
             </h1>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{
