@@ -9421,6 +9421,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [longPressIdx, setLongPressIdx] = useState<number | null>(null);
   const [selectedMsg, setSelectedMsg] = useState<{ text: string; idx: number } | null>(null);
+  const [selectionBar, setSelectionBar] = useState<{ text: string; x: number; y: number } | null>(null);
   const [visibleTimestamp, setVisibleTimestamp] = useState<number | null>(null);
   const [noteSavedIdx, setNoteSavedIdx] = useState<number | null>(null);
   const longPressTimer = React.useRef<any>(null);
@@ -9527,6 +9528,23 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
 
   const handleLongPressEnd = () => {
     clearTimeout(longPressTimer.current);
+  };
+
+  const handleTextSelection = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.toString().trim() === "") {
+      setSelectionBar(null);
+      return;
+    }
+    const selectedText = selection.toString().trim();
+    if (selectedText.length < 2) { setSelectionBar(null); return; }
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    setSelectionBar({
+      text: selectedText,
+      x: rect.left + rect.width / 2,
+      y: rect.top - 48,
+    });
   };
 
   const handleScroll = (e: any) => {
@@ -9641,10 +9659,10 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
                     }
                     if (msg.role === "user") handleCopy(msg.content, i);
                   }}
-                  onMouseDown={() => msg.role === "assistant" && handleLongPressStart(i, msg.content)}
-                  onMouseUp={handleLongPressEnd}
-                  onTouchStart={() => msg.role === "assistant" && handleLongPressStart(i, msg.content)}
-                  onTouchEnd={handleLongPressEnd}
+                  onMouseDown={() => msg.role === "user" && handleLongPressStart(i, msg.content)}
+                  onMouseUp={() => { handleLongPressEnd(); if (msg.role === "assistant") handleTextSelection(); }}
+                  onTouchStart={() => msg.role === "user" && handleLongPressStart(i, msg.content)}
+                  onTouchEnd={() => { handleLongPressEnd(); if (msg.role === "assistant") handleTextSelection(); }}
                   style={{
                     padding: "12px 16px",
                     borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
@@ -9655,6 +9673,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
                     boxShadow: msg.role === "user" ? `0 4px 16px ${COLORS.primary}40` : "none",
                     cursor: "pointer",
                     userSelect: msg.role === "assistant" ? "text" : "none" as any,
+                    WebkitUserSelect: msg.role === "assistant" ? "text" : "none" as any,
                     transition: "opacity 0.1s ease",
                   }}>
                   <p style={{ color: COLORS.white, fontSize: 14, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
@@ -9735,6 +9754,41 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
       </div>
 
       {/* Action sheet — fixed bottom, above everything */}
+      {/* Floating selection action bar */}
+      {selectionBar && (
+        <div style={{
+          position: "fixed",
+          left: Math.min(Math.max(selectionBar.x - 80, 8), window.innerWidth - 168),
+          top: Math.max(selectionBar.y, 60),
+          zIndex: 9999,
+          display: "flex",
+          gap: 8,
+          background: COLORS.card,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 12,
+          padding: "6px 8px",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+        }}>
+          <button onClick={() => {
+            navigator.clipboard.writeText(selectionBar.text).then(() => {
+              setSelectionBar(null);
+              window.getSelection()?.removeAllRanges();
+            });
+          }} style={{ background: COLORS.primary, border: "none", borderRadius: 8, padding: "6px 14px", color: COLORS.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            Copy
+          </button>
+          <button onClick={async () => {
+            await handleSaveNote(selectionBar.text, -1);
+            setSelectionBar(null);
+            window.getSelection()?.removeAllRanges();
+          }} style={{ background: COLORS.success, border: "none", borderRadius: 8, padding: "6px 14px", color: "#000", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            Save to Notes
+          </button>
+          <button onClick={() => { setSelectionBar(null); window.getSelection()?.removeAllRanges(); }} style={{ background: "transparent", border: "none", borderRadius: 8, padding: "6px 8px", color: COLORS.textSecondary, fontSize: 13, cursor: "pointer" }}>
+            x
+          </button>
+        </div>
+      )}
       {selectedMsg !== null && (
         <>
           <div
