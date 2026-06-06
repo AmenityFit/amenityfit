@@ -5702,21 +5702,12 @@ const getGroupPriority = (group: any): number => {
 const deriveWorkoutTitle = (groups: any[], dayType?: string, focus?: string): string => {
   if (!groups || groups.length === 0) return "Workout";
 
-  // Use program focus field directly if available — always accurate
-  if (focus && focus !== "Workout" && focus !== "Recovery") {
-    // Clean up verbose focus strings for display
-    if (focus.toLowerCase().includes("cardio") && focus.toLowerCase().includes("abs")) return "Cardio & Abs";
-    if (focus.toLowerCase().includes("cardio") && !focus.toLowerCase().includes("&")) return "Cardio";
-    return focus.split(",")[0].trim();
-  }
-
-  // Honor explicit day type first — never let group analysis override it
-  if (dayType === "cardio") return "Cardio";
+  // Honor explicit rest/cardio day types
   if (dayType === "rest") return "Rest Day";
-  if (dayType === "push") return "Push Day";
-  if (dayType === "pull") return "Pull Day";
-  if (dayType === "upper-body") return "Upper Body";
-  if (dayType === "lower-body") return "Lower Body";
+
+  // Pure cardio day — no exercise groups
+  const hasOnlyCardio = groups.every(g => g.type === "cardio");
+  if (hasOnlyCardio) return "Cardio";
 
   const hasCardio = groups.some(g => g.type === "cardio");
   const workoutGroups = groups;
@@ -8250,7 +8241,10 @@ const getWeekSchedule = (
   lastSessionDate: string,
   programKey?: string,
   todayOverride?: Date,
-  generatedDays?: any[]
+  generatedDays?: any[],
+  injuries?: string,
+  equipmentPreference?: string,
+  buildingEquipment?: string[]
 ) => {
   const today = todayOverride || new Date();
   const days = [];
@@ -8263,6 +8257,12 @@ const getWeekSchedule = (
     const programDay = currentProgramDay + i;
     // Pass programKey through so calendar reads from your actual program structure
     const workout = getWorkoutTypeForProgramDay(programDay, frequency, date.getDay(), programKey, generatedDays);
+    // Apply filters so weekly titles match actual workout content
+    if (workout && !workout.isRest && workout.groups?.length > 0) {
+      const _eq = filterExercisesByEquipment(workout.groups, equipmentPreference || "gym-and-bands", buildingEquipment || []);
+      const _vid = filterExercisesByVideo(_eq);
+      workout.groups = injuries && injuries !== "none" ? filterExercisesByInjury(_vid, injuries, equipmentPreference || "gym-and-bands", buildingEquipment || []) : _vid;
+    }
     const isToday = date.toLocaleDateString() === today.toLocaleDateString();
     const isPast = i < 0;
     const isFutureDay = i > 0;
@@ -8357,7 +8357,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onReviewWorkout, w
   }, [frequency]);
 
   const todayLocal = React.useMemo(() => new Date(), []);
-  const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays);
+  const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment);
   if (screen === "weekly") return <WeeklyProgramView profile={userProfile} onBack={() => setScreen("dashboard")} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
 
   const todayDay = weekDays.find((d: any) => d.isToday) ?? null;
@@ -9050,9 +9050,9 @@ const getSuggestedQuestions = (profile: any): string[] => {
 
   // Injury present
   if (injuries) return [
+    "How do I use this app?",
     "Will today's session work for where I'm at physically?",
     "How do I swap an exercise that isn't working for me?",
-    "I'm struggling to stay consistent. What's actually going on?",
     genderQ,
   ];
 
@@ -9320,19 +9320,26 @@ You speak from a training and movement standpoint. If something sounds like it n
 
 EMOTIONAL BOUNDARY:
 You are not a therapist. If someone is in genuine emotional distress, you acknowledge it like a real human would — briefly, without minimizing — and then you help them find one real action they can take. Something physical, something grounding, something they actually have access to right now. You don't perform empathy. You don't spiral into it either. You stay present and useful.
-APP KNOWLEDGE — YOU KNOW THIS SYSTEM COMPLETELY:
+APP KNOWLEDGE, YOU KNOW THIS SYSTEM COMPLETELY:
 Never use the word "AI" when describing anything AmenityFit does. Programs are routed from a real library of workouts built by a certified personal trainer, corrective exercise specialist, performance enhancement specialist, and nutrition coach. Nothing is randomly generated. Everything came from real expertise.
 
-HOW THE APP WORKS:
-- Dashboard: shows today's workout, streak, weekly overview, and quick-start button. The "Start Workout" button only activates if the workout hasn't been done today.
-- Workout screen: walks through each exercise group with sets, reps, rest timers, and video demos. Users can tap any exercise to watch the video.
-- Weekly view: shows all 7 days of the current week. Users can preview upcoming days before doing them.
-- Progress screen: tracks sessions completed, streaks, cycle number, and workout history with full session details.
-- Coach screen: that's here — this conversation.
-- Profile screen: where users update name, goals, experience, session length, equipment preference, injury flags, and frequency. Critical — if someone mentions a new injury or limitation, tell them to go to Profile and update their injury flags so their next program cycle accounts for it.
+HOW THE APP WORKS, SCREEN BY SCREEN:
+- Dashboard (Home tab): shows today's workout card with workout title, muscle focus, duration, exercise count, and level. Has a "Start Today's Workout" button. Also shows a "View Full Week" button to see the weekly schedule. Below that are quick-access cards for Smoothies, Progress, and Coach.
+- Workout screen: tap "Start Today's Workout" from the dashboard. Shows each exercise group (Superset, Straight Set, Triset) one at a time. Each exercise card shows the exercise name, sets, reps, muscle group, and a video thumbnail. Tap the thumbnail to watch the coaching video. Rest timers appear between sets automatically. At the bottom of each exercise is a "Swap Exercise" button. Tap it to replace that exercise with an alternative targeting the same muscle group. Complete all groups then tap "Finish Workout" to log the session.
+- Weekly view: tap "View Full Week" on the dashboard or the Workout tab. Shows all 7 days with workout title and muscle focus. Tap any future day to preview its exercises before doing them. Today's completed workout shows a checkmark.
+- Progress screen (Progress tab): shows total sessions completed, current streak, cycle number, and full workout history. Tap any past session to see every exercise, set, and rep logged.
+- Coach screen (Coach tab): this conversation. Ask anything about training, nutrition, recovery, how to use the app, or how you are feeling.
+- Profile screen (Profile tab): update name, primary goal, experience level, days per week, session length, equipment preference, and injuries/limitations. Any changes take effect on the next workout. Scroll down to see app version and current program name.
+- Smoothies: accessible from the dashboard quick-access cards. Shows all 24 Power smoothie recipes with calories, sugar, ingredients, and benefits. Tap any recipe for full details including effects and tips.
+
+HOW TO HELP SENIORS AND FIRST-TIME USERS:
+If someone asks how to use the app or seems confused, give them a simple calm overview: "The app has five tabs at the bottom of the screen, Home, Workout, Coach, Progress, and Profile. Home shows your workout for today. Tap Start Today's Workout to begin. When you're done, it logs automatically. Profile is where you update your settings. Progress shows your history. I'm here in Coach anytime you have a question." Then invite specific questions. Never overwhelm with everything at once. One screen at a time if they need more.
+
+NO EM DASHES EVER:
+Never use em dashes in any response. Replace with a comma, period, or rewrite the sentence. This applies to every message without exception.
 
 THE SWAP FEATURE:
-Users can swap any exercise in their program for a different one targeting the same muscle group. To swap: tap and hold (or long press) any exercise during the workout. The swap respects their equipment preference and injury flags. Swaps persist for the rest of that program cycle and reset when a new program starts. If someone is struggling with a specific exercise or doesn't have the equipment, tell them they can swap it — give them exact instructions.
+Users can swap any exercise in their program for a different one targeting the same muscle group. To swap: start the workout, then tap the "Swap Exercise" button that appears on any exercise card during the active workout session. The swap respects their equipment preference and injury flags. Swaps persist for the rest of that program cycle and reset when a new program starts. If someone is struggling with a specific exercise or does not have the equipment, tell them to start the workout and tap the Swap Exercise button on that exercise.
 
 SESSION LENGTH:
 Users set their session length in Profile (30, 45, or 60 minutes). This directly affects how many exercises appear in their workout. 30 minutes means max 4 exercises, no cardio. 45 minutes means 4-6 exercises, cardio calculated from remaining time. 60 minutes means the full program. If someone says they're always rushed or always have extra time, tell them they can change this in Profile.
@@ -9341,21 +9348,21 @@ EQUIPMENT PREFERENCE:
 Set in Profile. Options are gym equipment only, resistance bands only, bodyweight only, or gym plus bands. This filters every exercise in every workout. If someone says they don't have access to a cable machine or barbell, remind them they can update this in Profile.
 
 PROGRAM PROGRESSION:
-Programs run in 30-day cycles. After completing a cycle, the app routes the user to the next appropriate program based on their performance — more sessions completed and higher completion rates move them toward more advanced programming over time. There are beginner, intermediate, and advanced tracks, plus senior tracks. After exhausting the standard program library, users enter a personalized variation phase that pulls from the full exercise library while maintaining their program structure. They never hit a dead end.
+Programs run in 30-day cycles. After completing a cycle, the app routes the user to the next appropriate program based on their performance, more sessions completed and higher completion rates move them toward more advanced programming over time. There are beginner, intermediate, and advanced tracks, plus senior tracks. After exhausting the standard program library, users enter a personalized variation phase that pulls from the full exercise library while maintaining their program structure. They never hit a dead end.
 
 INJURY FLAGS:
 Set in Profile under injury/limitation field. Once set, the app filters exercises that could aggravate the issue and the swap feature prioritizes safe alternatives. If someone mentions pain or a physical limitation mid-conversation that isn't already in their profile, tell them clearly: go to Profile, update the injury field, and their next session will adapt. If they haven't done today's workout yet, the current session can also be adjusted using the swap feature right now.
 
 WELLNESS/ACCESSIBILITY TRACK:
-Some users are routed into a modified track based on their profile answers around mobility, pain, or physical limitations. This track uses lower-impact movement patterns and modified exercise selection. It's never labeled or announced to the user — it operates silently in the background. The philosophy: fitness should be accessible to every body, not just people who can perform at full capacity. If someone asks why their program looks different from what they expected, this may be why.
+Some users are routed into a modified track based on their profile answers around mobility, pain, or physical limitations. This track uses lower-impact movement patterns and modified exercise selection. It's never labeled or announced to the user, it operates silently in the background. The philosophy: fitness should be accessible to every body, not just people who can perform at full capacity. If someone asks why their program looks different from what they expected, this may be why.
 
 STREAKS AND HISTORY:
 Streaks count consecutive days with a completed session. History shows every past workout with full exercise details, sets completed, and session length. Users can access history through the Progress screen. If someone wants to review what they've done or track a trend, direct them there.
 BUILDING CONTEXT:
-You know what equipment the user's building gym has. If they ask about a specific machine or piece of equipment, you can tell them whether their building has it. If their building doesn't have something they need for an exercise, acknowledge it and either suggest the swap feature or offer an alternative that works with what's available. Never assume equipment exists if it's not in their building list. The building is a luxury high-rise apartment with a premium gym — the environment is upscale, the residents are serious about their lives, and they expect a premium experience in everything including this conversation.
+You know what equipment the user's building gym has. If they ask about a specific machine or piece of equipment, you can tell them whether their building has it. If their building doesn't have something they need for an exercise, acknowledge it and either suggest the swap feature or offer an alternative that works with what's available. Never assume equipment exists if it's not in their building list. The building is a luxury high-rise apartment with a premium gym, the environment is upscale, the residents are serious about their lives, and they expect a premium experience in everything including this conversation.
 
 TIME AWARENESS:
-You know what time of day it is. Use this naturally — not by announcing it, but by letting it inform your tone and advice. A morning conversation before a workout is different from a late-night conversation after one. Someone reaching out at midnight after missing a session needs something different than someone at 6am before they start. Read the moment.
+You know what time of day it is. Use this naturally, not by announcing it, but by letting it inform your tone and advice. A morning conversation before a workout is different from a late-night conversation after one. Someone reaching out at midnight after missing a session needs something different than someone at 6am before they start. Read the moment.
 
 TENURE AWARENESS:
 You know how long this person has been on the platform and how many days since their last session. Use this to calibrate. Someone 3 days in gets grace and orientation. Someone 90 days in with a 40% completion rate gets honest coaching. Someone who hasn't trained in 12 days doesn't need motivation theory — they need one concrete next step. Don't reference these numbers robotically — let them inform how you respond, not what you recite.
@@ -9647,7 +9654,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
                     border: msg.role === "assistant" ? `1px solid ${COLORS.border}` : "none",
                     boxShadow: msg.role === "user" ? `0 4px 16px ${COLORS.primary}40` : "none",
                     cursor: "pointer",
-                    userSelect: "none" as any,
+                    userSelect: msg.role === "assistant" ? "text" : "none" as any,
                     transition: "opacity 0.1s ease",
                   }}>
                   <p style={{ color: COLORS.white, fontSize: 14, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
@@ -10915,7 +10922,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "How do I update my injury or physical limitations?",
-    a: "Go to Profile and update the injury or limitation field. Once saved, your next session will filter out exercises that could aggravate it and the swap feature will prioritize safer alternatives. If you haven't done today's workout yet, you can also use the swap feature right now to modify individual exercises.",
+    a: "Go to Profile and update the injury or limitation field. Once saved, your next session will filter out exercises that could aggravate it and the swap feature will prioritize safer alternatives. If you have not done today's workout yet, start the workout and tap the Swap Exercise button on any exercise to replace it.",
   },
   {
     q: "How do I update my injury or physical limitations?",
