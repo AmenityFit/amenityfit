@@ -4273,7 +4273,7 @@ const EXERCISES_DATA: Record<string, any> = {
     "drop-lunge": { name: "Drop Lunge", muscle: "Quads", equipment: "Bodyweight", difficulty: "beginner", eachLeg: true, injuryFlags: ["hip-flexion-loaded","knee-deep-flexion","knee-impact","knee-shear"], coachingCue: "Drop one leg behind and across the other into a lunge. Similar to curtsy squat. Targets outer glute and hip stabilizers." },
       "band-front-lateral-raise": { injuryFlags: ["shoulder-impingement"], name: "Band Front & Lateral Raise", muscle: "Shoulders", equipment: "Resistance Band", difficulty: "beginner", coachingCue: "Stand on the band with feet shoulder-width apart.|Lift one arm straight in front and the other out to the side simultaneously.|Control the descent of the band.|Keep a slight bend in the elbows.|Lift arms to shoulder height.|Control the band on the way back."},
         "trx-squat": { injuryFlags: ["knee-deep-flexion","knee-impact","knee-shear"], name: "TRX Squat", muscle: "Quads", equipment: "TRX", difficulty: "beginner", coachingCue: "Hold TRX straps for balance, lean back slightly. Squat to full depth. The straps allow you to reach a deeper squat position." },
-      "straight-arm-pulldown": { injuryFlags: ["shoulder-overhead"], name: "Straight Arm Pulldown", muscle: "Back", equipment: "Cable Machine", difficulty: "beginner" , coachingCue: "Stand at the high cable with a bar or rope.|Arms extended, slight bend in the elbows.|Pull the bar down in an arc to your thighs, keeping arms straight.|Squeeze the lats at the bottom.|Return slowly  - don't let the cable yank your arms back up.|No bending at the elbows. Straight arms the entire movement."},
+      "straight-arm-pulldown": { injuryFlags: [], name: "Straight Arm Pulldown", muscle: "Back", equipment: "Cable Machine", difficulty: "beginner" , coachingCue: "Stand at the high cable with a bar or rope.|Arms extended, slight bend in the elbows.|Pull the bar down in an arc to your thighs, keeping arms straight.|Squeeze the lats at the bottom.|Return slowly  - don't let the cable yank your arms back up.|No bending at the elbows. Straight arms the entire movement."},
   "standing-straight-arm-pulldown-band": { name: "Standing Straight Arm Pulldown (Band)", muscle: "Back", equipment: "Resistance Band", difficulty: "beginner", coachingCue: "Anchor the band high above you.|Stand back to create tension, arms extended.|Pull the band down in an arc to your thighs, keeping arms straight.|Squeeze the lats at the bottom.|Return slowly — control the band back up.|No bending at the elbows. Straight arms throughout." },
     "one-arm-lat-pulldown-band": { name: "One Arm Lat Pulldown", muscle: "Back", equipment: "Resistance Band", difficulty: "beginner", eachSide: true, coachingCue: "Stand with feet hip-width apart and raise both hands overhead.|Keep one hand stationary while you pull the other hand down towards your side.|Engage your lat muscles as you pull down.|Repeat for the desired number of repetitions, then switch sides." },
     "seated-cable-row-wide-pronated": { injuryFlags: ["lumbar-flexion-loaded"], name: "Seated Cable Row (Wide Pronated)", muscle: "Back", equipment: "Cable Machine", difficulty: "beginner", coachingCue: "Wide overhand grip on bar attachment. Row to your upper abs. Wide grip hits the upper back and rear delts more than narrow." },
@@ -5315,11 +5315,15 @@ const selectProgram = (profile: any): string => {
   const isBandOnly = (equipmentReq.length > 0 && equipmentReq.every((e: string) => e === "resistance_band")) ||
     equipPrefStr === "bands" || equipPrefStr === "bands-only" || equipPrefStr === "resistance_band";
   if (isBandOnly) {
-    if (exp === "intermediate" || exp === "advanced") {
+    if (exp === "advanced") {
       const gender = profile.gender || "male";
       const goal = profile.primaryGoal || "general_fitness";
       const cycleNum = profile.cycleNumber || 1;
       return getAdvancedProgramPath(gender, goal, correctedFreq, cycleNum, profile);
+    }
+    // Intermediate band-only — use frequency-matched intermediate program (works with bands)
+    if (exp === "intermediate") {
+      return `intermediate-${correctedFreq}x`;
     }
     // Beginner band-only — use band-friendly beginner program
     return correctedFreq <= 3 ? "beginner-3x-bands-comin" : "beginner-3x-earn-your-victory";
@@ -14528,6 +14532,10 @@ console.log("Month6+ result programKey:", result.programKey);
             console.error('Sign in fallback error:', signInError);
             setUserProfile({ ...baseProfile });
           }
+        } else if (e.code === 'auth/network-request-failed') {
+          // Network failure — don't set broken profile, show retry message
+          alert("Connection error. Please check your internet and try again.");
+          return;
         } else {
           setUserProfile({ ...baseProfile });
         }
