@@ -3813,7 +3813,7 @@ const Dashboard = ({ profile, onStartWorkout, workoutDoneToday = false, isInProg
       <div style={{ flex: 1, padding: "16px 24px 80px", overflowY: "auto" }}>
 
         {/* Today's Workout */}
-        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} dayFocus={currentDay?.focus} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); return _v.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
+        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} dayFocus={currentDay?.focus} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _i.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
 
         {/* View Full Week link */}
         <button onClick={onViewWeekly} style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20, marginTop: -8 }}>
@@ -3896,7 +3896,7 @@ const OnboardingFlow = ({ onComplete }) => {
 // ─── Exercise & Program Data (inline for CodeSandbox) ────────────────────────
 const EXERCISES_DATA: Record<string, any> = {
   // ── BACK ──────────────────────────────────────────────────────────────────
-  "wide-grip-lat-pulldown": { injuryFlags: ["shoulder-overhead"], name: "Seated Wide-Grip Lat Pull Down", muscle: "Back", equipment: "Cable Machine", difficulty: "beginner", coachingCue: "Grip the bar just outside shoulder width, palms facing away.|Lean back slightly, chest up.|Pull the bar down to your upper chest, driving your elbows down and back.|Squeeze your lats hard at the bottom.|Return with control  - full stretch at the top before the next rep.|Don't use momentum. Pull with your back, not your arms." },
+  "wide-grip-lat-pulldown": { injuryFlags: [], name: "Seated Wide-Grip Lat Pull Down", muscle: "Back", equipment: "Cable Machine", difficulty: "beginner", coachingCue: "Grip the bar just outside shoulder width, palms facing away.|Lean back slightly, chest up.|Pull the bar down to your upper chest, driving your elbows down and back.|Squeeze your lats hard at the bottom.|Return with control  - full stretch at the top before the next rep.|Don't use momentum. Pull with your back, not your arms." },
   "one-arm-dumbbell-row": { injuryFlags: ["lumbar-flexion-loaded"], name: "One Arm Dumbbell Row", muscle: "Back", equipment: "Dumbbells", eachSide: true, difficulty: "beginner", coachingCue: "Place one knee and hand on a bench for support, back flat and parallel to the floor.|Hold the dumbbell with the working arm hanging straight down.|Row the dumbbell toward your hip, driving your elbow straight back past your side.|Squeeze your lat and upper back at the top.|Lower with control  - full extension at the bottom.|Keep your back flat the entire time. No twisting." },
       "assisted-pull-up": { injuryFlags: ["shoulder-overhead"], name: "Assisted Pull Up", muscle: "Back", equipment: "Assisted Pull Up Machine", difficulty: "beginner", coachingCue: "Let the machine assist but still create tension. Drive elbows down and back, not just with your arms. Full range every rep." },
   "cable-rope-pull-through": { name: "Cable Pull Throughs", muscle: "Glutes", equipment: "Cable Machine", difficulty: "beginner", coachingCue: "Cable at low setting, rope between legs, facing away from machine. Hinge forward, then drive hips through to standing. This is a hip hinge not a squat. Squeeze glutes hard at the top." },
@@ -8187,12 +8187,40 @@ const getWorkoutTypeForProgramDay = (
       const idx = (programDay - 1) % program.days.length;
       const day = program.days[idx];
       if (day) {
+        if (day.isRest) {
+          return { type: "rest", label: "Rest Day", focus: "Recovery", isRest: true, groups: [] };
+        }
+        // Derive title from actual exercise content to avoid mismatch
+        const rawGroups = day.groups || [];
+        const allMuscles: string[] = [];
+        rawGroups.forEach((g: any) => {
+          if (g.type === "cardio") { if (!allMuscles.includes("Cardio")) allMuscles.push("Cardio"); return; }
+          (g.exercises || []).forEach((ex: any) => {
+            const m = (EXERCISES_DATA as any)[ex.id]?.muscle;
+            if (m && !allMuscles.includes(m)) allMuscles.push(m);
+          });
+        });
+        const muscleToLabel: Record<string, string> = {
+          "Chest": "Chest", "Back": "Back", "Shoulders": "Shoulders",
+          "Triceps": "Triceps", "Biceps": "Biceps", "Quads": "Legs",
+          "Hamstrings": "Legs", "Glutes": "Glutes", "Core": "Abs",
+          "Full Body": "Full Body", "Cardio": "Cardio", "Calves": "Calves",
+        };
+        const hasCardio = allMuscles.includes("Cardio");
+        const muscleLabels = [...new Set(allMuscles.filter(m => m !== "Cardio").map(m => muscleToLabel[m] || m))];
+        const titleParts = muscleLabels.slice(0, 2);
+        if (hasCardio && titleParts.length < 3) titleParts.push("Cardio");
+        const hasUpper = allMuscles.some(m => ["Chest","Back","Shoulders","Triceps","Biceps"].includes(m));
+        const hasLower = allMuscles.some(m => ["Quads","Hamstrings","Glutes","Calves"].includes(m));
+        const derivedType = hasUpper && hasLower ? "full-body" : hasUpper ? "upper-body" : hasLower ? "lower-body" : "full-body";
+        const derivedLabel = titleParts.length > 0 ? titleParts.join(" & ") : expandDayTitle(day.title || day.focus || "Workout");
+        const derivedFocus = [...muscleLabels.slice(0, 4), ...(hasCardio && !muscleLabels.includes("Cardio") ? ["Cardio"] : [])].join(", ") || day.focus || "Workout";
         return {
-          type: day.type || (day.isRest ? "rest" : "full-body"),
-          label: day.isRest ? "Rest Day" : expandDayTitle(day.title || day.focus || "Workout"),
-          focus: day.focus || "Recovery",
-          isRest: !!day.isRest,
-          groups: day.groups || [],
+          type: derivedType,
+          label: derivedLabel,
+          focus: derivedFocus,
+          isRest: false,
+          groups: rawGroups,
         };
       }
     }
