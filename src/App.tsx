@@ -370,6 +370,18 @@ const fetchAllBuildings = async () => {
   }
 };
 
+const fetchCompanyBuildings = async (companyId: string) => {
+  try {
+    const snap = await getDocs(collection(db, "buildings"));
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter((b: any) => b.companyId === companyId);
+  } catch (e) {
+    console.error("fetchCompanyBuildings error:", e);
+    return [];
+  }
+};
+
 const updateBuildingBranding = async (buildingId: string, programName: string): Promise<boolean> => {
   try {
     await setDoc(doc(db, "buildings", buildingId), { programName }, { merge: true });
@@ -567,7 +579,10 @@ const validateInviteCode = async (code: string): Promise<any | null> => {
       try {
         const buildingSnap = await getDoc(doc(db, "buildings", data.buildingId));
         if (buildingSnap.exists()) {
-          buildingEquipment = buildingSnap.data().equipment || [];
+          const buildingData = buildingSnap.data();
+          // Block churned buildings — code is structurally valid but building is inactive
+          if (buildingData.subscription === "churned") return null;
+          buildingEquipment = buildingData.equipment || [];
         }
       } catch (e) {
         console.error("validateInviteCode building fetch error:", e);
@@ -12415,7 +12430,7 @@ const SuperAdminLogin = ({ onLogin, onBack }) => {
 };
 
 const SuperAdminDashboard = ({ onSignOut }) => {
-  const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "content" | "queue" | "revenue">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "queue" | "revenue">("overview");
   const [selectedBuilding, setSelectedBuilding] = useState<any>(null);
   const [buildingSearch, setBuildingSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "at_risk" | "churned">("all");
@@ -12489,7 +12504,6 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const tabs = [
     { id: "overview", label: "Platform Overview" },
     { id: "buildings", label: "Buildings" },
-    { id: "content", label: "Content & Programs" },
     { id: "queue", label: "Activation Queue" },
     { id: "revenue", label: "Revenue" },
   ];
@@ -12716,6 +12730,67 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0, lineHeight: 1.5 }}>Engagement has dropped significantly. Consider reaching out to the building manager to offer support or a check-in.</p>
                   </div>
                 )}
+
+                {/* Contract Management */}
+                <div style={{ background: COLORS.card, borderRadius: 16, padding: "16px", border: `1px solid ${COLORS.border}`, marginTop: 10 }}>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 12px" }}>Contract</p>
+
+                  {/* Renewal date setter */}
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 6px" }}>Renewal Date</p>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                    <input
+                      type="date"
+                      defaultValue={selectedBuilding.renewalDate || ""}
+                      id={`renewal-${selectedBuilding.id}`}
+                      style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: COLORS.background, color: COLORS.white, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: "none" }}
+                    />
+                    <button
+                      onClick={async () => {
+                        const input = document.getElementById(`renewal-${selectedBuilding.id}`) as HTMLInputElement;
+                        const val = input?.value;
+                        if (!val) return;
+                        await setDoc(doc(db, "buildings", String(selectedBuilding.id)), { renewalDate: val }, { merge: true });
+                        setSelectedBuilding((prev: any) => ({ ...prev, renewalDate: val }));
+                        setAllBuildings(prev => prev.map(b => b.id === selectedBuilding.id ? { ...b, renewalDate: val } : b));
+                        alert("Renewal date saved.");
+                      }}
+                      style={{ padding: "10px 16px", borderRadius: 10, border: "none", background: COLORS.primary, color: COLORS.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                    >
+                      Save
+                    </button>
+                  </div>
+
+                  {/* Cancel contract */}
+                  {selectedBuilding.subscription !== "churned" && (
+                    <button
+                      onClick={() => {
+                        if (!window.confirm(`Cancel contract for ${selectedBuilding.name}? This marks them as churned and cannot be undone without manual Firestore edit.`)) return;
+                        const secondCheck = window.confirm("Are you absolutely sure? This will remove them from active billing.");
+                        if (!secondCheck) return;
+                        const cancellationDate = new Date(); cancellationDate.setDate(cancellationDate.getDate() + 30); const cancellationDateStr = cancellationDate.toISOString().split("T")[0];
+                        setDoc(doc(db, "buildings", String(selectedBuilding.id)), { subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr }, { merge: true });
+                        setSelectedBuilding((prev: any) => ({ ...prev, subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr }));
+                        setAllBuildings(prev => prev.map(b => b.id === selectedBuilding.id ? { ...b, subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr } : b));
+                      }}
+                      style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #FF4D4D40", background: "transparent", color: "#FF6B6B", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                    >
+                      Cancel Contract
+                    </button>
+                  )}
+                  {selectedBuilding.subscription === "churned" && (
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm(`Reactivate ${selectedBuilding.name}?`)) return;
+                        await setDoc(doc(db, "buildings", String(selectedBuilding.id)), { subscription: "active" }, { merge: true });
+                        setSelectedBuilding((prev: any) => ({ ...prev, subscription: "active" }));
+                        setAllBuildings(prev => prev.map(b => b.id === selectedBuilding.id ? { ...b, subscription: "active" } : b));
+                      }}
+                      style={{ width: "100%", padding: "12px", borderRadius: 10, border: `1px solid ${COLORS.success}40`, background: "transparent", color: COLORS.success, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                    >
+                      Reactivate Building
+                    </button>
+                  )}
+                </div>
               </>
             ) : (
               <>
@@ -13017,7 +13092,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                                 createdAt: serverTimestamp(),
                               });
 
-                              // 6. Generate invite codes
+                              // 6. Generate invite codes — sequential with collision check
                               const units = sub.units || 0;
                               const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
                               const genCode = () => {
@@ -13025,33 +13100,101 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                                 for (let i = 0; i < 6; i++) c += CHARS[Math.floor(Math.random() * CHARS.length)];
                                 return c;
                               };
-                              const codePromises = [];
+                              const generatedCodes: {code: string, unit: string}[] = [];
+                              const usedCodes = new Set<string>(
+                                (await getDocs(collection(db, "inviteCodes"))).docs.map(d => d.id)
+                              );
                               for (let i = 1; i <= units; i++) {
-                                const code = genCode();
-                                codePromises.push(
-                                  setDoc(doc(db, "inviteCodes", code), {
-                                    code,
-                                    buildingId: slug,
-                                    buildingName: sub.buildingName || "",
-                                    unitNumber: String(i),
-                                    status: "active",
-                                    createdAt: serverTimestamp(),
-                                    usedBy: [],
-                                  })
-                                );
+                                let code = genCode();
+                                let attempts = 0;
+                                while (usedCodes.has(code) && attempts < 20) {
+                                  code = genCode();
+                                  attempts++;
+                                }
+                                usedCodes.add(code);
+                                await setDoc(doc(db, "inviteCodes", code), {
+                                  code,
+                                  buildingId: slug,
+                                  buildingName: sub.buildingName || "",
+                                  unitNumber: String(i),
+                                  status: "active",
+                                  createdAt: serverTimestamp(),
+                                  usedBy: [],
+                                });
+                                generatedCodes.push({ code, unit: String(i) });
                               }
-                              await Promise.all(codePromises);
 
                               // 7. Update submission status
                               await updateStatus(sub.id, "activated");
 
-                              // 8. Store credentials on submission for reference
+                              // 8. Store activation record — no plain-text password in Firestore
                               await setDoc(doc(db, "buildingSubmissions", sub.id), {
                                 activatedBuildingId: slug,
                                 activatedUid: uid,
-                                tempPassword,
                                 activatedAt: serverTimestamp(),
                               }, { merge: true });
+
+                              // 8b. Add managerUid to building doc for report lookups
+                              await setDoc(doc(db, "buildings", slug), { managerUid: uid }, { merge: true });
+
+                              // 8c. Send activation email via Resend Cloud Function
+                              const codeListHtml = generatedCodes.map(c =>
+                                `<tr><td style="padding:8px 16px;font-size:13px;color:#555;border-bottom:1px solid #f0f0f0;">Unit ${c.unit}</td><td style="padding:8px 16px;font-size:14px;font-weight:700;color:#111;letter-spacing:2px;border-bottom:1px solid #f0f0f0;">${c.code}</td></tr>`
+                              ).join("");
+
+                              const activationEmailHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;">
+<div style="max-width:620px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.10);">
+  <div style="background:linear-gradient(135deg,#1E5FBE,#6C63FF);padding:36px 40px 32px;">
+    <p style="color:rgba(255,255,255,0.7);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:0 0 10px;">AmenityFit Setup</p>
+    <h1 style="color:#fff;font-size:26px;font-weight:900;margin:0 0 6px;letter-spacing:-0.5px;">${sub.buildingName} is Live</h1>
+    <p style="color:rgba(255,255,255,0.75);font-size:14px;margin:0;">${sub.location || ""}</p>
+  </div>
+  <div style="padding:32px 40px;">
+    <p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 28px;">Hi ${sub.contactName || "there"},<br><br>Your building is activated and ready. Everything you need to get your residents started is below.</p>
+
+    <p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin:0 0 12px;">Manager Login</p>
+    <div style="border:1px solid #eee;border-radius:12px;overflow:hidden;margin-bottom:28px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr style="background:#fafafa;"><td style="padding:13px 16px;font-size:13px;color:#555;border-bottom:1px solid #eee;">Login URL</td><td style="padding:13px 16px;font-size:13px;font-weight:700;color:#1E5FBE;border-bottom:1px solid #eee;"><a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a> then tap "Building Manager"</td></tr>
+        <tr><td style="padding:13px 16px;font-size:13px;color:#555;border-bottom:1px solid #eee;">Email</td><td style="padding:13px 16px;font-size:13px;font-weight:700;color:#111;border-bottom:1px solid #eee;">${sub.managerEmail}</td></tr>
+        <tr style="background:#fafafa;"><td style="padding:13px 16px;font-size:13px;color:#555;">Temporary Password</td><td style="padding:13px 16px;font-size:15px;font-weight:900;color:#111;letter-spacing:2px;">${tempPassword}</td></tr>
+      </table>
+    </div>
+    <p style="font-size:12px;color:#aaa;margin:-20px 0 28px;padding:0 4px;">Change your password after your first login.</p>
+
+    <p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin:0 0 12px;">Resident Invite Codes (${units} units)</p>
+    <p style="font-size:13px;color:#555;margin:0 0 12px;line-height:1.6;">One code per unit. Share the code with the resident in that unit. Multiple residents in the same unit can each create their own profile using the same code.</p>
+    <div style="border:1px solid #eee;border-radius:12px;overflow:hidden;margin-bottom:28px;">
+      <table style="width:100%;border-collapse:collapse;">${codeListHtml}</table>
+    </div>
+
+    <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 28px;">Your residents can sign up at <a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a> using their invite code. No app download needed.</p>
+
+    <div style="background:#f5f5f7;border-radius:12px;padding:16px 20px;">
+      <p style="font-size:13px;color:#333;margin:0;">Questions? Contact <a href="mailto:support@fitmakesenz.com" style="color:#1E5FBE;">support@fitmakesenz.com</a></p>
+    </div>
+  </div>
+  <div style="background:#fafafa;border-top:1px solid #eee;padding:20px 40px;">
+    <p style="font-size:11px;color:#aaa;margin:0;">Senz · AmenityFit · <a href="https://amenityfit.app" style="color:#aaa;">amenityfit.app</a></p>
+  </div>
+</div>
+</body></html>`;
+
+                              try {
+                                await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/sendActivationEmail", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    to: sub.managerEmail,
+                                    subject: `Your AmenityFit Dashboard is Ready - ${sub.buildingName}`,
+                                    html: activationEmailHtml,
+                                    secret: "amenityfit-activation-2026",
+                                  }),
+                                });
+                              } catch (emailErr) {
+                                console.error("Activation email failed:", emailErr);
+                              }
 
                               setActivationResult({ slug, uid, tempPassword, email: sub.managerEmail, units });
 
@@ -13290,6 +13433,253 @@ const DEMO_BUILDING = {
   ],
 };
 
+const ChurnedBuildingScreen = ({ onSignOut }) => (
+  <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px" }}>
+    <div style={{ textAlign: "center", maxWidth: 320 }}>
+      <div style={{ fontSize: 48, marginBottom: 24 }}>🏢</div>
+      <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "0 0 12px", letterSpacing: -0.5 }}>Service Ended</h1>
+      <p style={{ color: COLORS.textSecondary, fontSize: 15, lineHeight: 1.6, margin: "0 0 32px" }}>
+        Your building's AmenityFit subscription is no longer active. Please contact your building manager for more information.
+      </p>
+      <button onClick={onSignOut} style={{ width: "100%", padding: "16px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.textSecondary, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+        Sign Out
+      </button>
+    </div>
+  </div>
+);
+
+
+// ─── PROPERTY MANAGER PORTAL ─────────────────────────────────────────────────
+
+const getHealthScore = (b: any): "green" | "yellow" | "red" => {
+  const adoption = b.inviteCodesGenerated
+    ? Math.round(((b.inviteCodesRedeemed || 0) / b.inviteCodesGenerated) * 100)
+    : 0;
+  const weeksSince = b.weeksSinceLastActivity || 0;
+  if (adoption > 50 && weeksSince < 2) return "green";
+  if (adoption >= 25 && weeksSince < 14) return "yellow";
+  return "red";
+};
+
+const healthColor = { green: "#22C55E", yellow: "#F59E0B", red: "#FF4D4D" };
+const healthLabel = { green: "Healthy", yellow: "At Risk", red: "Inactive" };
+
+const getBuildingGradient = (name: string): string => {
+  const gradients = [
+    "linear-gradient(135deg, #1E5FBE, #3B82F6)",
+    "linear-gradient(135deg, #7C3AED, #A78BFA)",
+    "linear-gradient(135deg, #0891B2, #22D3EE)",
+    "linear-gradient(135deg, #059669, #34D399)",
+    "linear-gradient(135deg, #B45309, #FCD34D)",
+    "linear-gradient(135deg, #BE185D, #F472B6)",
+    "linear-gradient(135deg, #1D4ED8, #818CF8)",
+    "linear-gradient(135deg, #065F46, #6EE7B7)",
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return gradients[Math.abs(hash) % gradients.length];
+};
+
+const PMBuildingCard = ({ building, onSelect }: { building: any; onSelect: () => void }) => {
+  const health = getHealthScore(building);
+  const adoption = building.inviteCodesGenerated
+    ? Math.round(((building.inviteCodesRedeemed || 0) / building.inviteCodesGenerated) * 100)
+    : 0;
+  const gradient = getBuildingGradient(building.name || building.id);
+
+  return (
+    <div onClick={onSelect} style={{ background: COLORS.card, borderRadius: 20, overflow: "hidden", marginBottom: 16, border: `1px solid ${COLORS.border}`, cursor: "pointer", boxShadow: "0 4px 24px rgba(0,0,0,0.18)", transition: "transform 0.15s ease", }}>
+      {/* Building image / gradient header */}
+      <div style={{ height: 90, background: gradient, position: "relative", display: "flex", alignItems: "flex-end", padding: "0 16px 12px" }}>
+        <div style={{ position: "absolute", top: 12, right: 12, background: "rgba(0,0,0,0.45)", borderRadius: 99, padding: "4px 10px", display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: healthColor[health], boxShadow: `0 0 6px ${healthColor[health]}` }} />
+          <span style={{ color: "#fff", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>{healthLabel[health]}</span>
+        </div>
+        <h3 style={{ color: "#fff", fontSize: 17, fontWeight: 800, margin: 0, textShadow: "0 1px 4px rgba(0,0,0,0.4)", letterSpacing: -0.3 }}>{building.name || building.id}</h3>
+      </div>
+      {/* Location */}
+      {building.location && (
+        <div style={{ padding: "8px 16px 0", display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>📍</span>
+          <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>{building.location}</span>
+        </div>
+      )}
+      {/* 3 stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 0, padding: "12px 16px 16px", borderTop: `1px solid ${COLORS.border}`, marginTop: 10 }}>
+        {[
+          { label: "Active Residents", value: building.activeUsersThisMonth ?? building.active ?? "—" },
+          { label: "Workouts This Month", value: building.totalWorkoutsThisMonth ?? building.workouts ?? "—" },
+          { label: "Adoption Rate", value: `${adoption}%` },
+        ].map((stat, i) => (
+          <div key={i} style={{ textAlign: "center", borderRight: i < 2 ? `1px solid ${COLORS.border}` : "none", padding: "0 8px" }}>
+            <p style={{ color: COLORS.white, fontSize: 20, fontWeight: 900, margin: "0 0 2px" }}>{stat.value}</p>
+            <p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, lineHeight: 1.3 }}>{stat.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => void }) => {
+  const health = getHealthScore(building);
+  const adoption = building.inviteCodesGenerated
+    ? Math.round(((building.inviteCodesRedeemed || 0) / building.inviteCodesGenerated) * 100)
+    : 0;
+  const gradient = getBuildingGradient(building.name || building.id);
+  const rc = building.retentionCohorts || [];
+
+  const StatRow = ({ label, value }: { label: string; value: string }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: `1px solid ${COLORS.border}` }}>
+      <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>{label}</span>
+      <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 700 }}>{value}</span>
+    </div>
+  );
+
+  return (
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", overflowY: "auto" }}>
+      <div style={{ height: 140, background: gradient, position: "relative", display: "flex", alignItems: "flex-end", padding: "0 24px 20px" }}>
+        <button onClick={onBack} style={{ position: "absolute", top: 52, left: 20, background: "rgba(0,0,0,0.35)", border: "none", borderRadius: 12, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <span style={{ color: "#fff", fontSize: 18 }}>←</span>
+        </button>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <div style={{ width: 9, height: 9, borderRadius: "50%", background: healthColor[health], boxShadow: `0 0 8px ${healthColor[health]}` }} />
+            <span style={{ color: "rgba(255,255,255,0.8)", fontSize: 12, fontWeight: 600 }}>{healthLabel[health]}</span>
+          </div>
+          <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{building.name || building.id}</h2>
+          {building.location && <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, margin: "2px 0 0" }}>{building.location}</p>}
+        </div>
+      </div>
+      <div style={{ padding: "24px 24px 48px" }}>
+        <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 4px" }}>Engagement</p>
+        <StatRow label="Active Residents" value={String(building.activeUsersThisMonth ?? building.active ?? "—")} />
+        <StatRow label="Workouts This Month" value={String(building.totalWorkoutsThisMonth ?? building.workouts ?? "—")} />
+        <StatRow label="Adoption Rate" value={`${adoption}% (${building.inviteCodesRedeemed ?? 0}/${building.inviteCodesGenerated ?? 0} residents)`} />
+        <StatRow label="Avg Sessions / Week" value={String(building.avgSessionsPerUserPerWeek ?? "—")} />
+        <StatRow label="Fitness Assistant Sessions" value={String(building.fitnessAssistantQuestionsThisMonth ?? building.assistantSessions ?? "—")} />
+        <StatRow label="Last Activity" value={building.weeksSinceLastActivity === 0 ? "This week" : building.weeksSinceLastActivity === 1 ? "Last week" : `${building.weeksSinceLastActivity ?? "—"} weeks ago`} />
+
+        <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "24px 0 4px" }}>Retention</p>
+        {rc.length > 0 ? rc.map((r: any, i: number) => (
+          <StatRow key={i} label={r.label || `Day ${r.day}`} value={`${r.pct ?? "—"}%`} />
+        )) : <p style={{ color: COLORS.textSecondary, fontSize: 13, padding: "12px 0" }}>Retention data not yet available.</p>}
+
+        <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "24px 0 4px" }}>Building Info</p>
+        <StatRow label="Units" value={String(building.units ?? "—")} />
+        <StatRow label="Equipment" value={building.equipmentProfile || building.tier || "—"} />
+        <StatRow label="Subscription" value={building.subscription || "active"} />
+        {building.renewalDate && <StatRow label="Renewal Date" value={building.renewalDate} />}
+      </div>
+    </div>
+  );
+};
+
+const PropertyManagerDashboard = ({ onSignOut, companyId, companyName }: { onSignOut: () => void; companyId: string; companyName: string }) => {
+  const [buildings, setBuildings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [selectedBuilding, setSelectedBuilding] = useState<any>(null);
+
+  useEffect(() => {
+    fetchCompanyBuildings(companyId).then(data => {
+      setBuildings(data);
+      setLoading(false);
+    });
+  }, [companyId]);
+
+  const filtered = buildings.filter(b =>
+    !search || (b.name || b.id || "").toLowerCase().includes(search.toLowerCase()) ||
+    (b.location || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const totalActive = buildings.reduce((a, b) => a + (b.activeUsersThisMonth ?? b.active ?? 0), 0);
+  const totalWorkouts = buildings.reduce((a, b) => a + (b.totalWorkoutsThisMonth ?? b.workouts ?? 0), 0);
+  const avgAdoption = buildings.length
+    ? Math.round(buildings.reduce((a, b) => {
+        const pct = b.inviteCodesGenerated ? ((b.inviteCodesRedeemed || 0) / b.inviteCodesGenerated) * 100 : 0;
+        return a + pct;
+      }, 0) / buildings.length)
+    : 0;
+  const healthCounts = { green: 0, yellow: 0, red: 0 };
+  buildings.forEach(b => { healthCounts[getHealthScore(b)]++; });
+
+  if (selectedBuilding) return <PMBuildingDetail building={selectedBuilding} onBack={() => setSelectedBuilding(null)} />;
+
+  return (
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", overflowY: "auto" }}>
+      {/* Header */}
+      <div style={{ padding: "52px 24px 24px", background: `linear-gradient(180deg, ${COLORS.primary}25 0%, transparent 100%)` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <div style={{ display: "inline-flex", alignItems: "center", background: `${COLORS.primary}25`, borderRadius: 99, padding: "4px 12px", marginBottom: 10 }}>
+              <span style={{ color: COLORS.accent, fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Portfolio Dashboard</span>
+            </div>
+            <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "0 0 2px", letterSpacing: -0.5 }}>{companyName}</h1>
+            <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>{buildings.length} {buildings.length === 1 ? "property" : "properties"}</p>
+          </div>
+          <button onClick={onSignOut} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "8px 14px", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign Out</button>
+        </div>
+
+        {/* Portfolio summary stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
+          {[
+            { label: "Active Residents", value: totalActive },
+            { label: "Workouts This Month", value: totalWorkouts },
+            { label: "Avg Adoption", value: `${avgAdoption}%` },
+          ].map((s, i) => (
+            <div key={i} style={{ background: COLORS.card, borderRadius: 14, padding: "14px 10px", textAlign: "center", border: `1px solid ${COLORS.border}` }}>
+              <p style={{ color: COLORS.white, fontSize: 20, fontWeight: 900, margin: "0 0 2px" }}>{s.value}</p>
+              <p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, lineHeight: 1.3 }}>{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Health summary pills */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+          {(["green", "yellow", "red"] as const).map(h => (
+            <div key={h} style={{ display: "flex", alignItems: "center", gap: 5, background: `${healthColor[h]}15`, borderRadius: 99, padding: "5px 12px", border: `1px solid ${healthColor[h]}30` }}>
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: healthColor[h] }} />
+              <span style={{ color: healthColor[h], fontSize: 12, fontWeight: 700 }}>{healthCounts[h]} {h === "green" ? "Healthy" : h === "yellow" ? "At Risk" : "Inactive"}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Search */}
+      <div style={{ padding: "0 24px 16px" }}>
+        <input
+          type="text"
+          placeholder="Search properties..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ width: "100%", padding: "13px 16px", borderRadius: 14, border: `1.5px solid ${search ? COLORS.accent : COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box" as const }}
+        />
+      </div>
+
+      {/* Building cards */}
+      <div style={{ padding: "0 24px 48px" }}>
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "48px 0" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 15 }}>Loading portfolio...</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "48px 0" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 15 }}>{search ? "No properties match your search." : "No properties found for this account."}</p>
+          </div>
+        ) : filtered.map(b => (
+          <PMBuildingCard key={b.id} building={b} onSelect={() => setSelectedBuilding(b)} />
+        ))}
+      </div>
+
+      <div style={{ textAlign: "center", paddingBottom: 32 }}>
+        <p style={{ color: COLORS.textSecondary, fontSize: 11 }}>Powered by AmenityFit™ · amenityfit.app</p>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 const ManagerLoginScreen = ({ onLogin, onBack }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -13305,7 +13695,29 @@ const ManagerLoginScreen = ({ onLogin, onBack }) => {
       const uid = credential.user.uid;
       const profile = await loadUserProfile(uid);
       if (!profile) { setError("No manager account found. Contact support@fitmakesenz.com."); setLoading(false); return; }
-      if (profile.role !== "manager") { setError("This account does not have manager access."); setLoading(false); return; }
+      if (profile.role !== "manager" && profile.role !== "property_manager") { setError("This account does not have manager access."); setLoading(false); return; }
+      // Check if building is churned and past cancellation date
+      if (profile.buildingId) {
+        try {
+          const { getDoc, doc } = await import("firebase/firestore");
+          const bSnap = await getDoc(doc(db, "buildings", profile.buildingId));
+          if (bSnap.exists()) {
+            const bData = bSnap.data();
+            if (bData.subscription === "churned") {
+              const cancelDate = bData.cancellationDate ? new Date(bData.cancellationDate) : null;
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              if (!cancelDate || today >= cancelDate) {
+                setError("Your building's AmenityFit subscription has ended. Contact support@fitmakesenz.com for assistance.");
+                setLoading(false);
+                return;
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Manager building status check error:", e);
+        }
+      }
       onLogin();
     } catch (e: any) {
       setLoading(false);
@@ -13424,6 +13836,67 @@ const getRetentionColor = (label: string, pct: number): string => {
   if (label === "Day 14") return pct >= 42 ? COLORS.success : pct >= 25 ? "#F39C12" : "#E74C3C";
   if (label === "Day 30") return pct >= 35 ? COLORS.success : pct >= 20 ? "#F39C12" : "#E74C3C";
   return COLORS.success;
+};
+
+const ReportSendButton = ({ buildingId, managerEmail }: { buildingId: string; managerEmail?: string }) => {
+  const [email, setEmail] = React.useState(managerEmail || "");
+  const [sending, setSending] = React.useState(false);
+  const [status, setStatus] = React.useState<"idle" | "sent" | "error">("idle");
+
+  const handleSend = async () => {
+    if (!email || !buildingId) return;
+    setSending(true);
+    setStatus("idle");
+    try {
+      const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/sendBuildingReport", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ buildingId, managerEmail: email, secret: "amenityfit-report-2026" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStatus("sent");
+      } else {
+        setStatus("error");
+      }
+    } catch (e) {
+      setStatus("error");
+    }
+    setSending(false);
+  };
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 10px" }}>Send Report</p>
+      <input
+        type="email"
+        placeholder="Manager email address"
+        value={email}
+        onChange={e => { setEmail(e.target.value); setStatus("idle"); }}
+        style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: `1.5px solid ${status === "error" ? "#FF4D4D" : status === "sent" ? "#22C55E" : email ? COLORS.accent : COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box" as const, marginBottom: 10 }}
+      />
+      <button
+        onClick={handleSend}
+        disabled={sending || !email || !buildingId}
+        style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: sending || !email ? COLORS.border : status === "sent" ? "#22C55E" : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: sending || !email ? COLORS.textSecondary : COLORS.white, fontSize: 14, fontWeight: 700, cursor: sending || !email ? "not-allowed" : "pointer", transition: "all 0.2s ease" }}
+      >
+        {sending ? "Sending..." : status === "sent" ? "✓ Report Sent" : status === "error" ? "Send Failed — Retry" : "Send Report Now"}
+      </button>
+      {status === "sent" && (
+        <p style={{ color: "#22C55E", fontSize: 12, textAlign: "center", margin: "10px 0 0", lineHeight: 1.5 }}>
+          Report delivered to {email}. You received a copy at itmakesenzfitness@gmail.com.
+        </p>
+      )}
+      {status === "error" && (
+        <p style={{ color: "#FF6B6B", fontSize: 12, textAlign: "center", margin: "10px 0 0", lineHeight: 1.5 }}>
+          Failed to send. Check your connection and try again.
+        </p>
+      )}
+      <p style={{ color: COLORS.textSecondary, fontSize: 11, textAlign: "center", margin: "10px 0 0", lineHeight: 1.5 }}>
+        Reports auto-deliver on the 1st of each month. Use this to send on demand.
+      </p>
+    </div>
+  );
 };
 
 const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingId = null, userProfile = null }) => {
@@ -14078,111 +14551,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-              <button
-                onClick={() => {
-                  const rc = b.retentionCurve || [];
-                  const text = `AMENITYFIT MONTHLY REPORT — ${month}\n${b.name} · ${buildingName}\n\nAdoption: ${b.inviteCodesRedeemed}/${b.inviteCodesGenerated} residents (${adoptionRate}%)\nActive This Month: ${b.activeUsersThisMonth}\nWorkouts Completed: ${b.totalWorkoutsThisMonth}\nAvg Sessions/Week: ${b.avgSessionsPerUserPerWeek}\nFitness Assistant Sessions: ${b.fitnessAssistantQuestionsThisMonth}\n\nRetention: Day 7: ${rc[0]?.pct ?? "—"}% · Day 14: ${rc[1]?.pct ?? "—"}% · Day 30: ${rc[2]?.pct ?? "—"}%\n\nPowered by AmenityFit · amenityfit.app`;
-                  navigator.clipboard.writeText(text).catch(() => {});
-                }}
-                style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-              >
-                Copy to Clipboard
-              </button>
-              <button
-                onClick={() => {
-                  const printWindow = window.open('', '_blank');
-                  if (!printWindow) return;
-                  printWindow.document.write(`
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                      <title>AmenityFit Report — ${b.name} — ${month}</title>
-                      <style>
-                        * { margin: 0; padding: 0; box-sizing: border-box; }
-                        body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; background: #fff; color: #111; padding: 48px; max-width: 680px; margin: 0 auto; }
-                        .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 20px; margin-bottom: 28px; }
-                        .header-left .label { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #888; margin-bottom: 6px; }
-                        .header-left .building { font-size: 24px; font-weight: 900; color: #111; margin-bottom: 2px; }
-                        .header-left .program { font-size: 14px; color: #555; }
-                        .header-right { text-align: right; }
-                        .header-right .month { font-size: 13px; color: #555; margin-bottom: 4px; }
-                        .header-right .brand { font-size: 13px; font-weight: 700; color: #6C63FF; }
-                        .section-title { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #888; margin: 28px 0 14px; }
-                        .metric-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid #eee; }
-                        .metric-row:last-child { border-bottom: none; }
-                        .metric-label { font-size: 13px; color: #444; }
-                        .metric-value { font-size: 14px; font-weight: 700; color: #111; }
-                        .retention-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
-                        .retention-row:last-child { border-bottom: none; }
-                        .ret-label { font-size: 13px; color: #444; }
-                        .ret-value { font-size: 13px; font-weight: 700; }
-                        .ret-high { color: #22c55e; }
-                        .ret-mid { color: #f59e0b; }
-                        .ret-low { color: #ef4444; }
-                        .milestone { font-size: 13px; color: #333; padding: 8px 0; border-bottom: 1px solid #eee; line-height: 1.5; }
-                        .milestone:last-child { border-bottom: none; }
-                        .milestone::before { content: "• "; color: #22c55e; font-weight: 700; }
-                        .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; }
-                        .footer p { font-size: 11px; color: #aaa; }
-                        .block { border: 1px solid #eee; border-radius: 8px; padding: 16px 20px; margin-bottom: 8px; }
-                        @media print {
-                          body { padding: 32px; }
-                          @page { margin: 0.5in; }
-                        }
-                      </style>
-                    </head>
-                    <body>
-                      <div class="header">
-                        <div class="header-left">
-                          <div class="label">Monthly Amenity Report</div>
-                          <div class="building">${b.name}</div>
-                          <div class="program">${buildingName}</div>
-                        </div>
-                        <div class="header-right">
-                          <div class="month">${month}</div>
-                          <div class="brand">AmenityFit</div>
-                        </div>
-                      </div>
-
-                      <div class="section-title">Key Metrics</div>
-                      <div class="block">
-                        <div class="metric-row"><span class="metric-label">Residents Invited</span><span class="metric-value">${b.inviteCodesGenerated}</span></div>
-                        <div class="metric-row"><span class="metric-label">Residents Signed Up</span><span class="metric-value">${b.inviteCodesRedeemed} (${adoptionRate}% adoption)</span></div>
-                        <div class="metric-row"><span class="metric-label">Active Residents This Month</span><span class="metric-value">${b.activeUsersThisMonth}</span></div>
-                        <div class="metric-row"><span class="metric-label">Total Workouts Completed</span><span class="metric-value">${b.totalWorkoutsThisMonth}</span></div>
-                        <div class="metric-row"><span class="metric-label">Avg Sessions Per Resident / Week</span><span class="metric-value">${b.avgSessionsPerUserPerWeek}</span></div>
-                        <div class="metric-row"><span class="metric-label">Fitness Assistant Sessions</span><span class="metric-value">${b.fitnessAssistantQuestionsThisMonth}</span></div>
-                      </div>
-
-                      <div class="section-title">Resident Retention</div>
-                      <div class="block">
-                      ${(b.retentionCurve || []).map(r => `<div class="retention-row"><span class="ret-label">Still active at ${r.label}</span><span class="ret-value ${r.pct >= 70 ? 'ret-high' : r.pct >= 50 ? 'ret-mid' : 'ret-low'}">${r.pct}%</span></div>`).join('')}
-                      </div>
-
-                      <div class="section-title">Resident Milestones</div>
-                      <div class="block">
-                        ${(b.milestones || []).map(m => `<div class="milestone">${m.text} <span style="color:#aaa;font-size:11px">(${m.date})</span></div>`).join('')}
-                      </div>
-
-                      <div class="footer">
-                        <p>Powered by AmenityFit · amenityfit.app</p>
-                        <p>All data is aggregate and anonymous</p>
-                      </div>
-                      <script>window.onload = function() { window.print(); }</script>
-                    </body>
-                    </html>
-                  `);
-                  printWindow.document.close();
-                }}
-                style={{ flex: 1, padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-              >
-                Download PDF
-              </button>
-            </div>
-            <p style={{ color: COLORS.textSecondary, fontSize: 12, textAlign: "center", margin: 0, lineHeight: 1.5 }}>
-              PDF opens print dialog — save as PDF or send directly to your property team.
-            </p>
+            <ReportSendButton buildingId={b.id || buildingId || userProfile?.buildingId} managerEmail={b.managerEmail} />
           </>
         )}
       </div>
@@ -14274,13 +14643,30 @@ export default function App() {
       if (firebaseUser) {
         const profile = await loadUserProfile(firebaseUser.uid);
         if (profile) {
-          if (profile.role === 'manager' && profile.buildingId) {
+          if (profile.role === 'property_manager' && profile.companyId) {
+            setUserProfile({ ...profile, uid: firebaseUser.uid });
+            setCurrentUid(firebaseUser.uid);
+            setPendingNavigation('pm-dashboard');
+          } else if (profile.role === 'manager' && profile.buildingId) {
             setUserProfile({ ...profile, uid: firebaseUser.uid });
             setCurrentUid(firebaseUser.uid);
             pingPresence(firebaseUser.uid, profile.buildingId, 'manager');
           } else if (profile.role === 'resident') {
             setUserProfile({ ...profile, uid: firebaseUser.uid });
             setCurrentUid(firebaseUser.uid);
+            // Check if building is still active before routing to dashboard
+            if (profile.buildingId) {
+              try {
+                const bSnap = await getDoc(doc(db, "buildings", profile.buildingId));
+                if (bSnap.exists() && bSnap.data().subscription === "churned") {
+                  setPendingNavigation('churned');
+                  setAuthReady(true);
+                  return;
+                }
+              } catch (e) {
+                console.error("Building status check error:", e);
+              }
+            }
             setPendingNavigation('dashboard');
             pingPresence(firebaseUser.uid, profile.buildingId || 'unknown', 'resident');
             // Handle OAuth callbacks for wearable connections
@@ -14660,6 +15046,8 @@ console.log("Month6+ result programKey:", result.programKey);
   />;
   if (superAdminLoggedIn) return <SuperAdminDashboard onSignOut={() => { setSuperAdminLoggedIn(false); setScreen("splash"); }} />;
   if (screen === "super-admin-login") return <SuperAdminLogin onLogin={() => setSuperAdminLoggedIn(true)} onBack={() => setScreen("splash")} />;
+  if (pendingNavigation === 'churned') return <ChurnedBuildingScreen onSignOut={async () => { await signOut(auth); setUserProfile(null); setCurrentUid(null); setPendingNavigation(null); setScreen("welcome"); }} />;
+  if (pendingNavigation === 'pm-dashboard' && userProfile?.companyId) return <PropertyManagerDashboard companyId={userProfile.companyId} companyName={userProfile.companyName || userProfile.companyId} onSignOut={async () => { await signOut(auth); setUserProfile(null); setCurrentUid(null); setPendingNavigation(null); setScreen("welcome"); }} />;
   if (managerLoggedIn) return <BuildingManagerDashboard
     onSignOut={() => { setManagerLoggedIn(false); setScreen(userProfile?.programKey ? "dashboard" : "welcome"); }}
     onBackToWorkout={userProfile?.programKey ? () => { setManagerLoggedIn(false); setScreen("dashboard"); } : null}
