@@ -12415,7 +12415,7 @@ const SuperAdminLogin = ({ onLogin, onBack }) => {
 };
 
 const SuperAdminDashboard = ({ onSignOut }) => {
-  const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "content" | "queue">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "content" | "queue" | "revenue">("overview");
   const [selectedBuilding, setSelectedBuilding] = useState<any>(null);
   const [buildingSearch, setBuildingSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "at_risk" | "churned">("all");
@@ -12491,12 +12491,13 @@ const SuperAdminDashboard = ({ onSignOut }) => {
     { id: "buildings", label: "Buildings" },
     { id: "content", label: "Content & Programs" },
     { id: "queue", label: "Activation Queue" },
+    { id: "revenue", label: "Revenue" },
   ];
 
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto" }}>
       {/* Header */}
-      <div style={{ padding: "52px 24px 20px", background: `linear-gradient(180deg, rgba(30,95,190,0.15) 0%, transparent 100%)`, borderBottom: i < 6 ? `1px solid ${COLORS.border}` : "none" }}>
+      <div style={{ padding: "52px 24px 20px", background: `linear-gradient(180deg, rgba(30,95,190,0.15) 0%, transparent 100%)`, borderBottom: `1px solid ${COLORS.border}` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -12511,7 +12512,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: "flex", padding: "0 24px", borderBottom: i < 6 ? `1px solid ${COLORS.border}` : "none" }}>
+      <div style={{ display: "flex", padding: "0 12px", borderBottom: `1px solid ${COLORS.border}`, overflowX: "auto", WebkitOverflowScrolling: "touch" as any, scrollbarWidth: "none" as any }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id as any)} style={{
             padding: "12px 16px", background: "none", border: "none", cursor: "pointer",
@@ -13140,6 +13141,109 @@ const SuperAdminDashboard = ({ onSignOut }) => {
             </>
           );
         })()}
+
+        {/* ── REVENUE TAB ── */}
+        {activeTab === "revenue" && (() => {
+          const getPricingTier = (units: number) => {
+            if (units <= 50) return { label: "Starter", monthly: 599 };
+            if (units <= 100) return { label: "Growth", monthly: 999 };
+            if (units <= 200) return { label: "Scale", monthly: 1499 };
+            if (units <= 300) return { label: "Pro", monthly: 1999 };
+            if (units <= 500) return { label: "Enterprise", monthly: 2799 };
+            if (units <= 1000) return { label: "Enterprise+", monthly: 3999 };
+            return { label: "Custom", monthly: 0 };
+          };
+
+          const activeRevBuildings = allBuildings.filter(b =>
+            b.subscription === "active" &&
+            !(b.isTest || (b.name || "").toLowerCase().includes("test"))
+          );
+
+          const mrr = activeRevBuildings.reduce((sum, b) => {
+            const tier = getPricingTier(b.units || 0);
+            return sum + tier.monthly;
+          }, 0);
+
+          const arr = mrr * 12;
+
+          // Upcoming renewals in next 60 days
+          const now = new Date();
+          const in60 = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+          const upcomingRenewals = allBuildings
+            .filter(b => {
+              if (!b.renewalDate) return false;
+              const d = new Date(b.renewalDate);
+              return d >= now && d <= in60;
+            })
+            .sort((a, b) => new Date(a.renewalDate).getTime() - new Date(b.renewalDate).getTime());
+
+          return (
+            <>
+              {/* MRR / ARR cards */}
+              <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Revenue Overview</p>
+              <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+                <div style={{ flex: 1, background: COLORS.card, borderRadius: 16, padding: "16px 14px", border: `1px solid ${COLORS.border}` }}>
+                  <p style={{ color: COLORS.success, fontSize: 26, fontWeight: 900, margin: "0 0 4px" }}>${mrr.toLocaleString()}</p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>MRR</p>
+                </div>
+                <div style={{ flex: 1, background: COLORS.card, borderRadius: 16, padding: "16px 14px", border: `1px solid ${COLORS.border}` }}>
+                  <p style={{ color: COLORS.accent, fontSize: 26, fontWeight: 900, margin: "0 0 4px" }}>${arr.toLocaleString()}</p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>ARR</p>
+                </div>
+              </div>
+
+              {/* Upcoming renewals */}
+              <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Renewals in Next 60 Days</p>
+              {upcomingRenewals.length === 0 ? (
+                <div style={{ background: COLORS.card, borderRadius: 14, padding: "16px", border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0, textAlign: "center" }}>No renewals due in the next 60 days.</p>
+                </div>
+              ) : (
+                <div style={{ background: COLORS.card, borderRadius: 18, padding: "4px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
+                  {upcomingRenewals.map((b, i) => {
+                    const daysUntil = Math.ceil((new Date(b.renewalDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    const isUrgent = daysUntil <= 7;
+                    return (
+                      <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: i < upcomingRenewals.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
+                        <div>
+                          <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{b.name}</p>
+                          <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{new Date(b.renewalDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                        </div>
+                        <div style={{ background: isUrgent ? "#FF4D4D20" : `${COLORS.primary}20`, borderRadius: 99, padding: "4px 12px" }}>
+                          <span style={{ color: isUrgent ? "#FF4D4D" : COLORS.accent, fontSize: 12, fontWeight: 700 }}>{daysUntil}d</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Per-building revenue breakdown */}
+              <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Buildings</p>
+              <div style={{ background: COLORS.card, borderRadius: 18, padding: "4px 20px", border: `1px solid ${COLORS.border}` }}>
+                {activeRevBuildings.length === 0 && (
+                  <p style={{ color: COLORS.textSecondary, fontSize: 13, textAlign: "center", padding: "20px 0", margin: 0 }}>No active buildings yet.</p>
+                )}
+                {activeRevBuildings.map((b, i) => {
+                  const tier = getPricingTier(b.units || 0);
+                  const renewalDate = b.renewalDate ? new Date(b.renewalDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Not set";
+                  return (
+                    <div key={b.id} style={{ padding: "14px 0", borderBottom: i < activeRevBuildings.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+                        <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: 0 }}>{b.name}</p>
+                        <p style={{ color: COLORS.success, fontSize: 14, fontWeight: 700, margin: 0 }}>${tier.monthly.toLocaleString()}/mo</p>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{b.units || 0} units, {tier.label}</p>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>Renews {renewalDate}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
       </div>
     </div>
   );
@@ -13512,7 +13616,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: "flex", gap: 0, padding: "0 24px", borderBottom: i < 6 ? `1px solid ${COLORS.border}` : "none" }}>
+      <div style={{ display: "flex", gap: 0, padding: "0 24px", borderBottom: `1px solid ${COLORS.border}` }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id as any)} style={{
             padding: "12px 16px", background: "none", border: "none", cursor: "pointer",
@@ -13918,7 +14022,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
           <>
             <div style={{ background: COLORS.card, borderRadius: 20, padding: "28px 24px", border: `1px solid ${COLORS.border}`, marginBottom: 16 }}>
               {/* Report header */}
-              <div style={{ borderBottom: i < 6 ? `1px solid ${COLORS.border}` : "none", paddingBottom: 20, marginBottom: 20 }}>
+              <div style={{ borderBottom: `1px solid ${COLORS.border}`, paddingBottom: 20, marginBottom: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
                     <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 6px" }}>Monthly Amenity Report</p>
