@@ -14160,8 +14160,31 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
             {/* Retention */}
             <div style={{ background: COLORS.card, borderRadius: 18, padding: "18px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
               <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 14px" }}>Retention</p>
-              <ManagerBarChart data={b.retentionCurve || []} color={COLORS.accent} />
-              <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "12px 0 0", lineHeight: 1.5 }}>% of residents still active at each milestone since program start.</p>
+              {(() => {
+                const last = b.lastMonthActiveUsers;
+                const current = b.activeUsersThisMonth;
+                if (last == null || last === 0) {
+                  return <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Available after first full month.</p>;
+                }
+                const pct = Math.min(100, Math.round((Math.min(current, last) / last) * 100));
+                const color = pct >= 70 ? "#22c55e" : pct >= 50 ? "#f59e0b" : "#ef4444";
+                return (
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                      <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Active Last Month</span>
+                      <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{last}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                      <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Still Active This Month</span>
+                      <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{current ?? "—"}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Month-over-Month</span>
+                      <span style={{ color, fontSize: 13, fontWeight: 700 }}>{pct}%</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Milestones */}
@@ -14546,12 +14569,31 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               {/* Retention */}
               <div style={{ background: COLORS.background, borderRadius: 14, padding: "16px", marginTop: 8, marginBottom: 16 }}>
                 <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 12px" }}>Resident Retention</p>
-                {(b.retentionCurve || []).map((r, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: i < (b.retentionCurve || []).length - 1 ? 6 : 0 }}>
-                    <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Still active at {r.label}</span>
-                    <span style={{ color: getRetentionColor(r.label, r.pct), fontSize: 13, fontWeight: 700 }}>{r.pct}%</span>
-                  </div>
-                ))}
+                {(() => {
+                  const last = b.lastMonthActiveUsers;
+                  const current = b.activeUsersThisMonth;
+                  if (last == null || last === 0) {
+                    return <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Available after first full month.</p>;
+                  }
+                  const pct = Math.min(100, Math.round((Math.min(current, last) / last) * 100));
+                  const color = pct >= 70 ? "#22c55e" : pct >= 50 ? "#f59e0b" : "#ef4444";
+                  return (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Active Last Month</span>
+                        <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{last}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Still Active This Month</span>
+                        <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{current ?? "—"}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Month-over-Month</span>
+                        <span style={{ color, fontSize: 13, fontWeight: 700 }}>{pct}%</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Milestones */}
