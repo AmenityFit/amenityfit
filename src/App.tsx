@@ -13543,7 +13543,7 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
         <button onClick={onBack} style={{ position: "absolute", top: 52, left: 20, background: "rgba(0,0,0,0.35)", border: "none", borderRadius: 12, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <span style={{ color: "#fff", fontSize: 18 }}>←</span>
         </button>
-        <div>
+        <div style={{ paddingLeft: 52 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <div style={{ width: 9, height: 9, borderRadius: "50%", background: healthColor[health], boxShadow: `0 0 8px ${healthColor[health]}` }} />
             <span style={{ color: "rgba(255,255,255,0.8)", fontSize: 12, fontWeight: 600 }}>{healthLabel[health]}</span>
@@ -13562,9 +13562,26 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
         <StatRow label="Last Activity" value={building.weeksSinceLastActivity === 0 ? "This week" : building.weeksSinceLastActivity === 1 ? "Last week" : `${building.weeksSinceLastActivity ?? "—"} weeks ago`} />
 
         <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "24px 0 4px" }}>Retention</p>
-        {rc.length > 0 ? rc.map((r: any, i: number) => (
-          <StatRow key={i} label={r.label || `Day ${r.day}`} value={`${r.pct ?? "—"}%`} />
-        )) : <p style={{ color: COLORS.textSecondary, fontSize: 13, padding: "12px 0" }}>Retention data not yet available.</p>}
+        {(() => {
+          const last = building.lastMonthActiveUsers;
+          const current = building.activeUsersThisMonth;
+          if (last == null || last === 0) {
+            return <p style={{ color: COLORS.textSecondary, fontSize: 13, padding: "12px 0" }}>Retention data available after first full month.</p>;
+          }
+          const retained = Math.min(current, last);
+          const pct = Math.round((retained / last) * 100);
+          const color = pct >= 70 ? "#22c55e" : pct >= 50 ? "#f59e0b" : "#ef4444";
+          return (
+            <>
+              <StatRow label="Active Last Month" value={String(last)} />
+              <StatRow label="Still Active This Month" value={String(current ?? "—")} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: `1px solid ${COLORS.border}` }}>
+                <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>Month-over-Month Retention</span>
+                <span style={{ color, fontSize: 14, fontWeight: 700 }}>{pct}%</span>
+              </div>
+            </>
+          );
+        })()}
 
         <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "24px 0 4px" }}>Building Info</p>
         <StatRow label="Units" value={String(building.units ?? "—")} />
@@ -14736,7 +14753,7 @@ const isInitialLoad = React.useRef(true);
         restProgramDays: [...(prev.restProgramDays || []), ...newRestDays],
       }));
     }
-  }, [userProfile.programDay]);
+  }, [userProfile?.programDay]);
 
   const handleWorkoutComplete = (snapshot?: { groups: any[]; sessionLength: number }, resolvedUid?: string) => {
     const completedGroups = snapshot?.groups || [];
@@ -15016,7 +15033,7 @@ console.log("Month6+ result programKey:", result.programKey);
     }
   }, [userProfile?.uid, userProfile?.progressionPhase, userProfile?.generatedDays, userProfile?.programKey, userProfile?.equipmentPreference, userProfile?.frequency, userProfile?.sessionLength]);
 
-  const workoutDoneToday = userProfile.lastSessionDate === new Date().toDateString();
+  const workoutDoneToday = userProfile?.lastSessionDate === new Date().toDateString();
 
   const navigate = (s: string) => {
     if (s === 'profile') setScreen('profile');
@@ -15047,10 +15064,10 @@ console.log("Month6+ result programKey:", result.programKey);
   />;
   if (superAdminLoggedIn) return <SuperAdminDashboard onSignOut={() => { setSuperAdminLoggedIn(false); setScreen("welcome"); }} />;
   if (screen === "super-admin-login") return <SuperAdminLogin onLogin={() => setSuperAdminLoggedIn(true)} onBack={() => setScreen("splash")} />;
-  if (pendingNavigation === 'churned') return <ChurnedBuildingScreen onSignOut={async () => { await signOut(auth); setUserProfile(null); setCurrentUid(null); setPendingNavigation(null); setScreen("welcome"); }} />;
-  if (pendingNavigation === 'pm-dashboard' && userProfile?.companyId) return <PropertyManagerDashboard companyId={userProfile.companyId} companyName={userProfile.companyName || userProfile.companyId} onSignOut={async () => { await signOut(auth); setUserProfile(null); setCurrentUid(null); setPendingNavigation(null); setScreen("welcome"); }} />;
+  if (pendingNavigation === 'churned') return <ChurnedBuildingScreen onSignOut={async () => { await signOut(auth); setUserProfile({}); setCurrentUid(null); setPendingNavigation(null); setScreen("welcome"); }} />;
+  if (pendingNavigation === 'pm-dashboard' && userProfile?.companyId) return <PropertyManagerDashboard companyId={userProfile.companyId} companyName={userProfile.companyName || userProfile.companyId} onSignOut={async () => { await signOut(auth); setUserProfile({}); setCurrentUid(null); setPendingNavigation(null); setScreen("welcome"); }} />;
   if (managerLoggedIn) return <BuildingManagerDashboard
-    onSignOut={async () => { await signOut(auth); setManagerLoggedIn(false); setUserProfile(null); setCurrentUid(null); setScreen("welcome"); }}
+    onSignOut={async () => { await signOut(auth); setManagerLoggedIn(false); setUserProfile({}); setCurrentUid(null); setScreen("welcome"); }}
     onBackToWorkout={userProfile?.programKey ? () => { setManagerLoggedIn(false); setScreen("dashboard"); } : null}
     userProfile={userProfile}
     buildingId={userProfile?.buildingId || null}
