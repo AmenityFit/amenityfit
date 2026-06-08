@@ -12079,31 +12079,7 @@ const LoginScreen = ({ onLogin, onBack }) => {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const credential = await signInWithPopup(auth, googleProvider);
-      const uid = credential.user.uid;
-      const profile = await loadUserProfile(uid);
-      if (profile) {
-        onLogin({ ...profile, uid });
-      } else {
-        // New Google user — send them through onboarding with pre-filled name/email
-        onLogin({
-          name: credential.user.displayName?.split(" ")[0] || "",
-          email: credential.user.email || "",
-          uid,
-          needsOnboarding: true,
-        });
-      }
-    } catch (e: any) {
-      setLoading(false);
-      if (e.code !== "auth/popup-closed-by-user") {
-        setError("Google sign in failed. Please try again or use email.");
-      }
-    }
-  };
+  // Google sign-in removed — email/password only for consistent onboarding flow
 
   const inputStyle = (hasVal: boolean) => ({
     width: "100%",
@@ -12283,45 +12259,7 @@ const LoginScreen = ({ onLogin, onBack }) => {
           {loading ? "Signing in..." : "Sign In"}
         </button>
 
-        {/* Divider */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-          <div style={{ flex: 1, height: 1, background: COLORS.border }} />
-          <span style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 500 }}>or</span>
-          <div style={{ flex: 1, height: 1, background: COLORS.border }} />
-        </div>
 
-        {/* Google Sign In */}
-        <button
-          onClick={handleGoogleLogin}
-          disabled={loading}
-          style={{
-            width: "100%",
-            padding: "16px",
-            borderRadius: 16,
-            border: `1.5px solid ${COLORS.border}`,
-            background: COLORS.card,
-            color: COLORS.white,
-            fontSize: 15,
-            fontWeight: 600,
-            cursor: loading ? "not-allowed" : "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-            marginBottom: 16,
-            fontFamily: "'Inter', sans-serif",
-            transition: "all 0.2s ease",
-          }}
-        >
-          {/* Google G logo SVG */}
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-            <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-            <path d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05"/>
-            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-          </svg>
-          Continue with Google
-        </button>
 
         {/* Back to welcome */}
         <button
@@ -15044,12 +14982,12 @@ console.log("Month6+ result programKey:", result.programKey);
     }}
     onSecretAdmin={() => { setManagerLoggedIn(false); setScreen("super-admin-login"); }}
   />;
-  if (superAdminLoggedIn) return <SuperAdminDashboard onSignOut={() => { setSuperAdminLoggedIn(false); setScreen("splash"); }} />;
+  if (superAdminLoggedIn) return <SuperAdminDashboard onSignOut={() => { setSuperAdminLoggedIn(false); setScreen("welcome"); }} />;
   if (screen === "super-admin-login") return <SuperAdminLogin onLogin={() => setSuperAdminLoggedIn(true)} onBack={() => setScreen("splash")} />;
   if (pendingNavigation === 'churned') return <ChurnedBuildingScreen onSignOut={async () => { await signOut(auth); setUserProfile(null); setCurrentUid(null); setPendingNavigation(null); setScreen("welcome"); }} />;
   if (pendingNavigation === 'pm-dashboard' && userProfile?.companyId) return <PropertyManagerDashboard companyId={userProfile.companyId} companyName={userProfile.companyName || userProfile.companyId} onSignOut={async () => { await signOut(auth); setUserProfile(null); setCurrentUid(null); setPendingNavigation(null); setScreen("welcome"); }} />;
   if (managerLoggedIn) return <BuildingManagerDashboard
-    onSignOut={() => { setManagerLoggedIn(false); setScreen(userProfile?.programKey ? "dashboard" : "welcome"); }}
+    onSignOut={async () => { await signOut(auth); setManagerLoggedIn(false); setUserProfile(null); setCurrentUid(null); setScreen("welcome"); }}
     onBackToWorkout={userProfile?.programKey ? () => { setManagerLoggedIn(false); setScreen("dashboard"); } : null}
     userProfile={userProfile}
     buildingId={userProfile?.buildingId || null}
@@ -15092,6 +15030,22 @@ console.log("Month6+ result programKey:", result.programKey);
         } catch (verifyErr) {
           console.error('Email verification send failed:', verifyErr);
           // Non-fatal — account is created, verification just won't send
+        }
+        // Send branded welcome email via Resend
+        try {
+          await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/sendResidentWelcomeEmail", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: data.email.trim(),
+              name: data.name || data.email.split("@")[0],
+              buildingName: data.buildingName || "",
+              secret: "amenityfit-welcome-2026",
+            }),
+          });
+        } catch (welcomeErr) {
+          console.error("Welcome email failed:", welcomeErr);
+          // Non-fatal
         }
         setUserProfile(profileWithUid);
         setCurrentUid(profileWithUid.uid);
