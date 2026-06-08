@@ -12757,6 +12757,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                       <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: 0 }}>Invite Codes</p>
                       <button
                         onClick={async () => {
+                          if (showBuildingCodes) { setShowBuildingCodes(false); return; }
                           const snap = await getDocs(query(collection(db, "inviteCodes"), where("buildingId", "==", String(selectedBuilding.id))));
                           const codes = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => parseInt(a.unitNumber) - parseInt(b.unitNumber));
                           setSelectedBuildingCodes(codes);
@@ -12764,7 +12765,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                         }}
                         style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: "6px 12px", color: COLORS.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                       >
-                        View Codes ({selectedBuilding.inviteCodesGenerated || 0})
+                        {showBuildingCodes ? "Hide Codes" : `View Codes (${selectedBuilding.inviteCodesGenerated || 0})`}
                       </button>
                     </div>
                     {showBuildingCodes && selectedBuildingCodes.length > 0 && (
