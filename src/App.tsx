@@ -12372,6 +12372,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const [selectedBuilding, setSelectedBuilding] = useState<any>(null);
   const [buildingSearch, setBuildingSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "at_risk" | "churned">("all");
+  const [groupByCompany, setGroupByCompany] = useState(false);
   const [queueSubmissions, setQueueSubmissions] = useState<any[]>([]);
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueLoaded, setQueueLoaded] = useState(false);
@@ -12751,52 +12752,114 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     </button>
                   ))}
                 </div>
-                <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 16px" }}>
-                  {filteredBuildings.length} of {totalBuildings} Buildings
-                </p>
-                {filteredBuildings.map((b, i) => (
-                  <div key={b.id} onClick={() => setSelectedBuilding(b)} style={{ background: COLORS.card, borderRadius: 18, padding: "16px 20px", border: `1px solid ${b.subscription === "at_risk" ? "#F59E0B40" : b.subscription === "churned" ? "#FF4D4D30" : COLORS.border}`, marginBottom: 12, cursor: "pointer" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                      <div>
-                        <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{b.name}</p>
-                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{b.location} · {b.tier}</p>
-                      </div>
-                      <div style={{ background: `${statusColor(b.subscription)}20`, borderRadius: 99, padding: "4px 12px" }}>
-                        <span style={{ color: statusColor(b.subscription), fontSize: 11, fontWeight: 700 }}>{statusLabel(b.subscription)}</span>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 16 }}>
-                      <div>
-                        <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{b.signedUp}/{b.units}</p>
-                        <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>adoption</p>
-                      </div>
-                      <div>
-                        <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{b.active}</p>
-                        <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>active</p>
-                      </div>
-                      <div>
-                        <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{(b.totalWorkoutsThisMonth || 0).toLocaleString()}</p>
-                        <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>workouts</p>
-                      </div>
-                      {getLiveCount(String(b.id)) > 0 && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: 99, background: COLORS.success, boxShadow: `0 0 6px ${COLORS.success}` }} />
-                          <div>
-                            <p style={{ color: COLORS.success, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{getLiveCount(String(b.id))}</p>
-                            <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>live now</p>
-                          </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: 0 }}>
+                    {filteredBuildings.length} of {totalBuildings} Buildings
+                  </p>
+                  <button
+                    onClick={() => setGroupByCompany(g => !g)}
+                    style={{ background: groupByCompany ? `${COLORS.accent}20` : COLORS.card, border: `1px solid ${groupByCompany ? COLORS.accent : COLORS.border}`, borderRadius: 99, padding: "5px 14px", color: groupByCompany ? COLORS.accent : COLORS.textSecondary, fontSize: 12, fontWeight: 700, cursor: "pointer", letterSpacing: 0.5 }}
+                  >
+                    {groupByCompany ? "✓ By Company" : "Group by Company"}
+                  </button>
+                </div>
+
+                {(() => {
+                  const BuildingCard = ({ b }: { b: any }) => (
+                    <div key={b.id} onClick={() => setSelectedBuilding(b)} style={{ background: COLORS.card, borderRadius: 18, padding: "16px 20px", border: `1px solid ${b.subscription === "at_risk" ? "#F59E0B40" : b.subscription === "churned" ? "#FF4D4D30" : COLORS.border}`, marginBottom: 12, cursor: "pointer" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                        <div>
+                          <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{b.name}</p>
+                          <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{b.location} · {b.tier}</p>
                         </div>
-                      )}
-                      <div>
-                        <p style={{ color: engagementScore(b) >= 50 ? COLORS.success : engagementScore(b) >= 30 ? "#F59E0B" : "#FF4D4D", fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{engagementScore(b)}%</p>
-                        <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>score</p>
+                        <div style={{ background: `${statusColor(b.subscription)}20`, borderRadius: 99, padding: "4px 12px" }}>
+                          <span style={{ color: statusColor(b.subscription), fontSize: 11, fontWeight: 700 }}>{statusLabel(b.subscription)}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 16 }}>
+                        <div>
+                          <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{b.signedUp}/{b.units}</p>
+                          <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>adoption</p>
+                        </div>
+                        <div>
+                          <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{b.active}</p>
+                          <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>active</p>
+                        </div>
+                        <div>
+                          <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{(b.totalWorkoutsThisMonth || 0).toLocaleString()}</p>
+                          <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>workouts</p>
+                        </div>
+                        {getLiveCount(String(b.id)) > 0 && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <div style={{ width: 6, height: 6, borderRadius: 99, background: COLORS.success, boxShadow: `0 0 6px ${COLORS.success}` }} />
+                            <div>
+                              <p style={{ color: COLORS.success, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{getLiveCount(String(b.id))}</p>
+                              <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>live now</p>
+                            </div>
+                          </div>
+                        )}
+                        <div>
+                          <p style={{ color: engagementScore(b) >= 50 ? COLORS.success : engagementScore(b) >= 30 ? "#F59E0B" : "#FF4D4D", fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{engagementScore(b)}%</p>
+                          <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>score</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-                {filteredBuildings.length === 0 && (
-                  <p style={{ color: COLORS.textSecondary, fontSize: 13, textAlign: "center", padding: "40px 0", margin: 0 }}>No buildings match your search or filter.</p>
-                )}
+                  );
+
+                  if (!groupByCompany) {
+                    return (
+                      <>
+                        {filteredBuildings.map((b: any) => <BuildingCard key={b.id} b={b} />)}
+                        {filteredBuildings.length === 0 && (
+                          <p style={{ color: COLORS.textSecondary, fontSize: 13, textAlign: "center", padding: "40px 0", margin: 0 }}>No buildings match your search or filter.</p>
+                        )}
+                      </>
+                    );
+                  }
+
+                  // Group by companyId — buildings without one go to "Independent"
+                  const groups: Record<string, any[]> = {};
+                  filteredBuildings.forEach((b: any) => {
+                    const key = b.companyName || b.companyId || "Independent";
+                    if (!groups[key]) groups[key] = [];
+                    groups[key].push(b);
+                  });
+
+                  // Sort: named companies first (alphabetical), Independent last
+                  const sortedKeys = Object.keys(groups).sort((a, b) => {
+                    if (a === "Independent") return 1;
+                    if (b === "Independent") return -1;
+                    return a.localeCompare(b);
+                  });
+
+                  return (
+                    <>
+                      {sortedKeys.map(company => {
+                        const buildings = groups[company];
+                        const allActive = buildings.every((b: any) => b.subscription === "active");
+                        const anyChurned = buildings.some((b: any) => b.subscription === "churned");
+                        const anyAtRisk = buildings.some((b: any) => b.subscription === "at_risk");
+                        const dotColor = anyChurned ? "#FF4D4D" : anyAtRisk ? "#F59E0B" : COLORS.success;
+                        const totalActiveResidents = buildings.reduce((a: number, b: any) => a + (b.activeUsersThisMonth || b.active || 0), 0);
+                        return (
+                          <div key={company} style={{ marginBottom: 20 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "8px 12px", background: `${COLORS.primary}15`, borderRadius: 10, border: `1px solid ${COLORS.primary}25` }}>
+                              <div style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, boxShadow: `0 0 6px ${dotColor}`, flexShrink: 0 }} />
+                              <p style={{ color: COLORS.white, fontSize: 13, fontWeight: 800, margin: 0, flex: 1 }}>{company}</p>
+                              <span style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 600 }}>{buildings.length} {buildings.length === 1 ? "building" : "buildings"}</span>
+                              <span style={{ color: COLORS.textSecondary, fontSize: 11 }}>·</span>
+                              <span style={{ color: COLORS.accent, fontSize: 11, fontWeight: 600 }}>{totalActiveResidents} active</span>
+                            </div>
+                            {buildings.map((b: any) => <BuildingCard key={b.id} b={b} />)}
+                          </div>
+                        );
+                      })}
+                      {filteredBuildings.length === 0 && (
+                        <p style={{ color: COLORS.textSecondary, fontSize: 13, textAlign: "center", padding: "40px 0", margin: 0 }}>No buildings match your search or filter.</p>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             )}
           </>
