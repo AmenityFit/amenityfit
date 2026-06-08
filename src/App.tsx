@@ -12710,6 +12710,47 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     </button>
                   </div>
 
+                  {/* Stripe Invoice */}
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: 0 }}>Billing</p>
+                      {selectedBuilding.stripeCustomerId ? (
+                        <span style={{ color: COLORS.success, fontSize: 12, fontWeight: 600 }}>✓ Stripe customer linked</span>
+                      ) : (
+                        <button
+                          onClick={async () => {
+                            if (!selectedBuilding.managerEmail) { alert("No manager email on this building."); return; }
+                            try {
+                              const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/createStripeCustomer", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  buildingId: String(selectedBuilding.id),
+                                  buildingName: selectedBuilding.name,
+                                  managerEmail: selectedBuilding.managerEmail,
+                                  units: selectedBuilding.units || 0,
+                                  secret: "amenityfit-activation-2026",
+                                }),
+                              });
+                              const data = await res.json();
+                              if (data.success) {
+                                setSelectedBuilding((prev: any) => ({ ...prev, stripeCustomerId: data.customerId }));
+                                alert(`✅ Stripe customer created. Invoice sent to ${selectedBuilding.managerEmail}`);
+                              } else {
+                                alert("Stripe error: " + (data.error || "Unknown error"));
+                              }
+                            } catch (e) {
+                              alert("Failed to create Stripe customer. Check console.");
+                            }
+                          }}
+                          style={{ background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, border: "none", borderRadius: 8, padding: "6px 12px", color: COLORS.white, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                        >
+                          Create Stripe Invoice
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Invite Codes */}
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -13186,17 +13227,6 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                               // 8b. Add managerUid to building doc for report lookups
                               await setDoc(doc(db, "buildings", slug), { managerUid: uid }, { merge: true });
 
-                              // 8c. Create Stripe customer + subscription
-                              try {
-                                await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/createStripeCustomer", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ buildingId: slug, buildingName: sub.buildingName, managerEmail: sub.managerEmail, units: sub.units || 0, secret: "amenityfit-activation-2026" }),
-                                });
-                              } catch (stripeErr) {
-                                console.error("Stripe setup failed for", sub.buildingName, stripeErr);
-                              }
-
                               // 8c. Send activation email via Resend Cloud Function
                               const codeListHtml = generatedCodes.map(c =>
                                 `<tr><td style="padding:8px 16px;font-size:13px;color:#555;border-bottom:1px solid #f0f0f0;">Unit ${c.unit}</td><td style="padding:8px 16px;font-size:14px;font-weight:700;color:#111;letter-spacing:2px;border-bottom:1px solid #f0f0f0;">${c.code}</td></tr>`
@@ -13492,17 +13522,6 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                           milestones: [],
                           createdAt: serverTimestamp(),
                         });
-
-                        // Create Stripe customer + subscription
-                        try {
-                          await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/createStripeCustomer", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ buildingId: slug, buildingName: sub.buildingName, managerEmail: sub.managerEmail, units: sub.units || 0, secret: "amenityfit-activation-2026" }),
-                          });
-                        } catch (stripeErr) {
-                          console.error("Stripe setup failed for", sub.buildingName, stripeErr);
-                        }
 
                         const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
                         const genCode = () => { let c = "AF-"; for (let j = 0; j < 6; j++) c += CHARS[Math.floor(Math.random() * CHARS.length)]; return c; };
