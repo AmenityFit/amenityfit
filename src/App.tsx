@@ -372,10 +372,8 @@ const fetchAllBuildings = async () => {
 
 const fetchCompanyBuildings = async (companyId: string) => {
   try {
-    const snap = await getDocs(collection(db, "buildings"));
-    return snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter((b: any) => b.companyId === companyId);
+    const snap = await getDocs(query(collection(db, "buildings"), where("companyId", "==", companyId)));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   } catch (e) {
     console.error("fetchCompanyBuildings error:", e);
     return [];
