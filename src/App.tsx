@@ -12410,6 +12410,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const [selectedBuildingCodes, setSelectedBuildingCodes] = React.useState<any[]>([]);
   const [showBuildingCodes, setShowBuildingCodes] = React.useState(false);
   const [batchInput, setBatchInput] = React.useState("");
+  const [batchPmEmail, setBatchPmEmail] = React.useState("");
   const [batchCompanyName, setBatchCompanyName] = React.useState("");
   const [batchParsed, setBatchParsed] = React.useState<any[]>([]);
   const [batchReviewMode, setBatchReviewMode] = React.useState(false);
@@ -13352,6 +13353,17 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                   />
                 </div>
 
+                <div style={{ marginBottom: 14 }}>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>PM Executive Email <span style={{ color: COLORS.textSecondary, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(receives monthly portfolio report)</span></p>
+                  <input
+                    type="email"
+                    placeholder="e.g. jsmith@akamassociates.com"
+                    value={batchPmEmail}
+                    onChange={e => setBatchPmEmail(e.target.value)}
+                    style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: `1.5px solid ${batchPmEmail ? COLORS.accent : COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box" as const }}
+                  />
+                </div>
+
                 <div style={{ marginBottom: 16 }}>
                   <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Building List</p>
                   <textarea
@@ -13503,6 +13515,37 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                       }
                     }
 
+                    // Create PM exec user doc if email provided
+                    if (batchPmEmail.trim()) {
+                      const companyId = batchCompanyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+                      try {
+                        // Check if PM user already exists for this company
+                        const existingPmSnap = await getDocs(query(collection(db, "users"), where("role", "==", "property_manager"), where("companyId", "==", companyId)));
+                        if (existingPmSnap.empty) {
+                          // Create Firebase Auth account for PM exec
+                          const { createUserWithEmailAndPassword: createPmUser } = await import("firebase/auth");
+                          const pmTempPassword = "AmenityFit" + Math.floor(1000 + Math.random() * 9000) + "!";
+                          const pmCredential = await createPmUser(auth, batchPmEmail.trim(), pmTempPassword);
+                          await setDoc(doc(db, "users", pmCredential.user.uid), {
+                            role: "property_manager",
+                            companyId,
+                            companyName: batchCompanyName,
+                            email: batchPmEmail.trim(),
+                            createdAt: serverTimestamp(),
+                          });
+                          // Send PM exec their login credentials
+                          const pmEmailHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;"><div style="max-width:620px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.10);"><div style="background:linear-gradient(135deg,#1E5FBE,#6C63FF);padding:36px 40px 32px;"><p style="color:rgba(255,255,255,0.7);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:0 0 10px;">AmenityFit Portfolio Access</p><h1 style="color:#fff;font-size:26px;font-weight:900;margin:0 0 6px;">${batchCompanyName} is Live</h1><p style="color:rgba(255,255,255,0.75);font-size:14px;margin:0;">${valid.length} properties activated</p></div><div style="padding:32px 40px;"><p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 28px;">Your portfolio dashboard is ready. Use the credentials below to access your property overview.</p><div style="border:1px solid #eee;border-radius:12px;overflow:hidden;margin-bottom:28px;"><table style="width:100%;border-collapse:collapse;"><tr style="background:#fafafa;"><td style="padding:13px 16px;font-size:13px;color:#555;border-bottom:1px solid #eee;">Login URL</td><td style="padding:13px 16px;font-size:13px;font-weight:700;color:#1E5FBE;border-bottom:1px solid #eee;"><a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a> → Building Manager</td></tr><tr><td style="padding:13px 16px;font-size:13px;color:#555;border-bottom:1px solid #eee;">Email</td><td style="padding:13px 16px;font-size:13px;font-weight:700;color:#111;border-bottom:1px solid #eee;">${batchPmEmail.trim()}</td></tr><tr style="background:#fafafa;"><td style="padding:13px 16px;font-size:13px;color:#555;">Temporary Password</td><td style="padding:13px 16px;font-size:15px;font-weight:900;color:#111;letter-spacing:2px;">${pmTempPassword}</td></tr></table></div><p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 28px;">You will receive a monthly portfolio summary on the 1st of each month covering all your properties.</p><div style="background:#f5f5f7;border-radius:12px;padding:16px 20px;"><p style="font-size:13px;color:#333;margin:0;">Questions? <a href="mailto:support@fitmakesenz.com" style="color:#1E5FBE;">support@fitmakesenz.com</a></p></div></div><div style="background:#fafafa;border-top:1px solid #eee;padding:20px 40px;"><p style="font-size:11px;color:#aaa;margin:0;">Senz · AmenityFit™ · amenityfit.app</p></div></div></body></html>`;
+                          await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/sendActivationEmail", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ to: batchPmEmail.trim(), subject: `Your AmenityFit Portfolio Dashboard is Ready — ${batchCompanyName}`, html: pmEmailHtml, secret: "amenityfit-activation-2026" }),
+                          });
+                        }
+                      } catch (pmErr: any) {
+                        console.error("PM exec account creation failed:", pmErr.message);
+                      }
+                    }
+
                     setBatchActivating(false);
                     setBatchComplete(true);
                   }}
@@ -13536,7 +13579,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                   </div>
                 )}
                 <button
-                  onClick={() => { setBatchInput(""); setBatchCompanyName(""); setBatchParsed([]); setBatchReviewMode(false); setBatchComplete(false); setBatchProgress({ done: 0, total: 0, current: "", errors: [] }); }}
+                  onClick={() => { setBatchInput(""); setBatchCompanyName(""); setBatchPmEmail(""); setBatchParsed([]); setBatchReviewMode(false); setBatchComplete(false); setBatchProgress({ done: 0, total: 0, current: "", errors: [] }); }}
                   style={{ padding: "14px 32px", borderRadius: 14, border: "none", background: COLORS.card, color: COLORS.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
                 >
                   Activate Another Batch
