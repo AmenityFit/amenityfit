@@ -14107,14 +14107,14 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: "flex", gap: 0, padding: "0 24px", borderBottom: `1px solid ${COLORS.border}` }}>
+      <div style={{ display: "flex", gap: 0, padding: "0 24px", borderBottom: `1px solid ${COLORS.border}`, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id as any)} style={{
             padding: "12px 16px", background: "none", border: "none", cursor: "pointer",
             color: activeTab === t.id ? COLORS.white : COLORS.textSecondary,
             fontSize: 13, fontWeight: activeTab === t.id ? 700 : 500,
             borderBottom: `2px solid ${activeTab === t.id ? COLORS.accent : "transparent"}`,
-            transition: "all 0.15s ease",
+            transition: "all 0.15s ease", whiteSpace: "nowrap", flexShrink: 0,
           }}>{t.label}</button>
         ))}
       </div>
@@ -14605,9 +14605,8 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               </div>
 
               {/* Footer */}
-              <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>Powered by AmenityFit · amenityfit.app</p>
-                <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>All data is aggregate and anonymous</p>
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 16, textAlign: "center" }}>
+                <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0, lineHeight: 1.6 }}>Powered by AmenityFit™ · amenityfit.app · All data is aggregate and anonymous</p>
               </div>
             </div>
 
