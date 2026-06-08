@@ -13698,7 +13698,7 @@ const PropertyManagerDashboard = ({ onSignOut, companyId, companyName }: { onSig
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-const ManagerLoginScreen = ({ onLogin, onBack }) => {
+const ManagerLoginScreen = ({ onLogin, onBack }: { onLogin: (profile: any) => void; onBack: () => void }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -13736,7 +13736,7 @@ const ManagerLoginScreen = ({ onLogin, onBack }) => {
           console.error("Manager building status check error:", e);
         }
       }
-      onLogin();
+      onLogin(profile);
     } catch (e: any) {
       setLoading(false);
       if (e.code === "auth/user-not-found" || e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
@@ -14611,7 +14611,9 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               </div>
             </div>
 
-            <ReportSendButton buildingId={b.id || buildingId || userProfile?.buildingId} managerEmail={b.managerEmail} />
+            <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 14, padding: "14px 16px", marginTop: 8 }}>
+              <p style={{ color: COLORS.textSecondary, fontSize: 12, textAlign: "center", margin: 0, lineHeight: 1.6 }}>Reports are automatically delivered on the 1st of each month.<br />Contact <span style={{ color: COLORS.accent }}>support@fitmakesenz.com</span> to request an on-demand report.</p>
+            </div>
           </>
         )}
       </div>
@@ -15114,7 +15116,7 @@ console.log("Month6+ result programKey:", result.programKey);
     userProfile={userProfile}
     buildingId={userProfile?.buildingId || null}
   />;
-  if (screen === "manager-login") return <ManagerLoginScreen onLogin={() => setManagerLoggedIn(true)} onBack={() => setScreen("welcome")} />;
+  if (screen === "manager-login") return <ManagerLoginScreen onLogin={(profile) => { setUserProfile(profile); setManagerLoggedIn(true); }} onBack={() => setScreen("welcome")} />;
 
   if (screen === "welcome") return <WelcomeScreen onGetStarted={() => setScreen("onboarding")} onLogin={() => setScreen("login")} onManagerLogin={() => setScreen("manager-login")} />;
   if (screen === "onboarding") return <OnboardingFlow onComplete={async (data) => {
