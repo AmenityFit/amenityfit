@@ -597,12 +597,11 @@ const validateInviteCode = async (code: string): Promise<any | null> => {
 const markCodeUsed = async (code: string, uid: string): Promise<void> => {
   try {
     const ref = doc(db, "inviteCodes", code);
-    const snap = await getDocs(collection(db, "inviteCodes"));
-    const existing = snap.docs.find(d => d.id === code);
-    if (existing) {
-      const usedBy = existing.data().usedBy || [];
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const usedBy = snap.data().usedBy || [];
       if (!usedBy.includes(uid)) {
-        await setDoc(ref, { ...existing.data(), usedBy: [...usedBy, uid] }, { merge: true });
+        await setDoc(ref, { usedBy: [...usedBy, uid] }, { merge: true });
       }
     }
   } catch (e) {
@@ -613,11 +612,10 @@ const markCodeUsed = async (code: string, uid: string): Promise<void> => {
 // Fetch all codes for a building (for manager dashboard)
 const fetchBuildingCodes = async (buildingId: string): Promise<any[]> => {
   try {
-    const snap = await getDocs(collection(db, "inviteCodes"));
+    const snap = await getDocs(query(collection(db, "inviteCodes"), where("buildingId", "==", buildingId)));
     return snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
-      .filter((c: any) => c.buildingId === buildingId)
-      .sort((a: any, b: any) => a.unitNumber?.localeCompare?.(b.unitNumber) || 0);
+      .sort((a: any, b: any) => parseInt(a.unitNumber) - parseInt(b.unitNumber));
   } catch (e) {
     console.error("fetchBuildingCodes error:", e);
     return [];
