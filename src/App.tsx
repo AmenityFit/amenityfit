@@ -6828,8 +6828,8 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
                         {vid ? (
                           <>
                             <img src={`https://vumbnail.com/${vid}_295x166.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12 }} />
-                            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              <div style={{ width: 22, height: 22, borderRadius: 99, background: COLORS.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.25)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <div style={{ width: 24, height: 24, borderRadius: 99, background: "rgba(255,255,255,0.2)", border: "1.5px solid rgba(255,255,255,0.6)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <span style={{ color: "#fff", fontSize: 9, fontWeight: 900, paddingLeft: 2 }}>▶</span>
                               </div>
                             </div>
