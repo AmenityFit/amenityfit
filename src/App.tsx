@@ -1159,12 +1159,21 @@ const Step1InviteCode = ({ data, onChange, onNext, onBack }) => {
           type="text"
           value={data.inviteCode}
           onChange={(e) => {
-            onChange({ inviteCode: e.target.value.toUpperCase() });
+            const normalized = e.target.value
+              .toUpperCase()
+              .replace(/[–—]/g, "-")
+              .replace(/[^A-Z0-9-]/g, "")
+              .slice(0, 9);
+            onChange({ inviteCode: normalized });
             setError("");
             setValidated(false);
           }}
           placeholder="AF-XXXXXX"
           maxLength={9}
+          autoCorrect="off"
+          autoCapitalize="characters"
+          autoComplete="off"
+          spellCheck={false}
           style={{
             width: "100%", padding: "18px 20px",
             borderRadius: 16,
