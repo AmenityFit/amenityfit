@@ -9054,7 +9054,12 @@ const getSuggestedQuestions = (profile: any): string[] => {
   ];
 
   // Rest day
-  if (isRestDay) return [
+  if (isRestDay) return sessionsCompleted < 3 ? [
+    "How do I use this app?",
+    "My muscles are sore today. Is that a good sign or bad sign?",
+    "How do I best recover between sessions?",
+    "I'm struggling to stay consistent. What's actually going on?",
+  ] : [
     "My muscles are sore today. Is that a good sign or bad sign?",
     "How do I best recover between sessions?",
     "I'm struggling to stay consistent. What's actually going on?",
@@ -9062,7 +9067,12 @@ const getSuggestedQuestions = (profile: any): string[] => {
   ];
 
   // Post-workout
-  if (workoutDoneToday) return [
+  if (workoutDoneToday) return sessionsCompleted < 3 ? [
+    "How do I use this app?",
+    todayFocus ? `I just finished ${todayFocus}. What should I do in the next few hours?` : "I just finished training. What should I do in the next few hours?",
+    "How do I best recover between sessions?",
+    "I'm struggling to stay consistent. What's actually going on?",
+  ] : [
     todayFocus ? `I just finished ${todayFocus}. What should I do in the next few hours?` : "I just finished training. What should I do in the next few hours?",
     "How do I best recover between sessions?",
     "I'm struggling to stay consistent. What's actually going on?",
