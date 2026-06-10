@@ -3090,7 +3090,7 @@ const PlaylistCard = () => (
       display: "flex", alignItems: "center", justifyContent: "center",
       boxShadow: "0 4px 16px rgba(29,185,84,0.4)",
     }}>
-      <span style={{ fontSize: 22, lineHeight: 1 }}>♪</span>
+      <span style={{ fontSize: 22, lineHeight: 1, color: "#fff" }}>♪</span>
     </div>
     <div style={{ flex: 1 }}>
       <p style={{ color: COLORS.white, fontWeight: 700, fontSize: 15, margin: "0 0 3px" }}>Fitmakesenz Afrobeats Mix</p>
@@ -6840,12 +6840,12 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
                         <p style={{ color: COLORS.white, fontWeight: 700, fontSize: 14, margin: "0 0 3px", lineHeight: 1.3, textAlign: "left" }}>
                           {exData?.name}{exData?.eachLeg ? "" : ""}{exData?.eachSide ? "" : ""}
                         </p>
-                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 1px" }}>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 1px", textAlign: "left" }}>
                           {group.restBetweenSets === "None"
                             ? (() => { const m = group.label.match(/(\d+)\s*round/i); return m ? `${m[1]} rounds` : `${ex.sets} set`; })()
                             : `${ex.sets} sets`} · {ex.reps} {exData?.isTime ? "" : "reps"}
                         </p>
-                        <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0, opacity: 0.7 }}>{exData?.muscle}</p>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0, opacity: 0.7, textAlign: "left" }}>{exData?.muscle}</p>
                       </div>
                       {isReview ? (
                         <div style={{ marginLeft: 8, width: 28, height: 28, borderRadius: 99, background: "rgba(46,204,113,0.15)", border: "1px solid rgba(46,204,113,0.4)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -7723,7 +7723,7 @@ if (showRest) {
 
         {/* Coach's Notes — full cue */}
         {currentEx?.coachingCue && (
-          <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}30`, borderRadius: 16, padding: "16px 18px", marginBottom: 160 }}>
+          <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}30`, borderRadius: 16, padding: "16px 18px", marginBottom: 220 }}>
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 12px" }}>Coach's Note</p>
             {currentEx.coachingCue.split("|").map((line: string, i: number) => (
               <p key={i} style={{ color: COLORS.white, fontSize: 14, margin: "0 0 8px", lineHeight: 1.6 }}>{line}</p>
