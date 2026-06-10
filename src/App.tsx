@@ -54,6 +54,7 @@ import {
   Home,
   Activity,
   Watch,
+  Music,
 } from "lucide-react";
 
 const firebaseConfig = {
@@ -3090,7 +3091,7 @@ const PlaylistCard = () => (
       display: "flex", alignItems: "center", justifyContent: "center",
       boxShadow: "0 4px 16px rgba(29,185,84,0.4)",
     }}>
-      <span style={{ fontSize: 22, lineHeight: 1, color: "#fff" }}>♪</span>
+      <Music size={24} color="#ffffff" strokeWidth={2.5} />
     </div>
     <div style={{ flex: 1 }}>
       <p style={{ color: COLORS.white, fontWeight: 700, fontSize: 15, margin: "0 0 3px" }}>Fitmakesenz Afrobeats Mix</p>
@@ -7565,7 +7566,7 @@ if (showWeightLogger && pendingWeightGroup) {
             setSessionWeights(toSave);
             onWeightsSaved(toSave);
             setWeightSaved(true);
-            await saveWeightsToFirestore(wheelValues, pendingWeightGroup);
+            await saveWeightsToFirestore(toSave, pendingWeightGroup);
             setTimeout(() => {
               setShowWeightLogger(false);
               setPendingWeightGroup(null);
@@ -15602,7 +15603,7 @@ console.log("Month6+ result programKey:", result.programKey);
       const unsub = auth.onAuthStateChanged(user => { unsub(); resolve(user?.uid || ""); });
     }));
     if (uid && snapshot) {
-      (() => {
+      (async () => {
         const isMonth4 = userProfile.programKey?.startsWith("month6-");
         const baseProgramKey = isMonth4 ? userProfile.programKey.replace("month6-", "") : userProfile.programKey;
         const progDay = isMonth4
