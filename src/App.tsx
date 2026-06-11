@@ -2461,6 +2461,7 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-proxy-secret": "af-proxy-2026-xK9mQ3rL",
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
@@ -4064,7 +4065,6 @@ const EXERCISES_DATA: Record<string, any> = {
   "bent-over-underarm-barbell-row": { name: "Bent Over Row Underhand Grip", muscle: "Back", equipment: "Barbell", difficulty: "intermediate", injuryFlags: ["lumbar-flexion-loaded"], coachingCue: "Underhand grip shifts emphasis to lower lats and biceps. Same hip hinge position. Pull to your navel, elbows stay tight to your sides." },
   "plank-shoulder-tap": { injuryFlags: ["wrist-load"], name: "Plank Shoulder Taps", muscle: "Core", equipment: "Bodyweight", difficulty: "intermediate", isTime: true, coachingCue: "High plank. Alternate tapping each shoulder with the opposite hand. The key is keeping your hips from rocking. Anti-rotation core strength." },
             "seated-lateral-raise": { injuryFlags: [], name: "Seated Lateral Raises", muscle: "Shoulders", equipment: "Dumbbells", difficulty: "beginner", coachingCue: "Seated on bench, slight lean forward. Raise dumbbells to the sides. Sitting prevents leg drive so the deltoid does all the work." },
-                  "lat-pulldown-seated": { name: "Lat Pulldown", muscle: "Back", equipment: "Cable Machine", difficulty: "beginner", coachingCue: "Sit tall, thighs under pad. Grip bar just outside shoulder width. Pull to upper chest, elbows drive toward your hips. Control the rise." },
   "lat-pulldown-cable": { name: "Lat Pulldown (Cable)", muscle: "Back", equipment: "Cable Machine", difficulty: "beginner", coachingCue: "Grip just outside shoulder width, palms facing away. Sit tall, slight lean back, chest up. Pull the bar to your upper chest, leading with your elbows. Squeeze your lats at the bottom of the pull. Control the bar back up, do not let it yank you. Every rep starts with your shoulders packed down." },
     "dumbbell-lat-pullover": { injuryFlags: ["shoulder-overhead"], name: "Dumbbell Pullover", muscle: "Back", equipment: "Dumbbells", difficulty: "intermediate", coachingCue: "Lie across bench with one dumbbell. Hold with both hands above chest. Lower behind head keeping slight bend in elbows. Pull back using lats, not just your arms."},
   "seated-dumbbell-arm-circles": { name: "Seated Dumbbell Arm Circles", muscle: "Shoulders", equipment: "Dumbbells", difficulty: "beginner", vimeoId: "1183584890", coachingCue: "Sit tall, arms extended to sides with light dumbbells. Make small controlled circles forward or backward. Keep shoulders down and away from ears. Reps count for each way." },
@@ -4842,7 +4842,6 @@ const VIMEO_VIDEOS: Record<string, { vimeoIds: string[]; equipment: string }> = 
   "seated-dumbbell-alt-front-raise": { vimeoIds: ["1183585018"], equipment: "Dumbbells" },
   "seated-dumbbell-bicep-curl": { vimeoIds: ["1183584830"], equipment: "Dumbbells" },
   "seated-dumbbell-front-raise": { vimeoIds: ["1183584769"], equipment: "Dumbbells" },
-  "lat-pulldown-seated": { vimeoIds: ["1183584741"], equipment: "Cable Machine" },
   "seated-rope-cable-face-pull": { vimeoIds: ["1183584549"], equipment: "Cable Machine" },
   "seated-supinated-cable-row": { vimeoIds: ["1183584527"], equipment: "Cable Machine" },
   "back-row-machine": { vimeoIds: ["1183584510"], equipment: "Row Machine" },
@@ -7650,7 +7649,7 @@ if (showRest) {
       </div>
 
       {/* Scrollable body — video + exercise info together */}
-      <div className="ae-scroll" style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" as any }}>
+      <div className="ae-scroll" style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" as any, paddingBottom: 280 }}>
         <style>{`.ae-scroll::-webkit-scrollbar{display:none}`}</style>
 
       {/* Vimeo Demo Video */}
@@ -9602,6 +9601,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-proxy-secret": "af-proxy-2026-xK9mQ3rL",
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
