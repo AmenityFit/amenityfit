@@ -7087,6 +7087,15 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
   } catch (e) {
     console.error("Failed to write weights to session:", e);
   }
+  // Fetch all previous weight logs once (not per-exercise) to avoid N full-scans
+  let allPrevDocs: any[] = [];
+  try {
+    const prevSnap = await getDocs(collection(db, "users", profile.uid, "weightLog"));
+    allPrevDocs = prevSnap.docs;
+  } catch (e) {
+    console.error("Failed to fetch previous weight logs:", e);
+  }
+
   const batch: Promise<any>[] = [];
   for (const [exId, weight] of Object.entries(weights)) {
     if (weight === 0) continue;
@@ -7101,8 +7110,7 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
       loggedAt: serverTimestamp(),
     }, { merge: true }));
     try {
-      const prevSnap = await getDocs(collection(db, "users", profile.uid, "weightLog"));
-      const prevBest = prevSnap.docs
+      const prevBest = allPrevDocs
         .filter(d => d.data().exerciseId === exId && d.id !== `${today}_${exId}`)
         .reduce((best, d) => Math.max(best, d.data().weight || 0), 0);
       if (weight > prevBest && prevBest > 0) {
@@ -7281,10 +7289,21 @@ const handleRestDone = () => {
     });
     if (strengthExercises && strengthExercises.length > 0) {
       const initWheels: Record<string, number> = {};
+      const isMetricInit = !!(profile?.heightCm || profile?.weightKg);
       strengthExercises.forEach((ex: any) => {
         const BWIDS = new Set(["pronated-inverted-row","supinated-inverted-row","towel-grip-inverted-row","pull-up","assisted-pull-up","neutral-grip-assisted-pullup","trx-row","trx-pushup","trx-bicep-curl","trx-overhead-tricep-extension","trx-jump-squat","trx-jump-squat-with-pulse","trx-lunge-switches","trx-squat","trx-stationary-lunge","elevated-pushup","banded-pushup","laydown-pushup","side-motion-pushup","t-pushup","plyo-side-side-pushup","wall-pushup","mini-band-pushup","tricep-dips","bench-tricep-dips","walking-lunge-bodyweight","bodyweight-lunge-pushoff","bosu-bodyweight-lunge-pushoff","swiss-ball-hamstring-curl","swiss-ball-leg-lift","ab-wheel-rollout","kneeling-ab-wheel-rollout","modified-medicine-ball-russian-twist"]);
         if (!BWIDS.has(ex.id)) {
-          initWheels[ex.id] = sessionWeights[ex.id] || 0;
+          if (sessionWeights[ex.id]) {
+            initWheels[ex.id] = sessionWeights[ex.id];
+          } else {
+            // Initialize to the visual default so unscrolled wheels still save
+            const exData = (EXERCISES_DATA as any)[ex.id];
+            const cat = getEquipmentCategory(exData?.equipment || "", ex.id);
+            const defaultVal = isMetricInit
+              ? (cat === "dumbbell" ? 10 : cat === "barbell" ? 60 : cat === "ezbar" ? 20 : cat === "cable" ? 17.5 : cat === "legpress" ? 45 : cat === "kettlebell" ? 16 : cat === "medicineball" ? 6 : 10)
+              : (cat === "dumbbell" ? 25 : cat === "barbell" ? 135 : cat === "ezbar" ? 45 : cat === "cable" ? 40 : cat === "legpress" ? 100 : cat === "kettlebell" ? 16 : cat === "medicineball" ? 15 : 25);
+            initWheels[ex.id] = defaultVal;
+          }
         }
       });
       setWheelValues(initWheels);
