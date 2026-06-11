@@ -7035,7 +7035,7 @@ const getSwapCandidates = (
   return candidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 };
 
-const ActiveExerciseScreen = ({ group, groupIndex, totalGroups, onGroupComplete, onBack, onGoHome, onShowOverview, profile, initialRound = 1, initialExerciseIndex = 0, initialCompletedCells = [], onSaveState = (round: number, exerciseIndex: number, cells?: string[]) => {}, onSwap = (swapKey: string, newId: string) => {}, onWeightsSaved = (weights: Record<string, number>) => {} }) => {
+const ActiveExerciseScreen = ({ group, groupIndex, totalGroups, onGroupComplete, onBack, onGoHome, onShowOverview, profile, initialRound = 1, initialExerciseIndex = 0, initialCompletedCells = [], initialWeights = {} as Record<string, number>, onSaveState = (round: number, exerciseIndex: number, cells?: string[]) => {}, onSwap = (swapKey: string, newId: string) => {}, onWeightsSaved = (weights: Record<string, number>) => {} }) => {
   const [currentRound, setCurrentRound] = useState(initialRound);
 const [currentExerciseIndex, setCurrentExerciseIndex] = useState(initialExerciseIndex);
 const [showRest, setShowRest] = useState(false);
@@ -7289,21 +7289,10 @@ const handleRestDone = () => {
     });
     if (strengthExercises && strengthExercises.length > 0) {
       const initWheels: Record<string, number> = {};
-      const isMetricInit = !!(profile?.heightCm || profile?.weightKg);
       strengthExercises.forEach((ex: any) => {
         const BWIDS = new Set(["pronated-inverted-row","supinated-inverted-row","towel-grip-inverted-row","pull-up","assisted-pull-up","neutral-grip-assisted-pullup","trx-row","trx-pushup","trx-bicep-curl","trx-overhead-tricep-extension","trx-jump-squat","trx-jump-squat-with-pulse","trx-lunge-switches","trx-squat","trx-stationary-lunge","elevated-pushup","banded-pushup","laydown-pushup","side-motion-pushup","t-pushup","plyo-side-side-pushup","wall-pushup","mini-band-pushup","tricep-dips","bench-tricep-dips","walking-lunge-bodyweight","bodyweight-lunge-pushoff","bosu-bodyweight-lunge-pushoff","swiss-ball-hamstring-curl","swiss-ball-leg-lift","ab-wheel-rollout","kneeling-ab-wheel-rollout","modified-medicine-ball-russian-twist"]);
         if (!BWIDS.has(ex.id)) {
-          if (sessionWeights[ex.id]) {
-            initWheels[ex.id] = sessionWeights[ex.id];
-          } else {
-            // Initialize to the visual default so unscrolled wheels still save
-            const exData = (EXERCISES_DATA as any)[ex.id];
-            const cat = getEquipmentCategory(exData?.equipment || "", ex.id);
-            const defaultVal = isMetricInit
-              ? (cat === "dumbbell" ? 10 : cat === "barbell" ? 60 : cat === "ezbar" ? 20 : cat === "cable" ? 17.5 : cat === "legpress" ? 45 : cat === "kettlebell" ? 16 : cat === "medicineball" ? 6 : 10)
-              : (cat === "dumbbell" ? 25 : cat === "barbell" ? 135 : cat === "ezbar" ? 45 : cat === "cable" ? 40 : cat === "legpress" ? 100 : cat === "kettlebell" ? 16 : cat === "medicineball" ? 15 : 25);
-            initWheels[ex.id] = defaultVal;
-          }
+          initWheels[ex.id] = sessionWeights[ex.id] || initialWeights[ex.id] || 0;
         }
       });
       setWheelValues(initWheels);
@@ -9004,6 +8993,7 @@ onSaveState={(round: number, exerciseIndex: number, cells?: string[]) => {
   });
 }}
         onShowOverview={() => setPhase("overview")}
+        initialWeights={workoutFlowWeights}
         onWeightsSaved={(weights: Record<string, number>) => { const merged = { ...workoutFlowWeightsRef.current, ...weights }; workoutFlowWeightsRef.current = merged; setWorkoutFlowWeights(merged); }}
         profile={profile}
         onSwap={(swapKey: string, newId: string) => {
