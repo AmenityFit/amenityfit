@@ -9455,6 +9455,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
   const [selectionBar, setSelectionBar] = useState<{ text: string; x: number; y: number } | null>(null);
   const [visibleTimestamp, setVisibleTimestamp] = useState<number | null>(null);
   const [noteSavedIdx, setNoteSavedIdx] = useState<number | null>(null);
+  const [noteToast, setNoteToast] = useState(false);
   const longPressTimer = React.useRef<any>(null);
   const timestampTimer = React.useRef<any>(null);
   const uid = profile?.uid;
@@ -9545,6 +9546,8 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
       await setDoc(notesRef, { notes: updated });
       setNoteSavedIdx(idx);
       setTimeout(() => setNoteSavedIdx(null), 2000);
+      setNoteToast(true);
+      setTimeout(() => setNoteToast(false), 2000);
     } catch (e) {
       console.error("Save note error:", e);
     }
@@ -9887,6 +9890,37 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
             </button>
           </div>
         </>
+      )}
+
+      {/* Save to Notes toast */}
+      {noteToast && (
+        <div style={{
+          position: "fixed",
+          bottom: 120,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 9999,
+          background: "rgba(30,30,30,0.92)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: 50,
+          padding: "10px 20px",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+          whiteSpace: "nowrap",
+          transition: "opacity 0.2s ease",
+        }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="8" fill="#34C759"/>
+            <path d="M4.5 8L7 10.5L11.5 6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span style={{ color: "#fff", fontSize: 14, fontWeight: 600, fontFamily: "'Inter', sans-serif" }}>
+            Saved to Notes
+          </span>
+        </div>
       )}
 
       {/* Scroll to bottom button */}
