@@ -9616,6 +9616,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
           "x-proxy-secret": "af-proxy-2026-xK9mQ3rL",
         },
         body: JSON.stringify({
+          uid: profile?.uid || null,
           model: "claude-sonnet-4-6",
           max_tokens: 1000,
           system: buildSystemPrompt(profile),
@@ -9623,6 +9624,15 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
         }),
       });
       const data = await response.json();
+      if (response.status === 429) {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: "You've reached your daily limit for the Fitness Assistant. Your limit resets tomorrow — come back then and we'll pick up where we left off. 💪",
+          timestamp: Date.now(),
+        }]);
+        setLoading(false);
+        return;
+      }
       const reply = (data.content?.[0]?.text || "Having trouble connecting right now. Give it a second and try again.").replace(/—/g, "").replace(/–/g, "").replace(/\s{2,}/g, " ").trim();
       setMessages(prev => [...prev, { role: "assistant", content: reply }]);
     } catch (err) {
