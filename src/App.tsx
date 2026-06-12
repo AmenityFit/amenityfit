@@ -7573,7 +7573,7 @@ if (showWeightLogger && pendingWeightGroup) {
             setSessionWeights(toSave);
             onWeightsSaved(toSave);
             setWeightSaved(true);
-            await saveWeightsToFirestore(toSave, pendingWeightGroup);
+            await saveWeightsToFirestore(toSave, pendingWeightGroup, activeSessionIdRef.current || undefined);
             setTimeout(() => {
               setShowWeightLogger(false);
               setPendingWeightGroup(null);
@@ -8319,7 +8319,7 @@ const getWeekSchedule = (
 
 // ─── Weekly Program View Screen ───────────────────────────────────────────────
 
-const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onReviewWorkout, workoutDoneToday, onPreviewWorkout = null as any, initialSelectedDay = null as any }) => {
+const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onReviewWorkout, workoutDoneToday, isInProgress = false, onPreviewWorkout = null as any, initialSelectedDay = null as any }) => {
   const [selectedDay, setSelectedDay] = useState<any>(initialSelectedDay ?? null);
   // Ensure today is always selected on mount if no day was passed in
   React.useEffect(() => {
@@ -8394,7 +8394,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onReviewWorkout, w
 
   const todayLocal = React.useMemo(() => new Date(), []);
   const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment);
-  if (screen === "weekly") return <WeeklyProgramView profile={userProfile} onBack={() => setScreen("dashboard")} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  if (screen === "weekly") return <WeeklyProgramView profile={userProfile} onBack={() => setScreen("dashboard")} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
 
   const todayDay = weekDays.find((d: any) => d.isToday) ?? null;
   const didAutoSelect = React.useRef(false);
@@ -8575,10 +8575,11 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                           <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 10px" }}>Weights Logged</p>
                           {Object.entries(dayWeightLog).map(([exId, weight]) => {
                             const exData = (EXERCISES_DATA as any)[exId];
+                            const weightUnit = profile?.heightFt ? "lbs" : "kg";
                             return (
                               <div key={exId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${COLORS.border}` }}>
                                 <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 500 }}>{exData?.name || exId}</span>
-                                <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{weight} lbs</span>
+                                <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{weight} {weightUnit}</span>
                               </div>
                             );
                           })}
@@ -8596,7 +8597,7 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                   ) : (
                     <button onClick={onStartWorkout} style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, boxShadow: `0 8px 24px ${COLORS.primary}40` }}>
                       <ChevronRight size={18} color={COLORS.white} />
-                      Start Today's Workout
+                      {isInProgress ? "Continue Workout →" : "Start Today's Workout"}
                     </button>
                   )
                 )}
@@ -8613,10 +8614,11 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                       <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 10px" }}>Weights Logged</p>
                       {Object.entries(dayWeightLog).map(([exId, weight]) => {
                         const exData = (EXERCISES_DATA as any)[exId];
+                        const weightUnit = profile?.heightFt ? "lbs" : "kg";
                         return (
                           <div key={exId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: i < 6 ? `1px solid ${COLORS.border}` : "none" }}>
                             <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 500 }}>{exData?.name || exId}</span>
-                            <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{weight} lbs</span>
+                            <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{weight} {weightUnit}</span>
                           </div>
                         );
                       })}
@@ -8693,6 +8695,20 @@ const WorkoutFlow = ({ profile, onComplete, onBack, onGoHomeSave, onProfileUpdat
   })();
 
   const [localSwaps, setLocalSwaps] = useState<Record<string, string>>(profile?.programSwaps || {});
+  const activeSessionIdRef = React.useRef<string | null>(null);
+  // Create session doc at workout start so per-group weight saves always find it
+  React.useEffect(() => {
+    if (!profile?.uid || isReview) return;
+    const today = new Date().toISOString().split("T")[0];
+    const id = `${profile.uid}_${today}`;
+    activeSessionIdRef.current = id;
+    setDoc(doc(db, "workoutSessions", id), {
+      uid: profile.uid,
+      date: today,
+      programDay: profile?.programDay || 1,
+      weightsLogged: {},
+    }, { merge: true }).catch(() => {});
+  }, []);
   const [phase, setPhase] = useState<"list" | "active" | "complete">(savedProgress ? "list" : "list");
   const [currentGroupIndex, setCurrentGroupIndex] = useState(savedProgress?.currentGroupIndex ?? 0);
   const [totalSetsCompleted, setTotalSetsCompleted] = useState(savedProgress?.totalSetsCompleted ?? 0);
@@ -8873,7 +8889,7 @@ const workoutGroups = injuryFiltered.map(group => ({
 
   if (phase === "list") {
     const pinnedImage = getWorkoutImage(workoutType, actualCompletedDay);
-    return <WorkoutListScreen day={day} filteredGroups={workoutGroups} onStart={() => setPhase("active")} onBack={onBack} workoutImage={pinnedImage} programDay={actualCompletedDay} programWeek={profile?.programWeek || 1} isReview={isReview} bgPosition={workoutType === "upper-body" || workoutType === "push" ? "center top" : workoutType === "lower-body" ? "center 60%" : "center"} equipmentPreference={reviewEquipmentPreference} isInProgress={currentGroupIndex > 0 || (savedProgress?.currentGroupIndex ?? 0) > 0 || (savedProgress?.completedCells?.length ?? 0) > 0} currentGroupIndex={currentGroupIndex} workoutType={workoutType} workoutDoneToday={isReview} />;
+    return <WorkoutListScreen day={day} filteredGroups={workoutGroups} onStart={() => setPhase("active")} onBack={onBack} workoutImage={pinnedImage} programDay={actualCompletedDay} programWeek={profile?.programWeek || 1} isReview={isReview} bgPosition={workoutType === "upper-body" || workoutType === "push" ? "center top" : workoutType === "lower-body" ? "center 60%" : "center"} equipmentPreference={reviewEquipmentPreference} isInProgress={currentGroupIndex > 0 || (savedProgress?.currentGroupIndex ?? 0) > 0 || (savedProgress?.completedCells?.length ?? 0) > 0} currentGroupIndex={currentGroupIndex} workoutType={workoutType} workoutDoneToday={isReview || workoutWasDoneToday} />;
   }
 
   if (phase === "overview") {
@@ -9007,34 +9023,15 @@ onSaveState={(round: number, exerciseIndex: number, cells?: string[]) => {
         profile={profile}
         initialSwaps={localSwaps}
         onSwap={(swapKey: string, newId: string) => {
-          setLocalSwaps(prev => ({ ...prev, [swapKey]: newId }));
+          const updated = { ...(profile?.programSwaps || {}), ...localSwaps, [swapKey]: newId };
+          setLocalSwaps(updated);
+          if (profile?.uid) {
+            setDoc(doc(db, "users", profile.uid), { programSwaps: updated }, { merge: true });
+          }
         }}
       />
     );
   }
-
-  // Final weight sweep on workout completion — ensures all accumulated weights land in Firestore
-  React.useEffect(() => {
-    const finalWeights = workoutFlowWeightsRef.current;
-    if (Object.keys(finalWeights).length > 0) {
-      const today = new Date().toISOString().split("T")[0];
-      const saveAll = async () => {
-        try {
-          const sessSnap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", profile?.uid), where("date", "==", today)));
-          if (!sessSnap.empty) {
-            const updateMap: Record<string, any> = {};
-            for (const [exId, w] of Object.entries(finalWeights)) {
-              if (w !== 0) updateMap[`weightsLogged.${exId}`] = w;
-            }
-            if (Object.keys(updateMap).length > 0) {
-              await updateDoc(doc(db, "workoutSessions", sessSnap.docs[0].id), updateMap).catch(() => {});
-            }
-          }
-        } catch {}
-      };
-      saveAll();
-    }
-  }, []);
 
   return (
     <SessionCompleteScreen
@@ -15768,7 +15765,7 @@ console.log("Month6+ result programKey:", result.programKey);
     }
     setScreen("dashboard");
   }} />;
-  if (screen === "weekly") return <WeeklyProgramView key={screen + new Date().toDateString()} profile={userProfile} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  if (screen === "weekly") return <WeeklyProgramView key={screen + new Date().toDateString()} profile={userProfile} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
   if (screen === "preview" && previewDay) {
     const previewType = previewDay.type || "full-body";
     const previewImage = getWorkoutImage(previewType, previewDay.programDay || 1);
