@@ -12133,6 +12133,13 @@ const LoginScreen = ({ onLogin, onBack }) => {
       const uid = credential.user.uid;
       const profile = await loadUserProfile(uid);
       if (profile) {
+        // Block managers and property managers from resident login
+        if (profile.role === "manager" || profile.role === "property_manager" || profile.role === "superadmin") {
+          await signOut(auth);
+          setError("This account is not a resident account. Please use the Building Manager login.");
+          setLoading(false);
+          return;
+        }
         onLogin({ ...profile, uid });
       } else {
         onLogin({ name: email.split("@")[0], email: email.trim(), uid });
