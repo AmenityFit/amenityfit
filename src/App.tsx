@@ -7035,7 +7035,7 @@ const getSwapCandidates = (
   return candidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 };
 
-const ActiveExerciseScreen = ({ group, groupIndex, totalGroups, onGroupComplete, onBack, onGoHome, onShowOverview, profile, initialRound = 1, initialExerciseIndex = 0, initialCompletedCells = [], initialWeights = {} as Record<string, number>, onSaveState = (round: number, exerciseIndex: number, cells?: string[]) => {}, onSwap = (swapKey: string, newId: string) => {}, onWeightsSaved = (weights: Record<string, number>) => {}, initialSwaps = {} as Record<string, string> }) => {
+const ActiveExerciseScreen = ({ group, groupIndex, totalGroups, onGroupComplete, onBack, onGoHome, onShowOverview, profile, initialRound = 1, initialExerciseIndex = 0, initialCompletedCells = [], initialWeights = {} as Record<string, number>, onSaveState = (round: number, exerciseIndex: number, cells?: string[]) => {}, onSwap = (swapKey: string, newId: string) => {}, onWeightsSaved = (weights: Record<string, number>) => {}, initialSwaps = {} as Record<string, string>, sessionId = null as string | null }) => {
   const [currentRound, setCurrentRound] = useState(initialRound);
 const [currentExerciseIndex, setCurrentExerciseIndex] = useState(initialExerciseIndex);
 const [showRest, setShowRest] = useState(false);
@@ -7573,7 +7573,7 @@ if (showWeightLogger && pendingWeightGroup) {
             setSessionWeights(toSave);
             onWeightsSaved(toSave);
             setWeightSaved(true);
-            await saveWeightsToFirestore(toSave, pendingWeightGroup, activeSessionIdRef.current || undefined);
+            await saveWeightsToFirestore(toSave, pendingWeightGroup, sessionId || undefined);
             setTimeout(() => {
               setShowWeightLogger(false);
               setPendingWeightGroup(null);
@@ -8695,6 +8695,16 @@ const WorkoutFlow = ({ profile, onComplete, onBack, onGoHomeSave, onProfileUpdat
   })();
 
   const [localSwaps, setLocalSwaps] = useState<Record<string, string>>(profile?.programSwaps || {});
+  // Sync localSwaps with Firestore on mount in case profile state is stale
+  React.useEffect(() => {
+    if (!profile?.uid) return;
+    getDoc(doc(db, "users", profile.uid)).then(snap => {
+      if (snap.exists()) {
+        const saved = snap.data()?.programSwaps || {};
+        setLocalSwaps(saved);
+      }
+    }).catch(() => {});
+  }, []);
   const activeSessionIdRef = React.useRef<string | null>(null);
   // Create session doc at workout start so per-group weight saves always find it
   React.useEffect(() => {
@@ -9021,6 +9031,7 @@ onSaveState={(round: number, exerciseIndex: number, cells?: string[]) => {
         initialWeights={workoutFlowWeights}
         onWeightsSaved={(weights: Record<string, number>) => { const merged = { ...workoutFlowWeightsRef.current, ...weights }; workoutFlowWeightsRef.current = merged; setWorkoutFlowWeights(merged); }}
         profile={profile}
+        sessionId={activeSessionIdRef.current}
         initialSwaps={localSwaps}
         onSwap={(swapKey: string, newId: string) => {
           const updated = { ...(profile?.programSwaps || {}), ...localSwaps, [swapKey]: newId };
@@ -10357,7 +10368,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
     }
   }, [profile?.uid, profile?.sessionsCompleted]);
   const wellnessMode = profile?.wellnessMode || false;
-  const unit = profile?.heightFt ? "imperial" : "metric";
+  const unit = (profile?.heightFt && Number(profile.heightFt) > 0) ? "imperial" : (profile?.heightCm ? "metric" : "imperial");
   const startWeight = unit === "imperial"
     ? (Number(profile?.weightLbs) || null)
     : (Number(profile?.weightKg) || null);
@@ -11332,7 +11343,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
   const experienceLabels = {
     beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced"
   };
-  const unit = profile?.heightFt ? "imperial" : "metric";
+  const unit = (profile?.heightFt && Number(profile.heightFt) > 0) ? "imperial" : (profile?.heightCm ? "metric" : "imperial");
 
   const displayHeight = unit === "imperial"
     ? (profile?.heightFt ? `${profile.heightFt}ft ${profile?.heightIn || 0}in` : "—")
