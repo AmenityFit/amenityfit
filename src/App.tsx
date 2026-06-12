@@ -13222,6 +13222,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                                 buildingId: slug,
                                 email: sub.managerEmail,
                                 name: sub.contactName || "",
+                                passwordChangeRequired: true,
                                 createdAt: serverTimestamp(),
                               });
 
@@ -13324,13 +13325,19 @@ const SuperAdminDashboard = ({ onSignOut }) => {
     </div>
     <p style="font-size:12px;color:#aaa;margin:-20px 0 28px;padding:0 4px;">Change your password after your first login.</p>
 
-    <p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin:0 0 12px;">Resident Invite Codes (${units} units)</p>
+    <p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin:0 0 12px;">Resident Invite Codes (${generatedCodes.length} codes)</p>
     <p style="font-size:13px;color:#555;margin:0 0 12px;line-height:1.6;">One code per unit. Share the code with the resident in that unit. Multiple residents in the same unit can each create their own profile using the same code.</p>
     <div style="border:1px solid #eee;border-radius:12px;overflow:hidden;margin-bottom:28px;">
       <table style="width:100%;border-collapse:collapse;">${codeListHtml}</table>
     </div>
 
-    <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 28px;">Your residents can sign up at <a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a> using their invite code. No app download needed.</p>
+    <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 28px;">Your residents can download the AmenityFit app at <a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a> and sign up using their invite code.</p>
+
+    <p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin:0 0 12px;">Your Manager Dashboard</p>
+    <div style="background:#f5f5f7;border-radius:12px;padding:16px 20px;margin-bottom:28px;">
+      <p style="font-size:13px;color:#333;margin:0 0 10px;line-height:1.6;">You have access to a building manager portal where you can track resident activity, workout completions, adoption rates, and monthly reports.</p>
+      <p style="font-size:13px;color:#333;margin:0;line-height:1.6;">Log in at <a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a> using your credentials above, then tap <strong>Building Manager</strong> on the welcome screen.</p>
+    </div>
 
     <div style="background:#f5f5f7;border-radius:12px;padding:16px 20px;">
       <p style="font-size:13px;color:#333;margin:0;">Questions? Contact <a href="mailto:support@fitmakesenz.com" style="color:#1E5FBE;">support@fitmakesenz.com</a></p>
@@ -13404,13 +13411,13 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                               Email: <span style={{ color: COLORS.white, fontWeight: 600 }}>{sub.managerEmail}</span>
                             </p>
                             <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 4px" }}>
-                              Temp Password: <span style={{ color: COLORS.white, fontWeight: 600 }}>{sub.tempPassword}</span>
+                              Temp Password: <span style={{ color: COLORS.white, fontWeight: 600 }}>{activationResult?.email === sub.managerEmail ? activationResult.tempPassword : "••••••••• (check email)"}</span>
                             </p>
                             <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 4px" }}>
                               Building ID: <span style={{ color: COLORS.white, fontWeight: 600 }}>{sub.activatedBuildingId}</span>
                             </p>
                             <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 8px" }}>
-                              Invite Codes: <span style={{ color: COLORS.white, fontWeight: 600 }}>{sub.units} codes generated</span>
+                              Invite Codes: <span style={{ color: COLORS.white, fontWeight: 600 }}>{activationResult?.email === sub.managerEmail ? activationResult.units : sub.inviteCodesGenerated || sub.units} codes generated</span>
                             </p>
                             <button
                               onClick={() => {
@@ -14327,6 +14334,92 @@ const ReportSendButton = ({ buildingId, managerEmail }: { buildingId: string; ma
       <p style={{ color: COLORS.textSecondary, fontSize: 11, textAlign: "center", margin: "10px 0 0", lineHeight: 1.5 }}>
         Reports auto-deliver on the 1st of each month. Use this to send on demand.
       </p>
+    </div>
+  );
+};
+
+const ForcePasswordChangeScreen = ({ userProfile, onComplete, onSignOut }) => {
+  const [newPassword, setNewPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [showNew, setShowNew] = React.useState(false);
+  const [showConfirm, setShowConfirm] = React.useState(false);
+
+  const handleSubmit = async () => {
+    setError("");
+    if (newPassword.length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (newPassword !== confirmPassword) { setError("Passwords don't match."); return; }
+    setSaving(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("No user");
+      const { updatePassword } = await import("firebase/auth");
+      await updatePassword(user, newPassword);
+      await updateDoc(doc(db, "users", user.uid), { passwordChangeRequired: false });
+      onComplete();
+    } catch (e: any) {
+      if (e.code === "auth/requires-recent-login") {
+        setError("Session expired. Please sign out and log in again.");
+      } else {
+        setError("Failed to update password. Please try again.");
+      }
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+      <div style={{ width: "100%", maxWidth: 400 }}>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 16, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 24 }}>🔐</div>
+          <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "0 0 8px", letterSpacing: -0.5 }}>Set Your Password</h1>
+          <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: 0, lineHeight: 1.5 }}>You're using a temporary password. Create a permanent one to continue.</p>
+        </div>
+
+        <div style={{ background: COLORS.card, borderRadius: 20, padding: 24, border: `1px solid ${COLORS.border}` }}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 8 }}>New Password</label>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showNew ? "text" : "password"}
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                placeholder="Min. 8 characters"
+                style={{ width: "100%", padding: "14px 44px 14px 16px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.background, color: COLORS.white, fontSize: 15, fontFamily: "'Inter', sans-serif", boxSizing: "border-box" as any, outline: "none" }}
+              />
+              <button onClick={() => setShowNew(p => !p)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: COLORS.textSecondary, cursor: "pointer", fontSize: 13 }}>{showNew ? "Hide" : "Show"}</button>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 8 }}>Confirm Password</label>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showConfirm ? "text" : "password"}
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                placeholder="Repeat your password"
+                onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
+                style={{ width: "100%", padding: "14px 44px 14px 16px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.background, color: COLORS.white, fontSize: 15, fontFamily: "'Inter', sans-serif", boxSizing: "border-box" as any, outline: "none" }}
+              />
+              <button onClick={() => setShowConfirm(p => !p)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: COLORS.textSecondary, cursor: "pointer", fontSize: 13 }}>{showConfirm ? "Hide" : "Show"}</button>
+            </div>
+          </div>
+
+          {error && <p style={{ color: "#FF6B6B", fontSize: 13, margin: "0 0 16px", textAlign: "center" }}>{error}</p>}
+
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: saving ? COLORS.border : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", fontFamily: "'Inter', sans-serif" }}
+          >
+            {saving ? "Saving..." : "Set Password & Continue"}
+          </button>
+        </div>
+
+        <button onClick={onSignOut} style={{ display: "block", margin: "16px auto 0", background: "none", border: "none", color: COLORS.textSecondary, fontSize: 13, cursor: "pointer" }}>Sign out</button>
+      </div>
     </div>
   );
 };
@@ -15523,6 +15616,11 @@ console.log("Month6+ result programKey:", result.programKey);
   if (screen === "super-admin-login") return <SuperAdminLogin onLogin={() => setSuperAdminLoggedIn(true)} onBack={() => setScreen("splash")} />;
   if (pendingNavigation === 'churned') return <ChurnedBuildingScreen onSignOut={async () => { await signOut(auth); setUserProfile({}); setCurrentUid(null); setPendingNavigation(null); setScreen("welcome"); }} />;
   if (pendingNavigation === 'pm-dashboard' && userProfile?.companyId) return <PropertyManagerDashboard companyId={userProfile.companyId} companyName={userProfile.companyName || userProfile.companyId} onSignOut={async () => { await signOut(auth); setUserProfile({}); setCurrentUid(null); setPendingNavigation(null); setScreen("welcome"); }} />;
+  if (managerLoggedIn && userProfile?.passwordChangeRequired) return <ForcePasswordChangeScreen
+    userProfile={userProfile}
+    onComplete={() => setUserProfile((prev: any) => ({ ...prev, passwordChangeRequired: false }))}
+    onSignOut={async () => { await signOut(auth); setManagerLoggedIn(false); setUserProfile({}); setCurrentUid(null); setScreen("welcome"); }}
+  />;
   if (managerLoggedIn) return <BuildingManagerDashboard
     onSignOut={async () => { await signOut(auth); setManagerLoggedIn(false); setUserProfile({}); setCurrentUid(null); setScreen("welcome"); }}
     onBackToWorkout={userProfile?.programKey ? () => { setManagerLoggedIn(false); setScreen("dashboard"); } : null}
