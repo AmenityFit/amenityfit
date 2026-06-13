@@ -15827,7 +15827,19 @@ console.log("Month6+ result programKey:", result.programKey);
           programLabel: isMonth4 ? `${PROGRAMS[baseProgramKey]?.label || baseProgramKey} (Evolved)` : PROGRAMS[baseProgramKey]?.label || userProfile.programKey,
           programDay: userProfile.programDay,
           dayTitle: expandDayTitle(progDay?.title || `Day ${userProfile.programDay}`),
-          dayFocus: progDay?.focus || "Workout",
+          dayFocus: (() => {
+            const actualGroups = snapshot.groups || [];
+            const muscles: string[] = [];
+            actualGroups.forEach((g: any) => {
+              if (g.type === "cardio") { if (!muscles.includes("Cardio")) muscles.push("Cardio"); return; }
+              (g.exercises || []).forEach((ex: any) => {
+                const m = ex.muscle || (typeof window !== "undefined" && (window as any).EXERCISES_DATA?.[ex.id]?.muscle) || "";
+                if (m && !muscles.includes(m)) muscles.push(m);
+              });
+            });
+            if (muscles.length === 0) return progDay?.focus || "Workout";
+            return muscles.slice(0, 4).join(", ");
+          })(),
           sessionLength: snapshot.sessionLength,
           groups: sanitizeForFirestore(snapshot.groups),
           workoutType: progDay?.type || (progDay?.focus?.toLowerCase().includes("lower") || progDay?.focus?.toLowerCase().includes("leg") || progDay?.focus?.toLowerCase().includes("glute") ? "lower-body" : progDay?.focus?.toLowerCase().includes("push") || progDay?.focus?.toLowerCase().includes("chest") ? "push" : progDay?.focus?.toLowerCase().includes("pull") || progDay?.focus?.toLowerCase().includes("back") || progDay?.focus?.toLowerCase().includes("bicep") ? "upper-body" : progDay?.focus?.toLowerCase().includes("upper") ? "upper-body" : progDay?.focus?.toLowerCase().includes("core") || progDay?.focus?.toLowerCase().includes("abs") ? "core" : "full-body"),
