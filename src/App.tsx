@@ -1415,7 +1415,7 @@ const Step5HeightWeight = ({ data, onChange, onNext, onBack }) => {
       <QuestionHeader label="Height & weight" subtitle="Used to set your baseline and track body composition over time." />
       <div style={{ display: "flex", background: COLORS.card, borderRadius: 12, padding: 4, marginBottom: 24, border: `1px solid ${COLORS.border}` }}>
         {["imperial", "metric"].map((u) => (
-          <button key={u} onClick={() => setUnit(u)} style={{ flex: 1, padding: "10px", borderRadius: 9, border: "none", background: unit === u ? COLORS.primary : "transparent", color: unit === u ? COLORS.white : COLORS.textSecondary, fontSize: 14, fontWeight: 700, cursor: "pointer", transition: "all 0.2s ease" }}>
+          <button key={u} onClick={() => { setUnit(u); if (u === "imperial") { onChange({ heightCm: "", weightKg: "" }); } else { onChange({ heightFt: "", heightIn: "", weightLbs: "" }); } }} style={{ flex: 1, padding: "10px", borderRadius: 9, border: "none", background: unit === u ? COLORS.primary : "transparent", color: unit === u ? COLORS.white : COLORS.textSecondary, fontSize: 14, fontWeight: 700, cursor: "pointer", transition: "all 0.2s ease" }}>
             {u === "imperial" ? "ft / lbs" : "cm / kg"}
           </button>
         ))}
@@ -5373,13 +5373,17 @@ const selectProgram = (profile: any): string => {
 // The word 'obesity' NEVER appears in the UI — app silently serves appropriate exercises.
 // Formula: weight(lbs) ÷ height(in)² × 703
 const calculateBMI = (profile: any): number => {
-  let weightLbs = Number(profile.weightLbs);
+  let weightLbs: number;
   let heightIn: number;
-  if (profile.heightFt) {
-    heightIn = (Number(profile.heightFt) * 12) + (Number(profile.heightIn) || 0);
-  } else if (profile.heightCm) {
+  const isMetric = profile.heightCm && Number(profile.heightCm) > 0 && (!profile.heightFt || Number(profile.heightFt) === 0);
+  if (isMetric) {
+    if (!profile.weightKg || Number(profile.weightKg) === 0) return 0;
     heightIn = Number(profile.heightCm) / 2.54;
     weightLbs = Number(profile.weightKg) * 2.20462;
+  } else if (profile.heightFt && Number(profile.heightFt) > 0) {
+    if (!profile.weightLbs || Number(profile.weightLbs) === 0) return 0;
+    heightIn = (Number(profile.heightFt) * 12) + (Number(profile.heightIn) || 0);
+    weightLbs = Number(profile.weightLbs);
   } else {
     return 0;
   }
@@ -15738,8 +15742,18 @@ console.log("Month6+ result programKey:", result.programKey);
         const credential = await createUserWithEmailAndPassword(auth, data.email.trim(), data.password);
         const uid = credential.user.uid;
         const { password: _pw, ...safeProfile } = baseProfile;
-        // Strip empty string fields so Firestore stays clean (e.g. metric users don't get heightFt:"")
+        // Strip empty string fields so Firestore stays clean
         const cleanProfile = Object.fromEntries(Object.entries(safeProfile).filter(([_, v]) => v !== ""));
+        // Strip opposing unit fields — only one unit system should exist per user
+        const isMetricUser = cleanProfile.heightCm && Number(cleanProfile.heightCm) > 0 && (!cleanProfile.heightFt || Number(cleanProfile.heightFt) === 0);
+        if (isMetricUser) {
+          delete cleanProfile.heightFt;
+          delete cleanProfile.heightIn;
+          delete cleanProfile.weightLbs;
+        } else if (cleanProfile.heightFt && Number(cleanProfile.heightFt) > 0) {
+          delete cleanProfile.heightCm;
+          delete cleanProfile.weightKg;
+        }
         const profileWithUid = { ...cleanProfile, uid };
         await saveUserProfile(uid, profileWithUid);
         // Mark invite code as used by this uid — tracks who is on this code
