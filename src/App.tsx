@@ -4069,7 +4069,7 @@ const EXERCISES_DATA: Record<string, any> = {
     "dumbbell-lat-pullover": { injuryFlags: ["shoulder-overhead"], name: "Dumbbell Pullover", muscle: "Back", equipment: "Dumbbells", difficulty: "intermediate", coachingCue: "Lie across bench with one dumbbell. Hold with both hands above chest. Lower behind head keeping slight bend in elbows. Pull back using lats, not just your arms."},
   "seated-dumbbell-arm-circles": { name: "Seated Dumbbell Arm Circles", muscle: "Shoulders", equipment: "Dumbbells", difficulty: "beginner", vimeoId: "1183584890", coachingCue: "Sit tall, arms extended to sides with light dumbbells. Make small controlled circles forward or backward. Keep shoulders down and away from ears. Reps count for each way." },
   "seated-lateral-dumbbell-arm-circles": { name: "Seated Lateral Dumbbell Arm Circles", muscle: "Shoulders", equipment: "Dumbbells", difficulty: "intermediate", vimeoId: "1183584890", coachingCue: "Small circles with arms extended to the sides. Creates constant deltoid tension. Go slow. The burn adds up fast." },
-  "swiss-ball-leg-lift": { name: "Swiss Ball Lying Leg Raises", muscle: "Core", equipment: "Swiss Ball", difficulty: "intermediate" , injuryFlags: ["lumbar-flexion-loaded"], coachingCue: "Lie flat on your back on the mat. Grip the Swiss ball between your feet and ankles, legs extended.|Keep your lower back pressed into the mat the entire time.|Raise both legs up toward the ceiling, squeezing the ball.|Lower with control, stopping just before your feet touch the floor.|The ball adds weight and forces both legs to work together.|This is NOT lying on the ball  - you are lying on the mat with the ball between your legs."},
+  "swiss-ball-leg-lift": { name: "Swiss Ball Leg Lift", muscle: "Core", equipment: "Swiss Ball", difficulty: "intermediate" , injuryFlags: ["lumbar-flexion-loaded"], coachingCue: "Lie flat on your back on the mat. Grip the Swiss ball between your feet and ankles, legs extended.|Keep your lower back pressed into the mat the entire time.|Raise both legs up toward the ceiling, squeezing the ball.|Lower with control, stopping just before your feet touch the floor.|The ball adds weight and forces both legs to work together.|This is NOT lying on the ball - you are lying on the mat with the ball between your legs."},
   "barbell-straight-leg-deadlift": { name: "Barbell Straight Legged Deadlifts", muscle: "Hamstrings", equipment: "Barbell", difficulty: "intermediate", injuryFlags: ["lumbar-flexion-loaded","lumbar-hinge-heavy"], coachingCue: "Barbell, legs mostly straight. Hinge to feel maximum hamstring stretch, back stays flat. This is more of a hamstring stretch under load than a deadlift." },
       "standing-dumbbell-calf-raise": { injuryFlags: ["ankle-impact"], name: "Standing Dumbbell Calf Raises", muscle: "Calves", equipment: "Dumbbells", difficulty: "beginner", coachingCue: "Stand with dumbbells. Rise onto balls of feet to full extension. Hold at the top. Lower to stretch. Do not bounce at the bottom." },
   "jump-rope": { name: "Jump Rope", muscle: "Cardio", equipment: "Jump Rope", difficulty: "beginner", isTime: true , injuryFlags: ["ankle-impact","knee-deep-flexion","knee-impact","knee-shear"], coachingCue: "Keep elbows close to your sides, wrists doing the rotation.|Stay on the balls of your feet throughout.|Land softly with each jump.|Maintain a steady, controlled rhythm.|Keep core engaged and posture upright." },
@@ -15788,21 +15788,10 @@ console.log("Month6+ result programKey:", result.programKey);
       } catch (e: any) {
         console.error('Account creation error:', e);
         if (e.code === 'auth/email-already-in-use') {
-          // Email exists — sign them in instead
-          try {
-            const signInCredential = await signInWithEmailAndPassword(auth, data.email.trim(), data.password);
-            const uid = signInCredential.user.uid;
-            const existingProfile = await loadUserProfile(uid);
-            const { password: _pw2, ...safeBase } = baseProfile;
-            const profileToUse = existingProfile ? { ...existingProfile, uid } : { ...safeBase, uid };
-            await saveUserProfile(uid, profileToUse);
-            setUserProfile(profileToUse);
-            setCurrentUid(uid);
-            loadWearableData(uid, profileToUse, setUserProfile);
-          } catch (signInError) {
-            console.error('Sign in fallback error:', signInError);
-            setUserProfile({ ...baseProfile });
-          }
+          // Email already registered — do not overwrite existing account
+          // Direct user to sign in instead
+          alert("An account with this email already exists. Please use the \"I already have an account\" option on the welcome screen to sign in.");
+          return;
         } else if (e.code === 'auth/network-request-failed') {
           // Network failure — don't set broken profile, show retry message
           alert("Connection error. Please check your internet and try again.");
