@@ -4638,7 +4638,6 @@ const VIMEO_VIDEOS: Record<string, { vimeoIds: string[]; equipment: string }> = 
   "superman":                        { vimeoIds: ["1183595550"], equipment: "bodyweight" },
   "swiss-ball-crunch":               { vimeoIds: ["1183595540"], equipment: "swiss_ball" },
   "swiss-ball-knee-tuck":            { vimeoIds: ["1183595526"], equipment: "swiss_ball" },
-  "swiss-ball-leg-lift":     { vimeoIds: ["1183595519"], equipment: "swiss_ball" },
   "swiss-ball-pike":                 { vimeoIds: ["1183595510"], equipment: "swiss_ball" },
   "swiss-ball-push-pull":            { vimeoIds: ["1183595499"], equipment: "swiss_ball" },
   "swiss-ball-reverse-hyper":        { vimeoIds: ["1183595489"], equipment: "swiss_ball" },
