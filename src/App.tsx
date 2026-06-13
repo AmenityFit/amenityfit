@@ -6529,7 +6529,9 @@ const filterGroupsForSessionLength = (groups: any[], sessionLength: number) => {
     }
 
     for (const { group } of candidates) {
-      const count = group.exercises?.length || 0;
+      // Circuit groups (restBetweenSets === "None") count as 1 slot — they run as one continuous unit
+      const isCircuit = group.restBetweenSets === "None";
+      const count = isCircuit ? 1 : (group.exercises?.length || 0);
       if (exCount + count <= maxEx) {
         selected.push(group);
         exCount += count;
