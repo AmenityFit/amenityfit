@@ -8830,6 +8830,20 @@ const savedCompletedCellsRef = React.useRef<string[]>(savedProgress?.completedCe
   const rawGroups = (isReview && snapshotGroups && snapshotGroups.length > 0)
     ? snapshotGroups
     : filterGroupsForSessionLength(day.groups, sessionLength);
+  // If session is 30min and has circuit groups, update day notes to reflect 2 rounds
+  const dayWithUpdatedNotes = React.useMemo(() => {
+    if (sessionLength >= 45 || isReview) return day;
+    const hasCircuit = rawGroups.some((g: any) => g.restBetweenSets === "None");
+    if (!hasCircuit) return day;
+    const updatedNotes = (day.notes || []).map((n: string) =>
+      n.replace(/repeat\s+circuit\s+3[-\s]?4?\s*times?/gi, "Repeat circuit 2 times")
+       .replace(/repeat\s+circuit\s+3\s*times?/gi, "Repeat circuit 2 times")
+       .replace(/90\s+to\s+120\s+seconds\s+rest\s+after\s+each\s+circuit/gi, "90 to 120 seconds rest after each circuit")
+       .replace(/3[-\s]?4\s*rounds?/gi, "2 rounds")
+       .replace(/(?<!\d)3\s+rounds?/gi, "2 rounds")
+    );
+    return { ...day, notes: updatedNotes };
+  }, [day, sessionLength, rawGroups, isReview]);
     const substituteAgilityLadder = (groups: any[]): any[] => {
       return groups.map(group => {
         if (group.type === "cardio") return group;
@@ -8911,7 +8925,7 @@ const workoutGroups = injuryFiltered.map(group => ({
 
   if (phase === "list") {
     const pinnedImage = getWorkoutImage(workoutType, actualCompletedDay);
-    return <WorkoutListScreen day={day} filteredGroups={workoutGroups} onStart={() => setPhase("active")} onBack={onBack} workoutImage={pinnedImage} programDay={actualCompletedDay} programWeek={profile?.programWeek || 1} isReview={isReview} bgPosition={workoutType === "upper-body" || workoutType === "push" ? "center top" : workoutType === "lower-body" ? "center 60%" : "center"} equipmentPreference={reviewEquipmentPreference} isInProgress={currentGroupIndex > 0 || (savedProgress?.currentGroupIndex ?? 0) > 0 || (savedProgress?.completedCells?.length ?? 0) > 0} currentGroupIndex={currentGroupIndex} workoutType={workoutType} workoutDoneToday={isReview || workoutWasDoneToday} />;
+    return <WorkoutListScreen day={dayWithUpdatedNotes} filteredGroups={workoutGroups} onStart={() => setPhase("active")} onBack={onBack} workoutImage={pinnedImage} programDay={actualCompletedDay} programWeek={profile?.programWeek || 1} isReview={isReview} bgPosition={workoutType === "upper-body" || workoutType === "push" ? "center top" : workoutType === "lower-body" ? "center 60%" : "center"} equipmentPreference={reviewEquipmentPreference} isInProgress={currentGroupIndex > 0 || (savedProgress?.currentGroupIndex ?? 0) > 0 || (savedProgress?.completedCells?.length ?? 0) > 0} currentGroupIndex={currentGroupIndex} workoutType={workoutType} workoutDoneToday={isReview || workoutWasDoneToday} />;
   }
 
   if (phase === "overview") {
