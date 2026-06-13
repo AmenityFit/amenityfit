@@ -6553,7 +6553,18 @@ const filterGroupsForSessionLength = (groups: any[], sessionLength: number) => {
 
   // 30 min: max 4 exercises total, no abs, no cardio
   const selected = selectUpToExCount(scored, 4, true);
-  return selected;
+  // For circuits at 30 min: reduce to 2 rounds by updating label and notes
+  return selected.map((group: any) => {
+    if (group.restBetweenSets !== "None") return group;
+    const updatedLabel = (group.label || "").replace(/3[-\s]?4\s*x|3[-\s]?4\s*rounds?|4\s*rounds?|3\s*rounds?/gi, "2 rounds");
+    const updatedNotes = (group.notes || []).map((n: string) =>
+      n.replace(/repeat\s+circuit\s+3[-\s]?4?\s*times?/gi, "Repeat circuit 2 times")
+       .replace(/repeat\s+circuit\s+3\s*times?/gi, "Repeat circuit 2 times")
+       .replace(/3[-\s]?4\s*rounds?/gi, "2 rounds")
+       .replace(/3\s*rounds?/gi, "2 rounds")
+    );
+    return { ...group, label: updatedLabel, notes: updatedNotes };
+  });
 };
 
 const calculateCardioMinutes = (groups: any[], sessionLength: number): number => {
