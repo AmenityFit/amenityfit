@@ -1,5 +1,6 @@
 {
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "redirects": [
+    { "source": "/privacy", "destination": "https://amenityfit.app/privacy.html", "permanent": false },
+    { "source": "/terms", "destination": "https://amenityfit.app/terms.html", "permanent": false }
   ]
 }
