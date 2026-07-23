@@ -7365,7 +7365,7 @@ const WheelPickerScroll = ({ options, selected, itemHeight, formatLabel, onChang
       style={{
         height: itemHeight * 5,
         overflowY: "scroll",
-        scrollSnapType: "y mandatory",
+        scrollSnapType: "y proximity",
         WebkitOverflowScrolling: "touch" as any,
         scrollbarWidth: "none" as any,
         msOverflowStyle: "none" as any,
