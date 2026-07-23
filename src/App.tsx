@@ -3545,6 +3545,8 @@ const BottomNav = ({ active, onNavigate = (s) => {} }) => {
       position: "fixed", bottom: 0, left: 0, right: 0,
       background: COLORS.card, borderTop: `1px solid ${COLORS.border}`,
       display: "flex", padding: "10px 0 20px",
+      transform: "translateZ(0)", WebkitTransform: "translateZ(0)",
+      willChange: "transform",
     }}>
       {tabs.map((t) => {
         const isActive = t.id === active;
@@ -6888,7 +6890,7 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
 
       {/* Start Button */}
       {!isReview && onStart && (
-        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "8px 16px 16px", background: `linear-gradient(0deg, ${COLORS.background} 70%, transparent)` }}>
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "8px 16px 16px", background: `linear-gradient(0deg, ${COLORS.background} 70%, transparent)`, transform: "translateZ(0)", WebkitTransform: "translateZ(0)", willChange: "transform" }}>
           {isInProgress && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 10 }}>
               <div style={{ height: 4, flex: 1, borderRadius: 99, background: COLORS.border, overflow: "hidden" }}>
@@ -6903,7 +6905,7 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
         </div>
       )}
       {!isReview && !onStart && (
-        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "8px 16px 16px", background: `linear-gradient(0deg, ${COLORS.background} 70%, transparent)` }}>
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "8px 16px 16px", background: `linear-gradient(0deg, ${COLORS.background} 70%, transparent)`, transform: "translateZ(0)", WebkitTransform: "translateZ(0)", willChange: "transform" }}>
           <div style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, textAlign: "center", boxSizing: "border-box", overflow: "hidden" }}>
             <p style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: 600, margin: 0 }}>Preview Only — Not Available Yet</p>
           </div>
@@ -9926,6 +9928,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
             borderRadius: "20px 20px 0 0",
             border: `1px solid ${COLORS.border}`,
             boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
+            transform: "translateZ(0)", WebkitTransform: "translateZ(0)",
             overflow: "hidden",
           }}>
             {/* Handle */}
