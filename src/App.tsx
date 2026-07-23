@@ -3077,7 +3077,7 @@ const StatCard = ({ label, value, sub, icon: Icon, color }) => (
 
 const PlaylistCard = () => (
   <div
-    onClick={() => window.open("https://open.spotify.com/playlist/1vZ4MOciV3rtd3a67JWKv2?si=390aa8e4301c47fa", "_blank")}
+    onClick={() => window.open("spotify://playlist/1vZ4MOciV3rtd3a67JWKv2", "_blank")}
     style={{
       background: `linear-gradient(135deg, #1a1a2e 0%, #0d2137 100%)`,
       borderRadius: 20, padding: "18px 20px", marginBottom: 20,
