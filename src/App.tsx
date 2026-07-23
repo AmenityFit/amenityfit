@@ -8366,14 +8366,16 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onReviewWorkout, w
           }
           return todayUTC;
         })();
-        const snap = await getDocs(collection(db, "users", profile.uid, "weightLog"));
+        const sessQuery = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)));
         const dayLogs: Record<string, number> = {};
-        snap.docs.forEach(d => {
-          const data = d.data();
-          if (data.date === logDate && data.weight > 0) {
-            dayLogs[data.exerciseId] = data.weight;
-          }
-        });
+        if (sessQuery.docs.length > 0) {
+          const weightsLogged = sessQuery.docs[0].data().weightsLogged || {};
+          Object.entries(weightsLogged).forEach(([exId, weight]) => {
+            if (typeof weight === "number" && weight > 0) {
+              dayLogs[exId] = weight;
+            }
+          });
+        }
         setDayWeightLog(dayLogs);
       } catch (e) { setDayWeightLog({}); }
     };
