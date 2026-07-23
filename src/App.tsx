@@ -7089,18 +7089,11 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
       for (const [exId, w] of Object.entries(validWeights)) {
         updateMap[`weightsLogged.${exId}`] = w;
       }
-      if (sessionId) {
-        await updateDoc(doc(db, "workoutSessions", sessionId), updateMap).catch(() =>
-          setDoc(doc(db, "workoutSessions", sessionId), { weightsLogged: validWeights }, { merge: true })
-        );
-      } else {
-        const sessSnap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", today)));
-        if (!sessSnap.empty) {
-          await updateDoc(doc(db, "workoutSessions", sessSnap.docs[0].id), updateMap).catch(() =>
-            setDoc(doc(db, "workoutSessions", sessSnap.docs[0].id), { weightsLogged: validWeights }, { merge: true })
-          );
-        }
-      }
+      // Always write directly to the deterministic {uid}_{date} document ID.
+      // This avoids any race condition with session-doc creation timing -
+      // setDoc with merge:true creates the doc if missing or merges into it if present.
+      const targetSessionId = sessionId || `${profile.uid}_${today}`;
+      await setDoc(doc(db, "workoutSessions", targetSessionId), { weightsLogged: validWeights }, { merge: true });
     }
   } catch (e) {
     console.error("Failed to write weights to session:", e);
