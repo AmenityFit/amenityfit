@@ -9107,11 +9107,12 @@ const getSuggestedQuestions = (profile: any): string[] => {
     return day?.isRest || day?.groups?.length === 0 || false;
   })();
 
+  // If workout done today, programDay already incremented — step back to get the day actually completed
+  const displayProgramDay = workoutDoneToday ? Math.max(programDay - 1, 1) : programDay;
   const todayFocus = (() => {
     if (!hasProgram) return null;
-    const days = PROGRAMS[programKey].days || [];
-    const idx = (programDay - 1) % days.length;
-    return days[idx]?.focus || null;
+    const dayData = getProgramDay(programKey, displayProgramDay, profile?.generatedDays);
+    return dayData?.focus || dayData?.title || null;
   })();
 
   // Gender-aware question
@@ -9496,11 +9497,12 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     const idx = (programDay - 1) % days.length;
     return days[idx]?.isRest || false;
   })();
+  // If workout done today, programDay already incremented — step back to get the day actually completed
+  const displayProgramDay = workoutDoneToday ? Math.max(programDay - 1, 1) : programDay;
   const todayFocus = (() => {
     if (!programKey || !PROGRAMS[programKey]) return null;
-    const days = PROGRAMS[programKey].days || [];
-    const idx = (programDay - 1) % days.length;
-    return days[idx]?.focus || null;
+    const dayData = getProgramDay(programKey, displayProgramDay, profile?.generatedDays);
+    return dayData?.focus || dayData?.title || null;
   })();
 
   const openingMessage = (() => {
