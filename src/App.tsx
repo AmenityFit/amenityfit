@@ -8474,7 +8474,8 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onReviewWorkout, w
       <div style={{ padding: "0 24px 12px" }}>
 
         {/* Day strip */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 24, overflowX: "auto", paddingBottom: 4 }}>
+        <style>{`.wk-daystrip::-webkit-scrollbar{display:none}`}</style>
+        <div className="wk-daystrip" style={{ display: "flex", gap: 8, marginBottom: 24, overflowX: "auto", paddingBottom: 4, msOverflowStyle: "none", scrollbarWidth: "none" } as any}>
           {weekDays.map((day, i) => (
             <div key={i} onClick={() => {
               setSelectedDay(day);
@@ -10618,7 +10619,8 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
           </div>
 
           {/* Metric toggle — shows lock state per metric */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 20, overflowX: "auto" }}>
+          <style>{`.metric-toggle-scroll::-webkit-scrollbar{display:none}`}</style>
+          <div className="metric-toggle-scroll" style={{ display: "flex", gap: 8, marginBottom: 20, overflowX: "auto", msOverflowStyle: "none", scrollbarWidth: "none" } as any}>
             {metrics.map(m => {
               const isActive = activeMetric === m.id;
               const locked = !canLogMetric(m.id);
