@@ -7353,8 +7353,6 @@ const WheelPickerScroll = ({ options, selected, itemHeight, formatLabel, onChang
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      onMouseUp={snapToNearest}
-      onTouchEnd={snapToNearest}
       style={{
         height: itemHeight * 5,
         overflowY: "scroll",
