@@ -13235,6 +13235,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                 const submittedDate = sub.submittedAt?.toDate ? sub.submittedAt.toDate().toLocaleDateString() : "—";
                 const reviewedDate = sub.reviewedAt?.toDate ? sub.reviewedAt.toDate().toLocaleDateString() : null;
                 const isPending = sub.status === "pending";
+                const isInvoiceSent = sub.status === "invoice_sent";
                 const isRejected = sub.status === "rejected";
                 const isActivated = sub.status === "activated";
                 const statusColor = isActivated ? COLORS.success : isRejected ? "#FF4D4D" : "#F59E0B";
@@ -13277,7 +13278,44 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     </div>
 
                     {/* Pending actions */}
+                    {isInvoiceSent && (
+                      <div style={{ background: `${COLORS.primary}10`, borderRadius: 10, padding: "10px 14px", border: `1px solid ${COLORS.primary}30`, marginBottom: 10 }}>
+                        <p style={{ color: COLORS.primary, fontSize: 12, fontWeight: 700, margin: 0 }}>Invoice sent - awaiting payment. Activation happens automatically once paid, or activate manually below.</p>
+                      </div>
+                    )}
                     {isPending && (
+                      <div style={{ marginBottom: 10 }}>
+                        <button
+                          onClick={async () => {
+                            if (!sub.managerEmail) { alert("No manager email on this submission."); return; }
+                            if (activatingId === sub.id) return;
+                            setActivatingId(sub.id);
+                            try {
+                              const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/createInvoiceForSubmission", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ submissionId: sub.id, secret: "amenityfit-activation-2026" }),
+                              });
+                              const data = await res.json();
+                              if (data.success) {
+                                alert(`Invoice sent (${data.tier} tier). Building will activate automatically once paid.`);
+                                const updated = await fetchBuildingSubmissions();
+                                setQueueSubmissions(updated);
+                              } else {
+                                alert("Failed to send invoice: " + (data.error || "Unknown error"));
+                              }
+                            } catch (sendErr: any) {
+                              alert("Failed to send invoice: " + (sendErr?.message || "Unknown error"));
+                            }
+                            setActivatingId(null);
+                          }}
+                          style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: activatingId === sub.id ? COLORS.border : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: activatingId === sub.id ? COLORS.textSecondary : COLORS.white, fontSize: 13, fontWeight: 700, cursor: activatingId === sub.id ? "not-allowed" : "pointer" }}
+                        >
+                          {activatingId === sub.id ? "Sending..." : "Send Invoice"}
+                        </button>
+                      </div>
+                    )}
+                    {(isPending || isInvoiceSent) && (
                       <div style={{ display: "flex", gap: 10 }}>
                         <button
                           onClick={async () => {
