@@ -691,7 +691,7 @@ const SplashScreen = ({ onFinish, onSecretAdmin }) => {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", background: `linear-gradient(145deg, ${COLORS.background} 0%, ${COLORS.card} 100%)`, fontFamily: "'Inter', sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100dvh", background: `linear-gradient(145deg, ${COLORS.background} 0%, ${COLORS.card} 100%)`, fontFamily: "'Inter', sans-serif" }}>
       <div onClick={handleLogoTap} style={{ marginBottom: 24, boxShadow: `0 20px 60px ${COLORS.primary}40`, width: 100, height: 100, borderRadius: 22, overflow: "hidden", cursor: "pointer", userSelect: "none" as const }}>
         <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/Logo_rkq0cv" alt="AmenityFit" style={{ width: "120%", height: "120%", display: "block", objectFit: "cover", marginLeft: "-10%", marginTop: "-10%" }} />
       </div>
