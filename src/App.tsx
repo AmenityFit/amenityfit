@@ -13455,9 +13455,19 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                               const updated = await fetchBuildingSubmissions();
                               setQueueSubmissions(updated);
 
-                            } catch (e) {
+                            } catch (e: any) {
                               console.error("Activation error:", e);
-                              alert("Activation failed. Check console for details.");
+                              let userMessage = "Activation failed. ";
+                              if (e?.code === "auth/email-already-in-use") {
+                                userMessage += `The manager email "${sub.managerEmail}" already has an account. Use a different email, or delete the existing account in Firebase Authentication first.`;
+                              } else if (e?.code === "auth/invalid-email") {
+                                userMessage += `The manager email "${sub.managerEmail}" is not a valid email address.`;
+                              } else if (e?.code === "auth/weak-password") {
+                                userMessage += "The generated temporary password was rejected as too weak. Try activating again.";
+                              } else {
+                                userMessage += e?.message || "An unknown error occurred. Check the browser console or Firebase Functions logs for details.";
+                              }
+                              alert(userMessage);
                             }
                             setActivatingId(null);
                           }}
