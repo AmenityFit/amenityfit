@@ -7385,7 +7385,6 @@ const WheelPickerScroll = React.memo(({ options, selected, itemHeight, formatLab
             justifyContent: "center",
             scrollSnapAlign: "center",
             cursor: "pointer",
-            transition: "opacity 0.15s ease",
             opacity: i === localIdx ? 1 : 0.4,
           }}
           onClick={() => {
@@ -7401,7 +7400,6 @@ const WheelPickerScroll = React.memo(({ options, selected, itemHeight, formatLab
             fontSize: i === localIdx ? 20 : 16,
             fontWeight: i === localIdx ? 700 : 400,
             fontFamily: "'Inter', sans-serif",
-            transition: "font-size 0.15s ease, font-weight 0.15s ease",
           }}>
             {formatLabel(opt)}
           </span>
