@@ -12533,6 +12533,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const [queueLoaded, setQueueLoaded] = useState(false);
   const [allBuildings, setAllBuildings] = useState<any[]>([]);
   const [buildingsLoading, setBuildingsLoading] = useState(true);
+  const [buildingsRefreshing, setBuildingsRefreshing] = useState(false);
 
   useEffect(() => {
     fetchAllBuildings().then(data => {
@@ -12540,6 +12541,17 @@ const SuperAdminDashboard = ({ onSignOut }) => {
       setBuildingsLoading(false);
     });
   }, []);
+
+  const refreshBuildings = async () => {
+    setBuildingsRefreshing(true);
+    try {
+      const data = await fetchAllBuildings();
+      setAllBuildings(data);
+    } catch (e) {
+      console.error("Failed to refresh buildings:", e);
+    }
+    setBuildingsRefreshing(false);
+  };
 
   // Live presence — users who opened the app in the last 5 minutes
   const [liveUsers, setLiveUsers] = useState<any[]>([]);
@@ -13034,12 +13046,23 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                   <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: 0 }}>
                     {filteredBuildings.length} of {totalBuildings} Buildings
                   </p>
-                  <button
-                    onClick={() => setGroupByCompany(g => !g)}
-                    style={{ background: groupByCompany ? `${COLORS.accent}20` : COLORS.card, border: `1px solid ${groupByCompany ? COLORS.accent : COLORS.border}`, borderRadius: 99, padding: "5px 14px", color: groupByCompany ? COLORS.accent : COLORS.textSecondary, fontSize: 12, fontWeight: 700, cursor: "pointer", letterSpacing: 0.5 }}
-                  >
-                    {groupByCompany ? "✓ By Company" : "Group by Company"}
-                  </button>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <button
+                      onClick={refreshBuildings}
+                      disabled={buildingsRefreshing}
+                      title="Refresh building list"
+                      style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 99, padding: "5px 12px", color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, cursor: buildingsRefreshing ? "default" : "pointer", letterSpacing: 0.5, display: "flex", alignItems: "center", gap: 6 }}
+                    >
+                      <span style={{ display: "inline-block", animation: buildingsRefreshing ? "spin 0.8s linear infinite" : "none" }}>↻</span>
+                      {buildingsRefreshing ? "Refreshing..." : "Refresh"}
+                    </button>
+                    <button
+                      onClick={() => setGroupByCompany(g => !g)}
+                      style={{ background: groupByCompany ? `${COLORS.accent}20` : COLORS.card, border: `1px solid ${groupByCompany ? COLORS.accent : COLORS.border}`, borderRadius: 99, padding: "5px 14px", color: groupByCompany ? COLORS.accent : COLORS.textSecondary, fontSize: 12, fontWeight: 700, cursor: "pointer", letterSpacing: 0.5 }}
+                    >
+                      {groupByCompany ? "✓ By Company" : "Group by Company"}
+                    </button>
+                  </div>
                 </div>
 
                 {(() => {
