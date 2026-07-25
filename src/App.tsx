@@ -647,13 +647,6 @@ const reactivateCode = async (code: string): Promise<boolean> => {
   }
 };
 
-// Stable cross-render caches for the weight picker: without these, a brand-new
-// array/function is created every render even when the category hasn't
-// changed, which breaks React.memo's shallow prop comparison and forces a
-// full re-render of every option row (visible as a "flash") each time any
-// picker's value commits.
-const _weightOptionsCache: Record<string, (string | number)[]> = {};
-const _weightFormatLabelCache: Record<string, (w: string | number) => string> = {};
 
 const COLORS = {
   primary: "#1E5FBE",
@@ -7538,11 +7531,7 @@ if (showWeightLogger && pendingWeightGroup) {
         {strengthExes.map((ex: any) => {
           const exData = (EXERCISES_DATA as any)[ex.id];
           const category = getEquipmentCategory(exData?.equipment || "", ex.id);
-          const _cacheKey = `${category}_${isMetric}`;
-          if (!_weightOptionsCache[_cacheKey]) _weightOptionsCache[_cacheKey] = getWeightOptions(category);
-          const options = _weightOptionsCache[_cacheKey];
-          if (!_weightFormatLabelCache[_cacheKey]) _weightFormatLabelCache[_cacheKey] = (w: string | number) => formatWeightLabel(w, category);
-          const cachedFormatLabel = _weightFormatLabelCache[_cacheKey];
+          const options = getWeightOptions(category);
           const defaultVal = isMetric
             ? (category === "dumbbell" ? 10 : category === "barbell" ? 60 : category === "ezbar" ? 20 : category === "cable" ? 17.5 : category === "legpress" ? 45 : category === "kettlebell" ? 16 : category === "medicineball" ? 6 : options[0])
             : (category === "dumbbell" ? 25 : category === "barbell" ? 135 : category === "ezbar" ? 45 : category === "cable" ? 40 : category === "legpress" ? 100 : category === "kettlebell" ? 16 : category === "medicineball" ? 15 : options[0]);
@@ -7577,7 +7566,7 @@ if (showWeightLogger && pendingWeightGroup) {
                   options={options}
                   selected={wheelValues[ex.id] ?? options[0]}
                   itemHeight={itemHeight}
-                  formatLabel={cachedFormatLabel}
+                  formatLabel={(w) => formatWeightLabel(w, category)}
                   onChange={(val) => setWheelValues(prev => ({ ...prev, [ex.id]: val }))}
                 />
               </div>
