@@ -7317,36 +7317,46 @@ const handleRestDone = () => {
 
 
 
-const WheelPickerScroll = ({ options, selected, itemHeight, formatLabel, onChange }) => {
+const WheelPickerScroll = React.memo(({ options, selected, itemHeight, formatLabel, onChange }: any) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const isDragging = React.useRef(false);
-  const startY = React.useRef(0);
-  const startScrollTop = React.useRef(0);
+  const commitTimeout = React.useRef<any>(null);
 
   const selectedIndex = options.indexOf(selected);
+
+  // Local, cheap-to-update index that drives the visual highlight during scroll.
+  // This is decoupled from the parent's onChange so dragging never forces a
+  // re-render of sibling pickers (which was the source of the scroll jank).
+  const [localIdx, setLocalIdx] = React.useState(selectedIndex < 0 ? 0 : selectedIndex);
 
   React.useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const targetScrollTop = selectedIndex * itemHeight;
     el.scrollTop = targetScrollTop;
+    setLocalIdx(selectedIndex < 0 ? 0 : selectedIndex);
   }, []);
+
+  // Keep local highlight in sync if the selected value changes from outside
+  // (e.g. unit system toggle recalculating defaults).
+  React.useEffect(() => {
+    if (selectedIndex >= 0) setLocalIdx(selectedIndex);
+  }, [selected]);
 
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) return;
     const idx = Math.round(el.scrollTop / itemHeight);
     const clamped = Math.max(0, Math.min(idx, options.length - 1));
-    if (options[clamped] !== selected) onChange(options[clamped]);
-  };
 
-  const snapToNearest = () => {
-    const el = containerRef.current;
-    if (!el) return;
-    const idx = Math.round(el.scrollTop / itemHeight);
-    const clamped = Math.max(0, Math.min(idx, options.length - 1));
-    el.scrollTo({ top: clamped * itemHeight, behavior: "smooth" });
-    onChange(options[clamped]);
+    // Update the visual highlight immediately (local state, this component only).
+    setLocalIdx(prev => (prev !== clamped ? clamped : prev));
+
+    // Only commit to the parent (and therefore the exercise list) once scrolling
+    // has actually settled, instead of on every scroll frame.
+    if (commitTimeout.current) clearTimeout(commitTimeout.current);
+    commitTimeout.current = setTimeout(() => {
+      if (options[clamped] !== selected) onChange(options[clamped]);
+    }, 120);
   };
 
   return (
@@ -7376,18 +7386,20 @@ const WheelPickerScroll = ({ options, selected, itemHeight, formatLabel, onChang
             scrollSnapAlign: "center",
             cursor: "pointer",
             transition: "opacity 0.15s ease",
-            opacity: opt === selected ? 1 : 0.4,
+            opacity: i === localIdx ? 1 : 0.4,
           }}
           onClick={() => {
             const el = containerRef.current;
             if (el) el.scrollTo({ top: i * itemHeight, behavior: "smooth" });
+            setLocalIdx(i);
+            if (commitTimeout.current) clearTimeout(commitTimeout.current);
             onChange(opt);
           }}
         >
           <span style={{
             color: COLORS.white,
-            fontSize: opt === selected ? 20 : 16,
-            fontWeight: opt === selected ? 700 : 400,
+            fontSize: i === localIdx ? 20 : 16,
+            fontWeight: i === localIdx ? 700 : 400,
             fontFamily: "'Inter', sans-serif",
             transition: "font-size 0.15s ease, font-weight 0.15s ease",
           }}>
@@ -7399,7 +7411,7 @@ const WheelPickerScroll = ({ options, selected, itemHeight, formatLabel, onChang
       <div style={{ height: itemHeight * 2, flexShrink: 0 }} />
     </div>
   );
-};
+});
 
 if (showWeightLogger && pendingWeightGroup) {
   const strengthExes = pendingWeightGroup.exercises?.filter((ex: any) => {
