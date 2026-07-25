@@ -26,6 +26,7 @@ import {
   query,
   orderBy,
   where,
+  onSnapshot,
 } from "firebase/firestore";
 
 import {
@@ -8415,7 +8416,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onReviewWorkout, w
 
   const todayLocal = React.useMemo(() => new Date(), []);
   const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment);
-  if (screen === "weekly") return <WeeklyProgramView profile={userProfile} onBack={() => setScreen("dashboard")} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onBack={() => setScreen("dashboard")} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
 
   const todayDay = weekDays.find((d: any) => d.isToday) ?? null;
   const didAutoSelect = React.useRef(false);
@@ -15443,6 +15444,41 @@ export default function App() {
     setScreen("welcome");
   };
 
+  // ── Live building equipment sync ──────────────────────────────────────────
+  // Equipment used to be baked into the resident's own profile once at signup
+  // and never refreshed — meaning a manager updating their building's gym gear
+  // had zero effect on anyone who'd already signed up. This listener keeps a
+  // live, always-current copy for the duration of the session: Firestore holds
+  // one persistent connection and only pushes a tiny update on the rare
+  // occasion a manager actually changes equipment — no polling, no repeated
+  // fetches, negligible cost (same pattern already used for presence).
+  const [liveBuildingEquipment, setLiveBuildingEquipment] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!userProfile?.buildingId) { setLiveBuildingEquipment(null); return; }
+    const unsub = onSnapshot(
+      doc(db, "buildings", userProfile.buildingId),
+      (snap) => {
+        if (snap.exists()) {
+          setLiveBuildingEquipment(snap.data().equipment || []);
+        }
+      },
+      (err) => {
+        console.error("Live building equipment listener error:", err);
+      }
+    );
+    return () => unsub();
+  }, [userProfile?.buildingId]);
+
+  // Every screen should read equipment from here, not from userProfile directly —
+  // this is what makes equipment changes reach existing residents automatically,
+  // not just brand-new signups. Falls back to whatever was last saved on the
+  // profile if the live listener hasn't resolved yet (e.g. first paint).
+  const liveProfile = React.useMemo(() => ({
+    ...userProfile,
+    buildingEquipment: liveBuildingEquipment ?? userProfile?.buildingEquipment ?? [],
+  }), [userProfile, liveBuildingEquipment]);
+
   // previewDay: set when user taps "Preview Exercises" on an upcoming day
   const [previewDay, setPreviewDay] = useState<any>(null);
   const [weeklySelectedDay, setWeeklySelectedDay] = useState<any>(null);
@@ -15800,35 +15836,39 @@ const isInitialLoad = React.useRef(true);
     }
   };
 
-  // Auto-generate Month 6+ days if missing on load
+  // Auto-generate Month 6+ days if missing, or if the equipment preference OR
+  // the building's live gym equipment has changed since this program was cached.
+  // liveBuildingEquipmentFingerprint is a stable, sorted string — this means the
+  // effect only actually re-triggers generation when equipment content truly
+  // changes, not on every unrelated Firestore update to the building doc.
+  const liveBuildingEquipmentFingerprint = JSON.stringify([...(liveProfile.buildingEquipment || [])].sort());
+
   React.useEffect(() => {
     if (
       userProfile?.progressionPhase === "month6+" &&
       userProfile?.programKey &&
       userProfile?.uid &&
-      (!userProfile?.generatedDays || userProfile?.generatedDaysEquipment !== userProfile?.equipmentPreference)
+      (!userProfile?.generatedDays ||
+        userProfile?.generatedDaysEquipment !== userProfile?.equipmentPreference ||
+        userProfile?.generatedDaysBuildingEquipment !== liveBuildingEquipmentFingerprint)
     ) {
       console.log("Month6+ generation — effectiveLevel:", userProfile?.effectiveLevel, "experience:", userProfile?.experience);
-const result = generateMonth6Program(userProfile);
-console.log("Month6+ result programKey:", result.programKey);
+      const result = generateMonth6Program(liveProfile);
+      console.log("Month6+ result programKey:", result.programKey);
       if (result.generatedDays) {
-        const updates = {
+        const safeUpdates = {
           programKey: result.programKey,
           generatedDays: result.generatedDays,
-          generatedDaysEquipment: userProfile.equipmentPreference,
+          generatedDaysEquipment: liveProfile.equipmentPreference,
+          generatedDaysBuildingEquipment: liveBuildingEquipmentFingerprint,
         };
-        // Only update the three safe fields — never touch cycle, level, or progression data
-        const safeUpdates = {
-          programKey: updates.programKey,
-          generatedDays: updates.generatedDays,
-          generatedDaysEquipment: updates.generatedDaysEquipment,
-        };
+        // Only update these safe fields — never touch cycle, level, or progression data
         setUserProfile(prev => ({ ...prev, ...safeUpdates }));
         setDoc(doc(db, "users", userProfile.uid), safeUpdates, { merge: true })
           .catch(e => console.error("Failed to save auto-generated Month 6+ days:", e));
       }
     }
-  }, [userProfile?.uid, userProfile?.progressionPhase, userProfile?.generatedDays, userProfile?.programKey, userProfile?.equipmentPreference, userProfile?.frequency, userProfile?.sessionLength]);
+  }, [userProfile?.uid, userProfile?.progressionPhase, userProfile?.generatedDays, userProfile?.programKey, userProfile?.equipmentPreference, userProfile?.frequency, userProfile?.sessionLength, liveBuildingEquipmentFingerprint]);
 
   const workoutDoneToday = userProfile?.lastSessionDate === new Date().toDateString();
 
@@ -15963,7 +16003,7 @@ console.log("Month6+ result programKey:", result.programKey);
     }
     setScreen("dashboard");
   }} />;
-  if (screen === "weekly") return <WeeklyProgramView key={screen + new Date().toDateString()} profile={userProfile} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  if (screen === "weekly") return <WeeklyProgramView key={screen + new Date().toDateString()} profile={liveProfile} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
   if (screen === "preview" && previewDay) {
     const previewType = previewDay.type || "full-body";
     const previewImage = getWorkoutImage(previewType, previewDay.programDay || 1);
@@ -15980,8 +16020,8 @@ console.log("Month6+ result programKey:", result.programKey);
     })();
     return <WorkoutListScreen day={previewDay} filteredGroups={previewFiltered} onStart={null} onBack={() => { setPreviewDay(null); setScreen("weekly"); }} programDay={previewDay.programDay} programWeek={Math.ceil((previewDay.programDay || 1) / 7)} isReview={false} workoutImage={previewImage} bgPosition={previewBgPos} equipmentPreference={userProfile?.equipmentPreference || "gym-and-bands"} />;
   }
-  if (screen === "level-up") return <LevelUpScreen profile={userProfile} onContinue={() => setScreen("dashboard")} />;
-  if (screen === "welcome-back") return <WelcomeBackScreen profile={userProfile} onContinue={() => setScreen("dashboard")} />;
+  if (screen === "level-up") return <LevelUpScreen profile={liveProfile} onContinue={() => setScreen("dashboard")} />;
+  if (screen === "welcome-back") return <WelcomeBackScreen profile={liveProfile} onContinue={() => setScreen("dashboard")} />;
   if (screen === "re-entry-complete") return (
     <div style={{ minHeight: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 28px 40px", textAlign: "center" }}>
       <div style={{ width: 96, height: 96, borderRadius: 99, marginBottom: 28, background: `${COLORS.success}20`, border: `2px solid ${COLORS.success}50`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 48px ${COLORS.success}25` }}>
@@ -15995,9 +16035,9 @@ console.log("Month6+ result programKey:", result.programKey);
       <button onClick={() => setScreen("dashboard")} style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: "pointer", letterSpacing: 0.3, boxShadow: `0 8px 24px ${COLORS.primary}50` }}>Back to Dashboard</button>
     </div>
   );
-  if (screen === "dashboard") return <Dashboard profile={userProfile} onStartWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} onNavigate={navigate} onViewWeekly={() => setScreen("weekly")} reEntryMode={userProfile?.reEntryMode} reEntrySessions={userProfile?.reEntrySessions || 0} reEntryTarget={Math.round((userProfile?.frequency || 3) * 2)} wearableModifier={getWorkoutModifier(userProfile)} onWearableOverride={() => setUserProfile((prev: any) => ({ ...prev, wearableOverride: true }))} />;
-  if (screen === "cycle-complete") return <CycleCompleteScreen profile={userProfile} onStartNewCycle={handleNewCycle} />;
-  if (screen === "workout") return <WorkoutFlow profile={userProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onComplete={async (snapshot) => {
+  if (screen === "dashboard") return <Dashboard profile={liveProfile} onStartWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} onNavigate={navigate} onViewWeekly={() => setScreen("weekly")} reEntryMode={userProfile?.reEntryMode} reEntrySessions={userProfile?.reEntrySessions || 0} reEntryTarget={Math.round((userProfile?.frequency || 3) * 2)} wearableModifier={getWorkoutModifier(userProfile)} onWearableOverride={() => setUserProfile((prev: any) => ({ ...prev, wearableOverride: true }))} />;
+  if (screen === "cycle-complete") return <CycleCompleteScreen profile={liveProfile} onStartNewCycle={handleNewCycle} />;
+  if (screen === "workout") return <WorkoutFlow profile={liveProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onComplete={async (snapshot) => {
     const uid = auth.currentUser?.uid || userProfile?.uid || currentUid || authUid || (await new Promise<string>(resolve => {
       const unsub = auth.onAuthStateChanged(user => { unsub(); resolve(user?.uid || ""); });
     }));
@@ -16042,11 +16082,11 @@ console.log("Month6+ result programKey:", result.programKey);
     }
     handleWorkoutComplete(snapshot, uid);
   }} onBack={() => setScreen(workoutDoneToday ? "weekly" : "dashboard")} onGoHomeSave={(updatedProfile: any) => { setUserProfile(updatedProfile); setScreen("dashboard"); }} isReview={workoutDoneToday} />;
-  if (screen === "history") return <HistoryScreen profile={{ ...userProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("progress")} onNavigate={navigate} />;
-  if (screen === "progress") return <ProgressScreen profile={{ ...userProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("dashboard")} onNavigate={navigate} onUpdate={(updated) => setUserProfile(updated)} />;  if (screen === "assistant") return <FitnessAssistantScreen profile={userProfile} onBack={() => setScreen("dashboard")} onNavigate={navigate} />;
-  if (screen === "myNotes") return <MyNotesScreen profile={{ ...userProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("profile")} />;
+  if (screen === "history") return <HistoryScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("progress")} onNavigate={navigate} />;
+  if (screen === "progress") return <ProgressScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("dashboard")} onNavigate={navigate} onUpdate={(updated) => setUserProfile(updated)} />;  if (screen === "assistant") return <FitnessAssistantScreen profile={liveProfile} onBack={() => setScreen("dashboard")} onNavigate={navigate} />;
+  if (screen === "myNotes") return <MyNotesScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("profile")} />;
   if (screen === "nutrition") return <NutritionScreen onBack={() => setScreen("dashboard")} onNavigate={navigate} />;
-  if (screen === "profile") return <ProfileScreen profile={userProfile} onUpdate={(updated) => {
+  if (screen === "profile") return <ProfileScreen profile={liveProfile} onUpdate={(updated) => {
     setUserProfile(updated);
     const uid = updated?.uid || currentUid || auth.currentUser?.uid;
     if (uid) {
