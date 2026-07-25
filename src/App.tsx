@@ -14190,7 +14190,7 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
   );
 
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", overflowY: "auto" }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", overflowY: "auto", overflowX: "hidden" }}>
       <div style={{ height: 140, background: gradient, position: "relative", display: "flex", alignItems: "flex-end", padding: "0 24px 20px" }}>
         <button onClick={onBack} style={{ position: "absolute", top: 52, left: 20, background: "rgba(0,0,0,0.35)", border: "none", borderRadius: 12, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <span style={{ color: "#fff", fontSize: 18 }}>←</span>
@@ -14277,7 +14277,7 @@ const PropertyManagerDashboard = ({ onSignOut, companyId, companyName }: { onSig
   if (selectedBuilding) return <PMBuildingDetail building={selectedBuilding} onBack={() => setSelectedBuilding(null)} />;
 
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", overflowY: "auto" }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", overflowY: "auto", overflowX: "hidden" }}>
       {/* Header */}
       <div style={{ padding: "52px 24px 24px", background: `linear-gradient(180deg, ${COLORS.primary}25 0%, transparent 100%)` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
