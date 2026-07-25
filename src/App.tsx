@@ -15427,6 +15427,22 @@ export default function App() {
   const [superAdminLoggedIn, setSuperAdminLoggedIn] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+
+  // Shared sign-out reset — every "Sign Out" button (resident, building manager,
+  // property manager, super admin) should call this so leftover session flags
+  // from one login type never leak into the next. This only clears local app
+  // state (which screen/login-type is active); it never touches any saved
+  // data in Firestore or Firebase Auth.
+  const resetToWelcome = async () => {
+    try { await signOut(auth); } catch (e) { /* ignore */ }
+    setManagerLoggedIn(false);
+    setSuperAdminLoggedIn(false);
+    setPendingNavigation(null);
+    setUserProfile({});
+    setCurrentUid(null as any);
+    setScreen("welcome");
+  };
+
   // previewDay: set when user taps "Preview Exercises" on an upcoming day
   const [previewDay, setPreviewDay] = useState<any>(null);
   const [weeklySelectedDay, setWeeklySelectedDay] = useState<any>(null);
@@ -15843,17 +15859,17 @@ console.log("Month6+ result programKey:", result.programKey);
     }}
     onSecretAdmin={() => { setManagerLoggedIn(false); setScreen("super-admin-login"); }}
   />;
-  if (superAdminLoggedIn) return <SuperAdminDashboard onSignOut={() => { setSuperAdminLoggedIn(false); setScreen("welcome"); }} />;
+  if (superAdminLoggedIn) return <SuperAdminDashboard onSignOut={resetToWelcome} />;
   if (screen === "super-admin-login") return <SuperAdminLogin onLogin={() => setSuperAdminLoggedIn(true)} onBack={() => setScreen("splash")} />;
-  if (pendingNavigation === 'churned') return <ChurnedBuildingScreen onSignOut={async () => { await signOut(auth); setUserProfile({}); setCurrentUid(null); setPendingNavigation(null); setScreen("welcome"); }} />;
-  if (pendingNavigation === 'pm-dashboard' && userProfile?.companyId) return <PropertyManagerDashboard companyId={userProfile.companyId} companyName={userProfile.companyName || userProfile.companyId} onSignOut={async () => { await signOut(auth); setUserProfile({}); setCurrentUid(null); setPendingNavigation(null); setScreen("welcome"); }} />;
+  if (pendingNavigation === 'churned') return <ChurnedBuildingScreen onSignOut={resetToWelcome} />;
+  if (pendingNavigation === 'pm-dashboard' && userProfile?.companyId) return <PropertyManagerDashboard companyId={userProfile.companyId} companyName={userProfile.companyName || userProfile.companyId} onSignOut={resetToWelcome} />;
   if (managerLoggedIn && userProfile?.passwordChangeRequired) return <ForcePasswordChangeScreen
     userProfile={userProfile}
     onComplete={() => setUserProfile((prev: any) => ({ ...prev, passwordChangeRequired: false }))}
-    onSignOut={async () => { await signOut(auth); setManagerLoggedIn(false); setUserProfile({}); setCurrentUid(null); setScreen("welcome"); }}
+    onSignOut={resetToWelcome}
   />;
   if (managerLoggedIn) return <BuildingManagerDashboard
-    onSignOut={async () => { await signOut(auth); setManagerLoggedIn(false); setUserProfile({}); setCurrentUid(null); setScreen("welcome"); }}
+    onSignOut={resetToWelcome}
     onBackToWorkout={userProfile?.programKey ? () => { setManagerLoggedIn(false); setScreen("dashboard"); } : null}
     userProfile={userProfile}
     buildingId={userProfile?.buildingId || null}
@@ -16038,7 +16054,7 @@ console.log("Month6+ result programKey:", result.programKey);
       setDoc(doc(db, "users", uid), dataToSave, { merge: true })
         .catch(e => console.error("Failed to save profile update:", e));
     }
-  }} onSignOut={async () => { try { await signOut(auth); } catch(e) {} setUserProfile({}); setScreen("welcome"); }} onNavigate={navigate} onManagerAccess={() => setManagerLoggedIn(true)} />;
+  }} onSignOut={resetToWelcome} onNavigate={navigate} onManagerAccess={() => setManagerLoggedIn(true)} />;
   if (screen === "privacy") return <PrivacyPolicyScreen onBack={() => setScreen("profile")} />;
   if (screen === "terms") return <TermsOfServiceScreen onBack={() => setScreen("profile")} />;
 
