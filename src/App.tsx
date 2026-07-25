@@ -12925,7 +12925,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: 0 }}>Billing</p>
                       {selectedBuilding.stripeCustomerId ? (
-                        
+                        <a
                           href={`https://dashboard.stripe.com/customers/${selectedBuilding.stripeCustomerId}`}
                           target="_blank"
                           rel="noopener noreferrer"
