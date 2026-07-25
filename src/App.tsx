@@ -9480,6 +9480,9 @@ Streaks count consecutive days with a completed session. History shows every pas
 BUILDING CONTEXT:
 You know what equipment the user's building gym has. If they ask about a specific machine or piece of equipment, you can tell them whether their building has it. If their building doesn't have something they need for an exercise, acknowledge it and either suggest the swap feature or offer an alternative that works with what's available. Never assume equipment exists if it's not in their building list. The building is a luxury high-rise apartment with a premium gym, the environment is upscale, the residents are serious about their lives, and they expect a premium experience in everything including this conversation.
 
+SUPPORT REQUESTS:
+If someone asks how to report a bug, get help with something you genuinely can't resolve, reach a real person, or contact support, tell them directly and warmly: they can email support@fitmakesenz.com and a person will follow up. Don't make them dig for this — if they're asking, just give them the email address in that same reply. Don't over-promise response times or claim to know how support operates beyond that email address.
+
 TIME AWARENESS:
 You know what time of day it is. Use this naturally, not by announcing it, but by letting it inform your tone and advice. A morning conversation before a workout is different from a late-night conversation after one. Someone reaching out at midnight after missing a session needs something different than someone at 6am before they start. Read the moment.
 
@@ -12102,6 +12105,18 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
             </div>
           </div>
         </div>
+
+        {/* Support */}
+        
+          href="mailto:support@fitmakesenz.com?subject=AmenityFit%20Support"
+          style={{
+            display: "block", textAlign: "center", padding: "14px",
+            color: COLORS.textSecondary, fontSize: 13, fontWeight: 600,
+            textDecoration: "none", marginBottom: 12,
+          }}
+        >
+          Need help? Contact support
+        </a>
 
         {/* Sign Out */}
         <button
