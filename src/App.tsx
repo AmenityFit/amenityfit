@@ -14948,11 +14948,11 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                 <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>Units</span>
-                <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 600 }}>{b.units} residents</span>
+                <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 600 }}>{b.units}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>Renews</span>
-                <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 600 }}>{b.subscriptionRenewal}</span>
+                <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 600 }}>{b.renewalDate || "—"}</span>
               </div>
               </div>
           </>}
