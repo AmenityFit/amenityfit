@@ -14812,7 +14812,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
   );
 
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden" }}>
       {/* Header — image as atmospheric background, stats are the focus */}
       <div style={{ position: "relative", overflow: "hidden" }}>
         <div style={{
