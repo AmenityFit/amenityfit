@@ -12691,7 +12691,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   ];
 
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden" }}>
       {/* Header */}
       <div style={{ padding: "52px 24px 20px", background: `linear-gradient(180deg, rgba(30,95,190,0.15) 0%, transparent 100%)`, borderBottom: `1px solid ${COLORS.border}` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -12720,7 +12720,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
         ))}
       </div>
 
-      <div style={{ flex: 1, padding: "20px 24px 80px", overflowY: "auto" }}>
+      <div style={{ flex: 1, padding: "20px 24px 80px", overflowY: "auto", overflowX: "hidden" }}>
 
         {/* ── PLATFORM OVERVIEW ── */}
         {activeTab === "overview" && (
@@ -14857,7 +14857,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
         ))}
       </div>
 
-      <div style={{ flex: 1, padding: "20px 24px 80px", overflowY: "auto" }}>
+      <div style={{ flex: 1, padding: "20px 24px 80px", overflowY: "auto", overflowX: "hidden" }}>
 
         {/* ── OVERVIEW TAB ── */}
         {activeTab === "overview" && (
