@@ -7366,7 +7366,7 @@ const WheelPickerScroll = React.memo(({ options, selected, itemHeight, formatLab
       style={{
         height: itemHeight * 5,
         overflowY: "scroll",
-        scrollSnapType: "y proximity",
+        scrollSnapType: "y mandatory",
         WebkitOverflowScrolling: "touch" as any,
         scrollbarWidth: "none" as any,
         msOverflowStyle: "none" as any,
