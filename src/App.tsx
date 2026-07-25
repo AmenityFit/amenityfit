@@ -13974,6 +13974,23 @@ const SuperAdminDashboard = ({ onSignOut }) => {
             })
             .sort((a, b) => new Date(a.renewalDate).getTime() - new Date(b.renewalDate).getTime());
 
+          // Non-renewal notice deadlines — the actual "last day to act" if you
+          // don't want a building to auto-renew, which is 60 days BEFORE the
+          // renewal date itself. Computed across all active buildings (not just
+          // ones renewing within 60 days) since the deadline can be relevant
+          // even for a building renewing further out.
+          const noticeDeadlines = allBuildings
+            .filter(b => b.renewalDate && b.subscription !== "churned")
+            .map(b => {
+              const renewal = new Date(b.renewalDate);
+              const deadline = new Date(renewal);
+              deadline.setDate(deadline.getDate() - 60);
+              const daysUntilDeadline = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              return { ...b, noticeDeadline: deadline, daysUntilDeadline };
+            })
+            .filter(b => b.daysUntilDeadline >= -3 && b.daysUntilDeadline <= 30)
+            .sort((a, b) => a.daysUntilDeadline - b.daysUntilDeadline);
+
           return (
             <>
               {/* MRR / ARR cards */}
@@ -14008,6 +14025,36 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                         </div>
                         <div style={{ background: isUrgent ? "#FF4D4D20" : `${COLORS.primary}20`, borderRadius: 99, padding: "4px 12px" }}>
                           <span style={{ color: isUrgent ? "#FF4D4D" : COLORS.accent, fontSize: 12, fontWeight: 700 }}>{daysUntil}d</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Non-renewal notice deadlines */}
+              <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Non-Renewal Notice Deadlines</p>
+              {noticeDeadlines.length === 0 ? (
+                <div style={{ background: COLORS.card, borderRadius: 14, padding: "16px", border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0, textAlign: "center" }}>No notice deadlines coming up in the next 30 days.</p>
+                </div>
+              ) : (
+                <div style={{ background: COLORS.card, borderRadius: 18, padding: "4px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
+                  {noticeDeadlines.map((b, i) => {
+                    const isPast = b.daysUntilDeadline <= 0;
+                    const isUrgent = b.daysUntilDeadline > 0 && b.daysUntilDeadline <= 7;
+                    return (
+                      <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: i < noticeDeadlines.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
+                        <div>
+                          <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{b.name}</p>
+                          <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>
+                            {isPast ? "Deadline passed — will auto-renew" : `Last day to notify: ${b.noticeDeadline.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+                          </p>
+                        </div>
+                        <div style={{ background: isPast ? "#F59E0B20" : isUrgent ? "#FF4D4D20" : `${COLORS.primary}20`, borderRadius: 99, padding: "4px 12px" }}>
+                          <span style={{ color: isPast ? "#F59E0B" : isUrgent ? "#FF4D4D" : COLORS.accent, fontSize: 12, fontWeight: 700 }}>
+                            {isPast ? "Auto-renewed" : `${b.daysUntilDeadline}d`}
+                          </span>
                         </div>
                       </div>
                     );
