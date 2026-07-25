@@ -12568,10 +12568,65 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const [batchPmEmail, setBatchPmEmail] = React.useState("");
   const [batchCompanyName, setBatchCompanyName] = React.useState("");
   const [batchParsed, setBatchParsed] = React.useState<any[]>([]);
+  const [batchTemplateEmail, setBatchTemplateEmail] = React.useState("");
+  const [batchTemplateSending, setBatchTemplateSending] = React.useState(false);
+  const [batchTemplateSent, setBatchTemplateSent] = React.useState(false);
+  const [batchFileName, setBatchFileName] = React.useState("");
+  const [batchFileRowCount, setBatchFileRowCount] = React.useState(0);
+
+  // Proper CSV parser — respects quoted fields so commas inside an address
+  // (e.g. "123 Main St, New York, NY") don't get split into extra columns.
+  const parseCSVText = (text: string): string[][] => {
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let field = "";
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const next = text[i + 1];
+      if (inQuotes) {
+        if (char === '"' && next === '"') { field += '"'; i++; }
+        else if (char === '"') { inQuotes = false; }
+        else { field += char; }
+      } else {
+        if (char === '"') { inQuotes = true; }
+        else if (char === ',') { row.push(field); field = ""; }
+        else if (char === '\r') { /* ignore */ }
+        else if (char === '\n') { row.push(field); rows.push(row); row = []; field = ""; }
+        else { field += char; }
+      }
+    }
+    if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+    return rows.filter(r => r.some(c => c.trim() !== ""));
+  };
+
+  // Turns parsed CSV rows into building objects, auto-skipping a header row if present.
+  const rowsToBatchBuildings = (rows: string[][]) => {
+    let dataRows = rows;
+    if (rows.length > 0) {
+      const first = rows[0].map(c => c.trim().toLowerCase());
+      if (first[0]?.includes("building") || first.some(c => c.includes("manager email"))) {
+        dataRows = rows.slice(1);
+      }
+    }
+    return dataRows.map((parts, i) => ({
+      buildingName: (parts[0] || `Building ${i + 1}`).trim(),
+      location: (parts[1] || "").trim(),
+      units: parseInt((parts[2] || "").trim()) || 0,
+      managerEmail: (parts[3] || "").trim(),
+      valid: !!((parts[0] || "").trim() && (parts[3] || "").trim() && parseInt((parts[2] || "").trim()) > 0),
+    }));
+  };
   const [batchReviewMode, setBatchReviewMode] = React.useState(false);
   const [batchActivating, setBatchActivating] = React.useState(false);
   const [batchProgress, setBatchProgress] = React.useState<{done: number; total: number; current: string; errors: string[]}>({ done: 0, total: 0, current: "", errors: [] });
   const [batchComplete, setBatchComplete] = React.useState(false);
+  const [batchSubmitting, setBatchSubmitting] = React.useState(false);
+  const [batchSubmissionId, setBatchSubmissionId] = React.useState("");
+  const [batchInvoiceMode, setBatchInvoiceMode] = React.useState(false);
+  const [batchInvoiceAmount, setBatchInvoiceAmount] = React.useState("");
+  const [batchSendingInvoice, setBatchSendingInvoice] = React.useState(false);
+  const [batchInvoiceSent, setBatchInvoiceSent] = React.useState(false);
   const [activationResult, setActivationResult] = useState<any>(null);
 
   const totalBuildings = allBuildings.length;
@@ -12818,7 +12873,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                   {[
                     { label: "Tier", value: selectedBuilding.tier },
                     { label: "Renewal", value: selectedBuilding.renewalDate },
-                    { label: "Units", value: `${selectedBuilding.units} residents` },
+                    { label: "Units", value: `${selectedBuilding.units}` },
                     { label: "Gym Equipment", value: selectedBuilding.equipmentProfile || "Not configured" },
                     { label: "Last Activity", value: selectedBuilding.weeksSinceLastActivity === 0 ? "This week" : `${selectedBuilding.weeksSinceLastActivity} weeks ago` },
                   ].map((row, i, arr) => (
@@ -12865,43 +12920,21 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     </button>
                   </div>
 
-                  {/* Stripe Invoice */}
+                  {/* Billing status (informational only — invoicing happens pre-activation, not here) */}
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: 0 }}>Billing</p>
                       {selectedBuilding.stripeCustomerId ? (
-                        <span style={{ color: COLORS.success, fontSize: 12, fontWeight: 600 }}>✓ Stripe customer linked</span>
-                      ) : (
-                        <button
-                          onClick={async () => {
-                            if (!selectedBuilding.managerEmail) { alert("No manager email on this building."); return; }
-                            try {
-                              const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/createStripeCustomer", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  buildingId: String(selectedBuilding.id),
-                                  buildingName: selectedBuilding.name,
-                                  managerEmail: selectedBuilding.managerEmail,
-                                  units: selectedBuilding.units || 0,
-                                  secret: "amenityfit-activation-2026",
-                                }),
-                              });
-                              const data = await res.json();
-                              if (data.success) {
-                                setSelectedBuilding((prev: any) => ({ ...prev, stripeCustomerId: data.customerId }));
-                                alert(`✅ Stripe customer created. Invoice sent to ${selectedBuilding.managerEmail}`);
-                              } else {
-                                alert("Stripe error: " + (data.error || "Unknown error"));
-                              }
-                            } catch (e) {
-                              alert("Failed to create Stripe customer. Check console.");
-                            }
-                          }}
-                          style={{ background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, border: "none", borderRadius: 8, padding: "6px 12px", color: COLORS.white, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                        
+                          href={`https://dashboard.stripe.com/customers/${selectedBuilding.stripeCustomerId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: COLORS.success, fontSize: 12, fontWeight: 600, textDecoration: "none" }}
                         >
-                          Create Stripe Invoice
-                        </button>
+                          ✓ View in Stripe
+                        </a>
+                      ) : (
+                        <span style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600 }}>No Stripe customer on record</span>
                       )}
                     </div>
                   </div>
@@ -13592,7 +13625,58 @@ const SuperAdminDashboard = ({ onSignOut }) => {
             {!batchReviewMode && !batchComplete && (
               <>
                 <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 16px" }}>Batch Building Activation</p>
-                <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 16px", lineHeight: 1.6 }}>Paste a CSV list of buildings. One building per line:<br /><span style={{ color: COLORS.accent, fontFamily: "monospace", fontSize: 12 }}>Building Name, Address, Units, Manager Email</span></p>
+
+                {/* Step 1: Send the portfolio company a CSV template to fill out */}
+                <div style={{ background: COLORS.card, borderRadius: 16, padding: "16px", border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 10px" }}>Step 1 — Send Building List Template</p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 12px", lineHeight: 1.5 }}>Email a fill-in-the-blank spreadsheet to the portfolio contact. They reply with it completed — save that attachment, then upload it below in Step 2.</p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      type="email"
+                      placeholder="portfolio contact's email"
+                      value={batchTemplateEmail}
+                      onChange={e => { setBatchTemplateEmail(e.target.value); setBatchTemplateSent(false); }}
+                      style={{ flex: 1, padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${batchTemplateEmail ? COLORS.accent : COLORS.border}`, background: COLORS.background, color: COLORS.white, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box" as const }}
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!batchTemplateEmail.trim()) return;
+                        setBatchTemplateSending(true);
+                        setBatchTemplateSent(false);
+                        try {
+                          const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/sendPortfolioTemplate", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              contactEmail: batchTemplateEmail.trim(),
+                              companyName: batchCompanyName.trim(),
+                              secret: "amenityfit-activation-2026",
+                            }),
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            setBatchTemplateSent(true);
+                          } else {
+                            alert("Failed to send template: " + (data.error || "Unknown error"));
+                          }
+                        } catch (e) {
+                          alert("Failed to send template. Check console.");
+                        }
+                        setBatchTemplateSending(false);
+                      }}
+                      disabled={!batchTemplateEmail.trim() || batchTemplateSending}
+                      style={{ padding: "12px 18px", borderRadius: 12, border: "none", background: batchTemplateEmail.trim() ? `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` : COLORS.border, color: batchTemplateEmail.trim() ? COLORS.white : COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: batchTemplateEmail.trim() ? "pointer" : "not-allowed", whiteSpace: "nowrap" as const }}
+                    >
+                      {batchTemplateSending ? "Sending..." : "Send Template"}
+                    </button>
+                  </div>
+                  {batchTemplateSent && (
+                    <p style={{ color: COLORS.success, fontSize: 12, fontWeight: 600, margin: "10px 0 0" }}>✓ Template sent to {batchTemplateEmail.trim()}</p>
+                  )}
+                </div>
+
+                <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Step 2 — Upload Completed List</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 16px", lineHeight: 1.6 }}>Upload the CSV they sent back, or paste it manually:<br /><span style={{ color: COLORS.accent, fontFamily: "monospace", fontSize: 12 }}>Building Name, Address, Units, Manager Email</span></p>
 
                 <div style={{ marginBottom: 14 }}>
                   <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Company Name</p>
@@ -13618,28 +13702,55 @@ const SuperAdminDashboard = ({ onSignOut }) => {
 
                 <div style={{ marginBottom: 16 }}>
                   <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Building List</p>
+
+                  <input
+                    type="file"
+                    accept=".csv"
+                    id="batch-csv-upload"
+                    style={{ display: "none" }}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const text = String(ev.target?.result || "");
+                        setBatchInput(text);
+                        setBatchFileName(file.name);
+                        const rows = parseCSVText(text);
+                        setBatchFileRowCount(rowsToBatchBuildings(rows).length);
+                      };
+                      reader.readAsText(file);
+                      e.target.value = "";
+                    }}
+                  />
+                  <label
+                    htmlFor="batch-csv-upload"
+                    style={{ display: "inline-block", padding: "12px 20px", borderRadius: 12, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}
+                  >
+                    📄 Upload CSV File
+                  </label>
+
+                  {batchFileName && (
+                    <p style={{ color: COLORS.success, fontSize: 12, fontWeight: 600, margin: "0 0 12px" }}>
+                      ✓ {batchFileName} loaded — {batchFileRowCount} building{batchFileRowCount === 1 ? "" : "s"} detected. Review the parsed rows below before activating.
+                    </p>
+                  )}
+
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "4px 0 8px" }}>Or paste manually (one building per line):</p>
                   <textarea
-                    placeholder={"The Maverick, 123 Main St New York NY, 60, manager@themaverick.com\nThe Hudson, 456 Park Ave New York NY, 80, manager@thehudson.com"}
+                    placeholder={'The Maverick, "123 Main St, New York, NY", 60, manager@themaverick.com\nThe Hudson, "456 Park Ave, New York, NY", 80, manager@thehudson.com'}
                     value={batchInput}
-                    onChange={e => setBatchInput(e.target.value)}
-                    rows={10}
+                    onChange={e => { setBatchInput(e.target.value); setBatchFileName(""); }}
+                    rows={8}
                     style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: `1.5px solid ${batchInput ? COLORS.accent : COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" as const, resize: "vertical" as const, lineHeight: 1.6 }}
                   />
+                  <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "6px 0 0", lineHeight: 1.5 }}>Tip: if an address has commas in it, wrap that field in quotes, e.g. "123 Main St, New York, NY".</p>
                 </div>
 
                 <button
                   onClick={() => {
-                    const lines = batchInput.trim().split("\n").filter(l => l.trim());
-                    const parsed = lines.map((line, i) => {
-                      const parts = line.split(",").map(p => p.trim());
-                      return {
-                        buildingName: parts[0] || `Building ${i + 1}`,
-                        location: parts[1] || "",
-                        units: parseInt(parts[2]) || 0,
-                        managerEmail: parts[3] || "",
-                        valid: !!(parts[0] && parts[3] && parseInt(parts[2]) > 0),
-                      };
-                    });
+                    const rows = parseCSVText(batchInput);
+                    const parsed = rowsToBatchBuildings(rows);
                     setBatchParsed(parsed);
                     setBatchReviewMode(true);
                   }}
@@ -13651,7 +13762,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
               </>
             )}
 
-            {batchReviewMode && !batchActivating && !batchComplete && (
+            {batchReviewMode && !batchSubmitting && !batchInvoiceMode && !batchComplete && (
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: 0 }}>Review — {batchParsed.length} Buildings · {batchCompanyName}</p>
@@ -13677,168 +13788,118 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                   </div>
                 )}
 
+                {!batchPmEmail.trim() && (
+                  <div style={{ background: "#FF4D4D15", border: "1px solid #FF4D4D40", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+                    <p style={{ color: "#FF6B6B", fontSize: 13, margin: 0 }}>⚠️ A PM Executive Email is required before submitting a batch.</p>
+                  </div>
+                )}
+
                 <button
                   onClick={async () => {
                     const valid = batchParsed.filter(b => b.valid);
-                    if (valid.length === 0) return;
-                    setBatchActivating(true);
-                    setBatchProgress({ done: 0, total: valid.length, current: "", errors: [] });
-                    const errors: string[] = [];
-                    const companyId = batchCompanyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-
-                    for (let i = 0; i < valid.length; i++) {
-                      const sub = valid[i];
-                      setBatchProgress(p => ({ ...p, current: sub.buildingName }));
-                      try {
-                        const slug = sub.buildingName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + Math.random().toString(36).slice(2, 6);
-                        const tempPassword = "AmenityFit" + Math.floor(1000 + Math.random() * 9000) + "!";
-                        const { createUserWithEmailAndPassword: createUser } = await import("firebase/auth");
-                        const userCredential = await createUser(auth, sub.managerEmail, tempPassword);
-                        const uid = userCredential.user.uid;
-
-                        await setDoc(doc(db, "users", uid), {
-                          role: "manager",
-                          buildingId: slug,
-                          email: sub.managerEmail,
-                          name: "",
-                          passwordChangeRequired: true,
-                          companyId,
-                          companyName: batchCompanyName,
-                          createdAt: serverTimestamp(),
-                        });
-
-                        await setDoc(doc(db, "buildings", slug), {
-                          name: sub.buildingName,
-                          programName: sub.buildingName,
-                          location: sub.location,
-                          units: sub.units,
-                          managerEmail: sub.managerEmail,
-                          managerUid: uid,
-                          companyId,
-                          companyName: batchCompanyName,
-                          equipment: [],
-                          equipmentProfile: "",
-                          subscription: "active",
-                          subscriptionTier: "Standard",
-                          tier: "Standard",
-                          renewalDate: "",
-                          inviteCodesGenerated: sub.units,
-                          inviteCodesRedeemed: 0,
-                          activeUsersThisMonth: 0,
-                          totalWorkoutsThisMonth: 0,
-                          avgSessionsPerUserPerWeek: 0,
-                          fitnessAssistantQuestionsThisMonth: 0,
-                          weeksSinceLastActivity: 0,
-                          popularTimes: [],
-                          programWeekBreakdown: [],
-                          milestones: [],
-                          createdAt: serverTimestamp(),
-                        });
-
-                        const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-                        const genCode = () => { let c = "AF-"; for (let j = 0; j < 6; j++) c += CHARS[Math.floor(Math.random() * CHARS.length)]; return c; };
-                        const usedCodes = new Set<string>((await getDocs(collection(db, "inviteCodes"))).docs.map(d => d.id));
-                        const generatedCodes: {code: string, unit: string}[] = [];
-                        for (let u = 1; u <= sub.units; u++) {
-                          let code = genCode();
-                          let attempts = 0;
-                          while (usedCodes.has(code) && attempts < 20) { code = genCode(); attempts++; }
-                          usedCodes.add(code);
-                          await setDoc(doc(db, "inviteCodes", code), { code, buildingId: slug, buildingName: sub.buildingName, unitNumber: String(u), status: "active", createdAt: serverTimestamp(), usedBy: [] });
-                          generatedCodes.push({ code, unit: String(u) });
-                        }
-
-                        // Update building doc with actual generated code count
-                        await setDoc(doc(db, "buildings", slug), { inviteCodesGenerated: generatedCodes.length }, { merge: true });
-
-                        const codeListHtml = generatedCodes.map(c => `<tr><td style="padding:8px 16px;font-size:13px;color:#555;border-bottom:1px solid #f0f0f0;">Unit ${c.unit}</td><td style="padding:8px 16px;font-size:14px;font-weight:700;color:#111;letter-spacing:2px;border-bottom:1px solid #f0f0f0;">${c.code}</td></tr>`).join("");
-                        const activationEmailHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;"><div style="max-width:620px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.10);"><div style="background:linear-gradient(135deg,#1E5FBE,#6C63FF);padding:36px 40px 32px;"><p style="color:rgba(255,255,255,0.7);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:0 0 10px;">AmenityFit Setup</p><h1 style="color:#fff;font-size:26px;font-weight:900;margin:0 0 6px;letter-spacing:-0.5px;">${sub.buildingName} is Live</h1><p style="color:rgba(255,255,255,0.75);font-size:14px;margin:0;">${sub.location}</p></div><div style="padding:32px 40px;"><p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 28px;">Hi there,<br><br>Your building is activated and ready. Everything you need to get your residents started is below.</p><p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin:0 0 12px;">Manager Login</p><div style="border:1px solid #eee;border-radius:12px;overflow:hidden;margin-bottom:28px;"><table style="width:100%;border-collapse:collapse;"><tr style="background:#fafafa;"><td style="padding:13px 16px;font-size:13px;color:#555;border-bottom:1px solid #eee;">Get Started</td><td style="padding:13px 16px;font-size:13px;font-weight:700;color:#1E5FBE;border-bottom:1px solid #eee;">Download the app from <a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a>, then open it and tap "Building Manager"</td></tr><tr><td style="padding:13px 16px;font-size:13px;color:#555;border-bottom:1px solid #eee;">Email</td><td style="padding:13px 16px;font-size:13px;font-weight:700;color:#111;border-bottom:1px solid #eee;">${sub.managerEmail}</td></tr><tr style="background:#fafafa;"><td style="padding:13px 16px;font-size:13px;color:#555;">Temporary Password</td><td style="padding:13px 16px;font-size:15px;font-weight:900;color:#111;letter-spacing:2px;">${tempPassword}</td></tr></table></div><p style="font-size:12px;color:#aaa;margin:-20px 0 28px;padding:0 4px;">Change your password after your first login.</p><p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin:0 0 12px;">Before Sharing Codes — Set Your Equipment</p><div style="background:#fff8e1;border-radius:12px;padding:16px 20px;margin-bottom:28px;border:1px solid #f59e0b30;"><p style="font-size:13px;color:#333;margin:0 0 8px;line-height:1.6;font-weight:700;">Important: Log into your manager dashboard and set your building's gym equipment first.</p><p style="font-size:13px;color:#555;margin:0;line-height:1.6;">This ensures every resident gets a program that matches what's actually available in your gym. Once set, you can share the codes below.</p></div><p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin:0 0 12px;">Your Manager Dashboard</p><div style="background:#f5f5f7;border-radius:12px;padding:16px 20px;margin-bottom:28px;"><p style="font-size:13px;color:#333;margin:0 0 8px;line-height:1.6;">Track resident activity, workout completions, adoption rates, and monthly reports.</p><p style="font-size:13px;color:#333;margin:0;line-height:1.6;">Download the app from <a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a>, open it, then tap <strong>Building Manager</strong> on the welcome screen.</p></div><p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin:0 0 12px;">Resident Invite Codes (${generatedCodes.length} codes)</p><p style="font-size:13px;color:#555;margin:0 0 12px;line-height:1.6;">One code per unit. Share with the resident in that unit. Multiple residents in the same unit can each create their own profile using the same code.</p><div style="border:1px solid #eee;border-radius:12px;overflow:hidden;margin-bottom:28px;"><table style="width:100%;border-collapse:collapse;">${codeListHtml}</table></div><p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 28px;">Your residents can download the AmenityFit app at <a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a> and sign up using their invite code.</p><div style="background:#f5f5f7;border-radius:12px;padding:16px 20px;"><p style="font-size:13px;color:#333;margin:0;">Questions? <a href="mailto:support@fitmakesenz.com" style="color:#1E5FBE;">support@fitmakesenz.com</a></p></div></div><div style="background:#fafafa;border-top:1px solid #eee;padding:20px 40px;"><p style="font-size:11px;color:#aaa;margin:0;">Senz · AmenityFit · amenityfit.app</p></div></div></body></html>`;
-
-                        try {
-                          await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/sendActivationEmail", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ to: sub.managerEmail, subject: `Your AmenityFit Dashboard is Ready - ${sub.buildingName}`, html: activationEmailHtml, secret: "amenityfit-activation-2026" }),
-                          });
-                        } catch (emailErr) {
-                          console.error("Email failed for", sub.buildingName, emailErr);
-                        }
-
-                        setBatchProgress(p => ({ ...p, done: p.done + 1 }));
-                      } catch (e: any) {
-                        errors.push(`${sub.buildingName}: ${e.message || "Unknown error"}`);
-                        setBatchProgress(p => ({ ...p, done: p.done + 1, errors: [...p.errors, `${sub.buildingName}: ${e.message || "error"}`] }));
-                      }
+                    if (valid.length === 0 || !batchPmEmail.trim() || !batchCompanyName.trim()) return;
+                    setBatchSubmitting(true);
+                    try {
+                      const batchDocRef = doc(collection(db, "batchSubmissions"));
+                      await setDoc(batchDocRef, {
+                        companyName: batchCompanyName.trim(),
+                        pmEmail: batchPmEmail.trim(),
+                        buildings: valid.map(b => ({
+                          buildingName: b.buildingName,
+                          location: b.location,
+                          units: b.units,
+                          managerEmail: b.managerEmail,
+                        })),
+                        status: "pending",
+                        createdAt: serverTimestamp(),
+                      });
+                      setBatchSubmissionId(batchDocRef.id);
+                      setBatchInvoiceMode(true);
+                    } catch (e: any) {
+                      alert("Failed to submit batch: " + (e.message || "Unknown error"));
                     }
-
-                    // Create PM exec user doc if email provided
-                    if (batchPmEmail.trim()) {
-                      const companyId = batchCompanyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-                      try {
-                        // Check if PM user already exists for this company
-                        const existingPmSnap = await getDocs(query(collection(db, "users"), where("role", "==", "property_manager"), where("companyId", "==", companyId)));
-                        if (existingPmSnap.empty) {
-                          // Create Firebase Auth account for PM exec
-                          const { createUserWithEmailAndPassword: createPmUser } = await import("firebase/auth");
-                          const pmTempPassword = "AmenityFit" + Math.floor(1000 + Math.random() * 9000) + "!";
-                          const pmCredential = await createPmUser(auth, batchPmEmail.trim(), pmTempPassword);
-                          await setDoc(doc(db, "users", pmCredential.user.uid), {
-                            role: "property_manager",
-                            companyId,
-                            companyName: batchCompanyName,
-                            email: batchPmEmail.trim(),
-                            createdAt: serverTimestamp(),
-                          });
-                          // Send PM exec their login credentials
-                          const pmEmailHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;"><div style="max-width:620px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.10);"><div style="background:linear-gradient(135deg,#1E5FBE,#6C63FF);padding:36px 40px 32px;"><p style="color:rgba(255,255,255,0.7);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:0 0 10px;">AmenityFit Portfolio Access</p><h1 style="color:#fff;font-size:26px;font-weight:900;margin:0 0 6px;">${batchCompanyName} is Live</h1><p style="color:rgba(255,255,255,0.75);font-size:14px;margin:0;">${valid.length} properties activated</p></div><div style="padding:32px 40px;"><p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 28px;">Your portfolio dashboard is ready. Use the credentials below to access your property overview.</p><div style="border:1px solid #eee;border-radius:12px;overflow:hidden;margin-bottom:28px;"><table style="width:100%;border-collapse:collapse;"><tr style="background:#fafafa;"><td style="padding:13px 16px;font-size:13px;color:#555;border-bottom:1px solid #eee;">Get Started</td><td style="padding:13px 16px;font-size:13px;font-weight:700;color:#1E5FBE;border-bottom:1px solid #eee;">Download the app from <a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a>, then open it and tap "Building Manager"</td></tr><tr><td style="padding:13px 16px;font-size:13px;color:#555;border-bottom:1px solid #eee;">Email</td><td style="padding:13px 16px;font-size:13px;font-weight:700;color:#111;border-bottom:1px solid #eee;">${batchPmEmail.trim()}</td></tr><tr style="background:#fafafa;"><td style="padding:13px 16px;font-size:13px;color:#555;">Temporary Password</td><td style="padding:13px 16px;font-size:15px;font-weight:900;color:#111;letter-spacing:2px;">${pmTempPassword}</td></tr></table></div><p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 28px;">You will receive a monthly portfolio summary on the 1st of each month covering all your properties.</p><div style="background:#f5f5f7;border-radius:12px;padding:16px 20px;"><p style="font-size:13px;color:#333;margin:0;">Questions? <a href="mailto:support@fitmakesenz.com" style="color:#1E5FBE;">support@fitmakesenz.com</a></p></div></div><div style="background:#fafafa;border-top:1px solid #eee;padding:20px 40px;"><p style="font-size:11px;color:#aaa;margin:0;">Senz · AmenityFit™ · amenityfit.app</p></div></div></body></html>`;
-                          await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/sendActivationEmail", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ to: batchPmEmail.trim(), subject: `Your AmenityFit Portfolio Dashboard is Ready — ${batchCompanyName}`, html: pmEmailHtml, secret: "amenityfit-activation-2026" }),
-                          });
-                        }
-                      } catch (pmErr: any) {
-                        console.error("PM exec account creation failed:", pmErr.message);
-                      }
-                    }
-
-                    setBatchActivating(false);
-                    setBatchComplete(true);
+                    setBatchSubmitting(false);
                   }}
-                  disabled={batchParsed.every(b => !b.valid)}
+                  disabled={batchParsed.every(b => !b.valid) || !batchPmEmail.trim() || !batchCompanyName.trim() || batchSubmitting}
                   style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.success}, #1a9e4a)`, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer", marginTop: 8 }}
                 >
-                  Activate All {batchParsed.filter(b => b.valid).length} Buildings →
+                  {batchSubmitting ? "Submitting..." : `Submit ${batchParsed.filter(b => b.valid).length} Buildings for Invoicing →`}
                 </button>
               </>
             )}
 
-            {batchActivating && (
-              <div style={{ textAlign: "center", padding: "40px 0" }}>
-                <p style={{ color: COLORS.white, fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>Activating Buildings...</p>
-                <p style={{ color: COLORS.accent, fontSize: 32, fontWeight: 900, margin: "0 0 8px" }}>{batchProgress.done}/{batchProgress.total}</p>
-                <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 24px" }}>Current: {batchProgress.current}</p>
-                <div style={{ background: COLORS.card, borderRadius: 99, height: 8, overflow: "hidden" }}>
-                  <div style={{ background: `linear-gradient(90deg, ${COLORS.primary}, ${COLORS.accent})`, height: "100%", width: `${batchProgress.total > 0 ? (batchProgress.done / batchProgress.total) * 100 : 0}%`, transition: "width 0.3s ease", borderRadius: 99 }} />
+            {batchInvoiceMode && !batchComplete && (
+              <div>
+                <p style={{ color: COLORS.white, fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>Batch Submitted</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px", lineHeight: 1.6 }}>{batchCompanyName} and its {batchParsed.filter(b => b.valid).length} buildings are saved and waiting on an invoice. Once it is paid, every building activates automatically — each with its own manager login and codes — and {batchPmEmail} gets one combined summary organized by building.</p>
+
+                <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Negotiated Monthly Amount</p>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <input
+                    type="number"
+                    placeholder="e.g. 2500"
+                    value={batchInvoiceAmount}
+                    onChange={e => setBatchInvoiceAmount(e.target.value)}
+                    style={{ flex: 1, padding: "14px 16px", borderRadius: 14, border: `1.5px solid ${batchInvoiceAmount ? COLORS.accent : COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box" as const }}
+                  />
+                  <button
+                    onClick={async () => {
+                      const amount = parseFloat(batchInvoiceAmount);
+                      if (!batchSubmissionId || !amount || amount <= 0) return;
+                      setBatchSendingInvoice(true);
+                      try {
+                        const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/createBatchInvoice", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ batchId: batchSubmissionId, monthlyAmount: amount, secret: "amenityfit-activation-2026" }),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          setBatchInvoiceSent(true);
+                          setBatchComplete(true);
+                        } else {
+                          alert("Stripe error: " + (data.error || "Unknown error"));
+                        }
+                      } catch (e) {
+                        alert("Failed to send batch invoice. Check console.");
+                      }
+                      setBatchSendingInvoice(false);
+                    }}
+                    disabled={!batchInvoiceAmount || parseFloat(batchInvoiceAmount) <= 0 || batchSendingInvoice}
+                    style={{ padding: "14px 20px", borderRadius: 14, border: "none", background: batchInvoiceAmount && parseFloat(batchInvoiceAmount) > 0 ? `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` : COLORS.border, color: batchInvoiceAmount && parseFloat(batchInvoiceAmount) > 0 ? COLORS.white : COLORS.textSecondary, fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}
+                  >
+                    {batchSendingInvoice ? "Sending..." : "Send Invoice"}
+                  </button>
                 </div>
+                <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>Invoiced as "Enterprise Pro+ — {batchCompanyName}" · billed to {batchPmEmail}</p>
               </div>
             )}
 
             {batchComplete && (
               <div style={{ textAlign: "center", padding: "40px 0" }}>
                 <p style={{ color: COLORS.success, fontSize: 40, margin: "0 0 12px" }}>✓</p>
-                <p style={{ color: COLORS.white, fontSize: 20, fontWeight: 900, margin: "0 0 8px" }}>Batch Activation Complete</p>
-                <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 24px" }}>{batchProgress.total - batchProgress.errors.length} buildings activated · {batchProgress.errors.length} errors</p>
-                {batchProgress.errors.length > 0 && (
-                  <div style={{ background: "#FF4D4D15", border: "1px solid #FF4D4D40", borderRadius: 12, padding: "12px 16px", marginBottom: 20, textAlign: "left" }}>
-                    {batchProgress.errors.map((e, i) => <p key={i} style={{ color: "#FF6B6B", fontSize: 12, margin: "0 0 4px" }}>{e}</p>)}
-                  </div>
-                )}
+                <p style={{ color: COLORS.white, fontSize: 20, fontWeight: 900, margin: "0 0 8px" }}>Invoice Sent</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>{batchCompanyName} will receive an invoice for ${batchInvoiceAmount}/mo. Once paid, all buildings activate automatically — each manager gets their own login, and {batchPmEmail} gets one combined summary organized by building.</p>
                 <button
-                  onClick={() => { setBatchInput(""); setBatchCompanyName(""); setBatchPmEmail(""); setBatchParsed([]); setBatchReviewMode(false); setBatchComplete(false); setBatchProgress({ done: 0, total: 0, current: "", errors: [] }); }}
+                  onClick={() => {
+                    setBatchInput("");
+                    setBatchCompanyName("");
+                    setBatchPmEmail("");
+                    setBatchParsed([]);
+                    setBatchReviewMode(false);
+                    setBatchSubmitting(false);
+                    setBatchSubmissionId("");
+                    setBatchInvoiceMode(false);
+                    setBatchInvoiceAmount("");
+                    setBatchSendingInvoice(false);
+                    setBatchInvoiceSent(false);
+                    setBatchComplete(false);
+                    setBatchFileName("");
+                    setBatchFileRowCount(0);
+                  }}
                   style={{ padding: "14px 32px", borderRadius: 14, border: "none", background: COLORS.card, color: COLORS.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
                 >
-                  Activate Another Batch
+                  Submit Another Batch
                 </button>
               </div>
             )}
