@@ -12303,7 +12303,7 @@ const LoginScreen = ({ onLogin, onBack }) => {
       {/* Header */}
       <div style={{
         background: `linear-gradient(180deg, ${COLORS.primary}20 0%, transparent 100%)`,
-        padding: "32px 24px 24px",
+        padding: "72px 24px 24px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -12311,8 +12311,8 @@ const LoginScreen = ({ onLogin, onBack }) => {
         <div style={{
           marginBottom: 20,
           boxShadow: `0 12px 40px ${COLORS.primary}50`,
-          width: 72,
-          height: 72,
+          width: 82,
+          height: 82,
           borderRadius: 16,
           overflow: "hidden",
         }}>
