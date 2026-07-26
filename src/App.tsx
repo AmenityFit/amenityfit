@@ -698,9 +698,6 @@ const SplashScreen = ({ onFinish, onSecretAdmin }) => {
       </div>
       <h1 style={{ color: COLORS.white, fontSize: 32, fontWeight: 800, margin: 0, letterSpacing: -1 }}>AmenityFit</h1>
       <p style={{ color: COLORS.textSecondary, fontSize: 14, marginTop: 8, letterSpacing: 2, textTransform: "uppercase" }}>Your Building. Your Gym. Your Plan.</p>
-      {tapCount > 0 && (
-        <p style={{ color: "transparent", fontSize: 10, marginTop: 40, userSelect: "none" as const }}>{tapCount}</p>
-      )}
     </div>
   );
 };
