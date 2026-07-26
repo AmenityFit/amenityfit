@@ -1810,7 +1810,15 @@ const generateMonth6Program = (profile: any): { programKey: string; generatedDay
       injuryFlags.push("knee-impact");
       injuryFlags.push("knee-shear");
     }
-    if (text.includes("back") || text.includes("spine") || text.includes("lumbar") || text.includes("disc") || text.includes("disk") || text.includes("herniat") || text.includes("sciatica") || text.includes("scoliosis") || text.includes("vertebr")) {
+    const hasUnambiguousBackTerm_m6 = text.includes("spine") || text.includes("lumbar") || text.includes("disc") || text.includes("disk") || text.includes("herniat") || text.includes("sciatica") || text.includes("scoliosis") || text.includes("vertebr");
+    const hasBackWithContext_m6 = text.includes("back") && (
+      text.includes("lower back") || text.includes("upper back") || text.includes("mid back") || text.includes("middle back") || text.includes("bad back") ||
+      text.includes("pain") || text.includes("hurt") || text.includes("ache") || text.includes("sore") ||
+      text.includes("injur") || text.includes("issue") || text.includes("problem") ||
+      text.includes("sprain") || text.includes("strain") || text.includes("tweak") ||
+      text.includes("surgery") || text.includes("chronic") || text.includes("bulge") || text.includes("slip")
+    );
+    if (hasUnambiguousBackTerm_m6 || hasBackWithContext_m6) {
       injuryFlags.push("lumbar-extension");
       injuryFlags.push("lumbar-flexion-loaded");
       injuryFlags.push("lumbar-hinge-heavy");
@@ -2367,7 +2375,15 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
   // Heavy back injuries avoid hinge-heavy programs
   const injuryText = (profile.injuries || "none").toLowerCase();
   const hasKneeInjury = injuryText.includes("knee") || injuryText.includes("acl") || injuryText.includes("mcl") || injuryText.includes("meniscus");
-  const hasBackInjury = injuryText.includes("back") || injuryText.includes("lumbar") || injuryText.includes("disc") || injuryText.includes("herniat") || injuryText.includes("sciatica");
+  const hasBackInjuryUnambiguous = injuryText.includes("lumbar") || injuryText.includes("disc") || injuryText.includes("herniat") || injuryText.includes("sciatica") || injuryText.includes("spine") || injuryText.includes("scoliosis");
+  const hasBackInjuryWithContext = injuryText.includes("back") && (
+    injuryText.includes("lower back") || injuryText.includes("upper back") || injuryText.includes("bad back") ||
+    injuryText.includes("pain") || injuryText.includes("hurt") || injuryText.includes("ache") || injuryText.includes("sore") ||
+    injuryText.includes("injur") || injuryText.includes("issue") || injuryText.includes("problem") ||
+    injuryText.includes("sprain") || injuryText.includes("strain") || injuryText.includes("tweak") ||
+    injuryText.includes("surgery") || injuryText.includes("chronic") || injuryText.includes("bulge") || injuryText.includes("slip")
+  );
+  const hasBackInjury = hasBackInjuryUnambiguous || hasBackInjuryWithContext;
   const hasShoulderInjury = injuryText.includes("shoulder") || injuryText.includes("rotator") || injuryText.includes("labrum");
 
   // Programs to avoid by injury type — exercise filter still runs as secondary protection
