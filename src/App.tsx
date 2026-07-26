@@ -3075,7 +3075,15 @@ const StatCard = ({ label, value, sub, icon: Icon, color }) => (
 
 const PlaylistCard = () => (
   <div
-    onClick={() => window.open("spotify://playlist/1vZ4MOciV3rtd3a67JWKv2", "_blank")}
+    onClick={() => {
+      const spotifyWebUrl = "https://open.spotify.com/playlist/1vZ4MOciV3rtd3a67JWKv2";
+      window.location.href = "spotify://playlist/1vZ4MOciV3rtd3a67JWKv2";
+      setTimeout(() => {
+        if (!document.hidden) {
+          window.location.href = spotifyWebUrl;
+        }
+      }, 1500);
+    }}
     style={{
       background: `linear-gradient(135deg, #1a1a2e 0%, #0d2137 100%)`,
       borderRadius: 20, padding: "18px 20px", marginBottom: 20,
@@ -5877,8 +5885,18 @@ const parseInjuryFlags = (injuryText: string): string[] => {
   if (text.includes("knee") || text.includes("knees") || text.includes("acl") || text.includes("mcl") || text.includes("meniscus") || text.includes("patella") || text.includes("kneecap") || text.includes("pcl")) {
     flags.push("knee-deep-flexion", "knee-impact", "knee-shear");
   }
-  // Back — catches: back, spine, lumbar, disc, herniat, sciatica, lower back, scoliosis, sacral, si joint
-  if (text.includes("back") || text.includes("spine") || text.includes("lumbar") || text.includes("disc") || text.includes("herniat") || text.includes("sciatica") || text.includes("scoliosis") || text.includes("sacral") || text.includes("si joint")) {
+  // Back — unambiguous medical terms always count; the generic word "back" only
+  // counts alongside real injury context, since "back" alone is often idiomatic
+  // ("get back into the gym", "a while back", "back on track").
+  const hasUnambiguousBackTerm = text.includes("spine") || text.includes("lumbar") || text.includes("disc") || text.includes("herniat") || text.includes("sciatica") || text.includes("scoliosis") || text.includes("sacral") || text.includes("si joint");
+  const hasBackWithContext = text.includes("back") && (
+    text.includes("lower back") || text.includes("upper back") || text.includes("mid back") || text.includes("middle back") || text.includes("bad back") ||
+    text.includes("pain") || text.includes("hurt") || text.includes("ache") || text.includes("sore") ||
+    text.includes("injur") || text.includes("issue") || text.includes("problem") ||
+    text.includes("sprain") || text.includes("strain") || text.includes("tweak") ||
+    text.includes("surgery") || text.includes("chronic") || text.includes("bulge") || text.includes("slip")
+  );
+  if (hasUnambiguousBackTerm || hasBackWithContext) {
     flags.push("lumbar-flexion-loaded", "lumbar-hinge-heavy", "lumbar-rotation-loaded", "lumbar-extension");
   }
   // Shoulder — catches: shoulder, rotator, labrum, impingement, cuff, bursitis, ac joint, acromial
