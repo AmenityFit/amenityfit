@@ -12107,7 +12107,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
         </div>
 
         {/* Support */}
-        
+        <a
           href="mailto:support@fitmakesenz.com?subject=AmenityFit%20Support"
           style={{
             display: "block", textAlign: "center", padding: "14px",
