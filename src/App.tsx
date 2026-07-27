@@ -2448,8 +2448,10 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
     const newPool = (pools as any)[newPoolKey] || [];
     const rawFreshProgram = newPool[0] || selectProgram({ ...profile, experience: newLevel });
     const freshProgram = ensureFrequencyMatch(rawFreshProgram, profile.frequency || 3, newLevelKey);
+    const freshProgramAdapted = adaptProgramToFrequency(freshProgram, profile.frequency || 3);
     return {
-      programKey: freshProgram,
+      programKey: freshProgramAdapted.programKey,
+      generatedDays: freshProgramAdapted.generatedDays,
       profileUpdates: {
         effectiveLevel: newLevel,
         progressionPhase: "pool-rotation",
@@ -2462,7 +2464,14 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
   // Cycles 1-5: deterministic goal-based routing, with exposure-readiness applied
   if (cycleNumber < 6) {
     const deterministicKey = selectProgram(profile);
-    if (deterministicKey) return { programKey: deterministicKey, profileUpdates: { ...exposureUpdate, programSwaps: {} } };
+    if (deterministicKey) {
+      const deterministicAdapted = adaptProgramToFrequency(deterministicKey, profile.frequency || 3);
+      return {
+        programKey: deterministicAdapted.programKey,
+        generatedDays: deterministicAdapted.generatedDays,
+        profileUpdates: { ...exposureUpdate, programSwaps: {} },
+      };
+    }
   }
 
   if (cycleNumber >= 6) {
@@ -2477,8 +2486,10 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
       const clampedFreqForPool = Math.min(Math.max(profile.frequency || 3, 3), 6);
       const frequencyMatchedPool = availableFromPool.filter((k: string) => countActiveDays(k) === clampedFreqForPool);
       const nextProgram = ensureFrequencyMatch(frequencyMatchedPool[0] || availableFromPool[0], profile.frequency || 3, levelKey);
+      const nextProgramAdapted = adaptProgramToFrequency(nextProgram, profile.frequency || 3);
       return {
-        programKey: nextProgram,
+        programKey: nextProgramAdapted.programKey,
+        generatedDays: nextProgramAdapted.generatedDays,
         profileUpdates: { ...exposureUpdate, programSwaps: {} },
       };
     }
@@ -5386,6 +5397,51 @@ const ensureFrequencyMatch = (programKey: string, frequency: number, levelForFal
   const poolMatch = poolCandidates.find((k: string) => countActiveDays(k) === clampedFreq);
   if (poolMatch) return poolMatch;
   return programKey; // No safe fallback exists — better to serve something than nothing
+};
+
+// Last-resort guarantee: reshapes ANY program's real content to match the user's
+// exact chosen frequency, when no pre-built program at that frequency exists.
+// Reuses the same proven rest-day-placement pattern as Month 6+ generation —
+// picks active days from the source program in order (cycling through if the
+// source has fewer active days than needed), and places rest days sensibly
+// across the week. Preserves the source program's real content; never drops
+// the user's frequency choice, even when no exact pre-built program exists.
+const adaptProgramToFrequency = (programKey: string, frequency: number): { programKey: string; generatedDays?: any[] } => {
+  const clampedFreq = Math.min(Math.max(frequency, 3), 6);
+  const baseProgram = PROGRAMS[programKey];
+  if (!baseProgram || !baseProgram.days) return { programKey };
+  const workoutDays = baseProgram.days.filter((d: any) => !d.isRest);
+  if (workoutDays.length === clampedFreq) return { programKey }; // already matches — no reshaping needed
+
+  const restDaysByFrequency: Record<number, number[]> = {
+    6: [7],
+    5: [4, 7],
+    4: [3, 5, 7],
+    3: [2, 4, 6, 7],
+  };
+  const restDays = restDaysByFrequency[clampedFreq] || [7];
+
+  const restDayTemplate = (dayNum: number) => ({
+    dayNum,
+    title: `Day ${dayNum} — Rest`,
+    type: "rest",
+    focus: "Recovery",
+    isRest: true,
+    notes: ["Recovery is part of the program.", "Use this day to stretch, walk, or just rest.", "Your next session will be stronger for it."],
+    groups: [],
+  });
+
+  const generatedDays = Array.from({ length: 7 }, (_, i) => {
+    const dayNum = i + 1;
+    if (restDays.includes(dayNum)) return restDayTemplate(dayNum);
+    const workoutDayIndex = Array.from({ length: dayNum }, (_, j) => j + 1)
+      .filter(d => !restDays.includes(d)).length - 1;
+    const baseDay = workoutDays[workoutDayIndex] || workoutDays[workoutDayIndex % workoutDays.length];
+    if (!baseDay) return restDayTemplate(dayNum);
+    return { ...baseDay, dayNum, title: (baseDay.title || `Day ${dayNum}`).replace(/Day \d+/, `Day ${dayNum}`) };
+  });
+
+  return { programKey, generatedDays };
 };
 
 const selectProgram = (profile: any): string => {
