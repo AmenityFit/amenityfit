@@ -2422,20 +2422,13 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
     && (profile.exposureCyclesCompleted || 0) >= 3
     && avgRecentCompletion >= 0.8
     && recentRates.some((r: number) => r >= 0.9);
+  // First cycle entering exposure phase starts the count at 1.
+  // Every subsequent cycle already in exposure phase (and not yet transitioned) keeps counting up.
   const exposureUpdate = readyForExposure
-    ? { progressionPhase: "exposure", exposureCyclesCompleted: (profile.exposureCyclesCompleted || 0) + 1 }
-    : {};
-  console.log("[PROGRESSION DEBUG]", {
-    cycleNumber,
-    progressionPhase,
-    recentRates,
-    avgRecentCompletion,
-    readyForExposure,
-    readyForTransition,
-    exposureUpdate,
-    rawExposureCyclesCompleted: profile.exposureCyclesCompleted,
-    rawCycleCompletionRates: profile.cycleCompletionRates,
-  });
+    ? { progressionPhase: "exposure", exposureCyclesCompleted: 1 }
+    : (progressionPhase === "exposure"
+        ? { exposureCyclesCompleted: (profile.exposureCyclesCompleted || 0) + 1 }
+        : {});
 
   // If ready for level transition, always transition first — even if pool is exhausted
   // This reopens a fresh pool at the new level and keeps users progressing correctly
