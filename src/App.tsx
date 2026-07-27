@@ -3039,7 +3039,7 @@ const getGreeting = () => {
   return "Good evening";
 };
 
-const TodayWorkoutCard = ({ type = "upper-body", sessionLength = 45, experience = "Intermediate", programDay = 1, programWeek = 1, workoutDoneToday = false, isInProgress = false, onStartWorkout = () => {}, exerciseCount = 0, dayFocus = "" }) => (  <div style={{
+const TodayWorkoutCard = ({ type = "upper-body", sessionLength = 45, experience = "Intermediate", programDay = 1, programWeek = 1, workoutDoneToday = false, isInProgress = false, onStartWorkout = () => {}, onCompleteRestDay = () => {}, exerciseCount = 0, dayFocus = "" }) => (  <div style={{
     borderRadius: 24, overflow: "hidden", marginBottom: 20, position: "relative",
     boxShadow: `0 16px 48px ${COLORS.primary}55`, cursor: "pointer",
     minHeight: 260,
@@ -3102,8 +3102,11 @@ const TodayWorkoutCard = ({ type = "upper-body", sessionLength = 45, experience 
         </button>
       )}
       {type === "rest" && (
-        <button style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.8)", fontSize: 16, fontWeight: 800, cursor: "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", fontFamily: "'Inter', sans-serif" }}>
-          Rest & Recover Today
+        <button
+          onClick={workoutDoneToday ? undefined : onCompleteRestDay}
+          style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: workoutDoneToday ? "rgba(46,204,113,0.9)" : "rgba(255,255,255,0.15)", color: workoutDoneToday ? COLORS.white : "rgba(255,255,255,0.8)", fontSize: 16, fontWeight: 800, cursor: workoutDoneToday ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", fontFamily: "'Inter', sans-serif" }}
+        >
+          {workoutDoneToday ? (<><Check size={18} color={COLORS.white} strokeWidth={3} /> Rest Day Complete</>) : "Rest & Recover Today"}
         </button>
       )}
     </div>
@@ -3719,7 +3722,7 @@ const getWorkoutImage = (type: string, programDay: number = 1): string => {
   return pool[seed % pool.length];
 };
 
-const Dashboard = ({ profile, onStartWorkout, workoutDoneToday = false, isInProgress = false, onNavigate = (s) => {}, onViewWeekly = () => {}, reEntryMode = false, reEntrySessions = 0, reEntryTarget = 6, wearableModifier = null, onWearableOverride = () => {} }) => {
+const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, workoutDoneToday = false, isInProgress = false, onNavigate = (s) => {}, onViewWeekly = () => {}, reEntryMode = false, reEntrySessions = 0, reEntryTarget = 6, wearableModifier = null, onWearableOverride = () => {} }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
@@ -3891,7 +3894,7 @@ const Dashboard = ({ profile, onStartWorkout, workoutDoneToday = false, isInProg
       <div style={{ flex: 1, padding: "16px 24px 80px", overflowY: "auto" }}>
 
         {/* Today's Workout */}
-        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} dayFocus={currentDay?.focus} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _i.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
+        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={currentDay?.focus} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _i.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
 
         {/* View Full Week link */}
         <button onClick={onViewWeekly} style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20, marginTop: -8 }}>
@@ -8496,7 +8499,7 @@ const getWeekSchedule = (
 
 // ─── Weekly Program View Screen ───────────────────────────────────────────────
 
-const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onReviewWorkout, workoutDoneToday, isInProgress = false, onPreviewWorkout = null as any, initialSelectedDay = null as any }) => {
+const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay = () => {}, onReviewWorkout, workoutDoneToday, isInProgress = false, onPreviewWorkout = null as any, initialSelectedDay = null as any }) => {
   const [selectedDay, setSelectedDay] = useState<any>(initialSelectedDay ?? null);
   // Ensure today is always selected on mount if no day was passed in
   React.useEffect(() => {
@@ -8573,7 +8576,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onReviewWorkout, w
 
   const todayLocal = React.useMemo(() => new Date(), []);
   const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment);
-  if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onBack={() => setScreen("dashboard")} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onBack={() => setScreen("dashboard")} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={() => handleWorkoutComplete({ groups: [], sessionLength: 0 })} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
 
   const todayDay = weekDays.find((d: any) => d.isToday) ?? null;
   const didAutoSelect = React.useRef(false);
@@ -8771,8 +8774,11 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                       </button>
                     </div>
                   ) : viewing.isRest ? (
-                    <button style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.7)", fontSize: 15, fontWeight: 700, cursor: "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontFamily: "'Inter', sans-serif" }}>
-                      Rest & Recover Today
+                    <button
+                      onClick={workoutDoneToday ? undefined : onCompleteRestDay}
+                      style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: workoutDoneToday ? "rgba(46,204,113,0.9)" : "rgba(255,255,255,0.1)", color: workoutDoneToday ? COLORS.white : "rgba(255,255,255,0.7)", fontSize: 15, fontWeight: 700, cursor: workoutDoneToday ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontFamily: "'Inter', sans-serif" }}
+                    >
+                      {workoutDoneToday ? (<><Check size={16} color={COLORS.white} strokeWidth={3} /> Rest Day Complete</>) : "Rest & Recover Today"}
                     </button>
                   ) : (
                     <button onClick={onStartWorkout} style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, boxShadow: `0 8px 24px ${COLORS.primary}40` }}>
@@ -16222,7 +16228,7 @@ const isInitialLoad = React.useRef(true);
     }
     setScreen("dashboard");
   }} />;
-  if (screen === "weekly") return <WeeklyProgramView key={screen + new Date().toDateString()} profile={liveProfile} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  if (screen === "weekly") return <WeeklyProgramView key={screen + new Date().toDateString()} profile={liveProfile} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={() => handleWorkoutComplete({ groups: [], sessionLength: 0 })} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
   if (screen === "preview" && previewDay) {
     const previewType = previewDay.type || "full-body";
     const previewImage = getWorkoutImage(previewType, previewDay.programDay || 1);
@@ -16254,7 +16260,7 @@ const isInitialLoad = React.useRef(true);
       <button onClick={() => setScreen("dashboard")} style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: "pointer", letterSpacing: 0.3, boxShadow: `0 8px 24px ${COLORS.primary}50` }}>Back to Dashboard</button>
     </div>
   );
-  if (screen === "dashboard") return <Dashboard profile={liveProfile} onStartWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} onNavigate={navigate} onViewWeekly={() => setScreen("weekly")} reEntryMode={userProfile?.reEntryMode} reEntrySessions={userProfile?.reEntrySessions || 0} reEntryTarget={Math.round((userProfile?.frequency || 3) * 2)} wearableModifier={getWorkoutModifier(userProfile)} onWearableOverride={() => setUserProfile((prev: any) => ({ ...prev, wearableOverride: true }))} />;
+  if (screen === "dashboard") return <Dashboard profile={liveProfile} onStartWorkout={() => setScreen("workout")} onCompleteRestDay={() => handleWorkoutComplete({ groups: [], sessionLength: 0 })} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} onNavigate={navigate} onViewWeekly={() => setScreen("weekly")} reEntryMode={userProfile?.reEntryMode} reEntrySessions={userProfile?.reEntrySessions || 0} reEntryTarget={Math.round((userProfile?.frequency || 3) * 2)} wearableModifier={getWorkoutModifier(userProfile)} onWearableOverride={() => setUserProfile((prev: any) => ({ ...prev, wearableOverride: true }))} />;
   if (screen === "cycle-complete") return <CycleCompleteScreen profile={liveProfile} onStartNewCycle={handleNewCycle} />;
   if (screen === "workout") return <WorkoutFlow profile={liveProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onComplete={async (snapshot) => {
     const uid = auth.currentUser?.uid || userProfile?.uid || currentUid || authUid || (await new Promise<string>(resolve => {
