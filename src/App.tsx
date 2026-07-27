@@ -15756,11 +15756,11 @@ const isInitialLoad = React.useRef(true);
   useEffect(() => {
     if (userProfile?.uid) {
       const profileToSave = sanitizeForFirestore(userProfile);
-      if (profileToSave.progressionPhase === "pool-rotation" && (profileToSave.cycleNumber || 1) > 5) {
-        console.warn("AUTO-SAVE BLOCKED — would have written pool-rotation over advanced user");
-        return;
-      }
-      // Don't auto-save within 3 seconds of a completion write to avoid overwriting with stale data
+      // Don't auto-save within 3 seconds of a completion write to avoid overwriting with stale data.
+      // (Previously there was also a blanket block on any pool-rotation save past cycle 5, intended to
+      // stop stale state from overwriting a Month 6+ transition — but that's a completely legitimate,
+      // common state on its own (e.g. right after a level transition), and this time-based guard already
+      // covers the real race condition correctly, so the old blanket block was removed.)
       if (Date.now() - lastCompletionWrite.current < 3000) return;
       // Don't auto-save if this is the initial profile load from Firestore
       if (isInitialLoad.current) { isInitialLoad.current = false; return; }
