@@ -3104,7 +3104,7 @@ const TodayWorkoutCard = ({ type = "upper-body", sessionLength = 45, experience 
       {type === "rest" && (
         <button
           onClick={workoutDoneToday ? undefined : onCompleteRestDay}
-          style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: workoutDoneToday ? "rgba(46,204,113,0.9)" : "rgba(255,255,255,0.15)", color: workoutDoneToday ? COLORS.white : "rgba(255,255,255,0.8)", fontSize: 16, fontWeight: 800, cursor: workoutDoneToday ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", fontFamily: "'Inter', sans-serif" }}
+          style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: workoutDoneToday ? "rgba(46,204,113,0.9)" : COLORS.white, color: workoutDoneToday ? COLORS.white : COLORS.primary, fontSize: 16, fontWeight: 800, cursor: workoutDoneToday ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", fontFamily: "'Inter', sans-serif" }}
         >
           {workoutDoneToday ? (<><Check size={18} color={COLORS.white} strokeWidth={3} /> Rest Day Complete</>) : "Rest & Recover Today"}
         </button>
@@ -8776,7 +8776,7 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                   ) : viewing.isRest ? (
                     <button
                       onClick={workoutDoneToday ? undefined : onCompleteRestDay}
-                      style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: workoutDoneToday ? "rgba(46,204,113,0.9)" : "rgba(255,255,255,0.1)", color: workoutDoneToday ? COLORS.white : "rgba(255,255,255,0.7)", fontSize: 15, fontWeight: 700, cursor: workoutDoneToday ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontFamily: "'Inter', sans-serif" }}
+                      style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: workoutDoneToday ? "rgba(46,204,113,0.9)" : COLORS.white, color: workoutDoneToday ? COLORS.white : COLORS.primary, fontSize: 15, fontWeight: 700, cursor: workoutDoneToday ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontFamily: "'Inter', sans-serif" }}
                     >
                       {workoutDoneToday ? (<><Check size={16} color={COLORS.white} strokeWidth={3} /> Rest Day Complete</>) : "Rest & Recover Today"}
                     </button>
