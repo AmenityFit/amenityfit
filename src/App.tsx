@@ -6688,6 +6688,19 @@ const filterGroupsForSessionLength = (groups: any[], sessionLength: number) => {
         exCount += count;
       }
     }
+    // Guarantee against an empty session: if every candidate group was too large to fit
+    // whole, never leave the person with zero exercises — trim the single best-priority
+    // group down to fit the time budget instead of skipping it entirely.
+    if (selected.length === 0 && candidates.length > 0 && maxEx > 0) {
+      const bestCandidate = candidates[0].group;
+      const isCircuit = bestCandidate.restBetweenSets === "None";
+      if (isCircuit) {
+        selected.push(bestCandidate);
+      } else {
+        const trimmedExercises = (bestCandidate.exercises || []).slice(0, maxEx);
+        selected.push({ ...bestCandidate, exercises: trimmedExercises });
+      }
+    }
     return selected;
   };
 
