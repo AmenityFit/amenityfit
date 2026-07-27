@@ -2446,7 +2446,8 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
       : newLevel;
     const newPoolKey = `${newLevelKey}-${equipKey}`;
     const newPool = (pools as any)[newPoolKey] || [];
-    const freshProgram = newPool[0] || selectProgram({ ...profile, experience: newLevel });
+    const rawFreshProgram = newPool[0] || selectProgram({ ...profile, experience: newLevel });
+    const freshProgram = ensureFrequencyMatch(rawFreshProgram, profile.frequency || 3, newLevelKey);
     return {
       programKey: freshProgram,
       profileUpdates: {
@@ -2471,8 +2472,11 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
     // Once pool is exhausted, permanently use Month 6+
     const isEvenCycle = cycleNumber % 2 === 0;
     if (isEvenCycle && availableFromPool.length > 0) {
-      // Pick next unused pool program
-      const nextProgram = availableFromPool[0];
+      // Pick next unused pool program — prefer one that already matches the
+      // user's chosen frequency exactly; otherwise fall back to a frequency-correct generic
+      const clampedFreqForPool = Math.min(Math.max(profile.frequency || 3, 3), 6);
+      const frequencyMatchedPool = availableFromPool.filter((k: string) => countActiveDays(k) === clampedFreqForPool);
+      const nextProgram = ensureFrequencyMatch(frequencyMatchedPool[0] || availableFromPool[0], profile.frequency || 3, levelKey);
       return {
         programKey: nextProgram,
         profileUpdates: { ...exposureUpdate, programSwaps: {} },
@@ -5348,6 +5352,42 @@ const getAdvancedProgramPath = (
   return path[idx];
 };
 
+// ── Frequency guarantee ──────────────────────────────────────────────────────
+// A person's chosen training frequency must always be honored exactly. Named,
+// curated programs sometimes have a fixed day-structure that doesn't match a
+// given user's frequency choice — this counts a program's real active days and
+// lets callers fall back to a frequency-correct generic template when needed.
+const countActiveDays = (programKey: string): number => {
+  const program = PROGRAMS[programKey];
+  if (!program || !program.days) return 0;
+  return program.days.filter((d: any) => !d.isRest).length;
+};
+
+const frequencyKeyFor = (frequency: number): string => {
+  const clamped = Math.min(Math.max(frequency, 3), 6);
+  return `${clamped}x`;
+};
+
+// Returns the given programKey if its active-day count matches the user's
+// chosen frequency exactly. Otherwise, first tries the plain generic template
+// for the level (real for beginner/intermediate/senior tiers), then searches
+// every named program in that level's real pools (some tiers, like advanced,
+// have no generic template — only named programs — so the pool search is
+// the real safety net), guaranteeing the frequency is always honored.
+const ensureFrequencyMatch = (programKey: string, frequency: number, levelForFallback: string): string => {
+  const clampedFreq = Math.min(Math.max(frequency, 3), 6);
+  if (countActiveDays(programKey) === clampedFreq) return programKey;
+  const fallbackKey = `${levelForFallback}-${frequencyKeyFor(frequency)}`;
+  if (PROGRAMS[fallbackKey] && countActiveDays(fallbackKey) === clampedFreq) return fallbackKey;
+  const poolCandidates: string[] = ([] as string[])
+    .concat((pools as any)[`${levelForFallback}-gym-and-bands`] || [])
+    .concat((pools as any)[`${levelForFallback}-gym`] || [])
+    .concat((pools as any)[`${levelForFallback}-bands`] || []);
+  const poolMatch = poolCandidates.find((k: string) => countActiveDays(k) === clampedFreq);
+  if (poolMatch) return poolMatch;
+  return programKey; // No safe fallback exists — better to serve something than nothing
+};
+
 const selectProgram = (profile: any): string => {
   const age = parseInt(String(profile.age)) || 30;
   const freq = profile.frequency || 3;
@@ -5378,7 +5418,7 @@ const selectProgram = (profile: any): string => {
       const gender = profile.gender || "male";
       const goal = profile.primaryGoal || "general_fitness";
       const cycleNum = profile.cycleNumber || 1;
-      return getAdvancedProgramPath(gender, goal, correctedFreq, cycleNum, profile);
+      return ensureFrequencyMatch(getAdvancedProgramPath(gender, goal, correctedFreq, cycleNum, profile), correctedFreq, "advanced");
     }
     // Intermediate band-only — use frequency-matched intermediate program (works with bands)
     if (exp === "intermediate") {
@@ -5393,7 +5433,7 @@ const selectProgram = (profile: any): string => {
     const gender = profile.gender || "male";
     const goal = profile.primaryGoal || "general_fitness";
     const cycleNum = profile.cycleNumber || 1;
-    return getAdvancedProgramPath(gender, goal, correctedFreq, cycleNum, profile);
+    return ensureFrequencyMatch(getAdvancedProgramPath(gender, goal, correctedFreq, cycleNum, profile), correctedFreq, "advanced");
   }
 
   // Intermediate users — use frequency-matched generic program
