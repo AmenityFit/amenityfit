@@ -2425,6 +2425,17 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
   const exposureUpdate = readyForExposure
     ? { progressionPhase: "exposure", exposureCyclesCompleted: (profile.exposureCyclesCompleted || 0) + 1 }
     : {};
+  console.log("[PROGRESSION DEBUG]", {
+    cycleNumber,
+    progressionPhase,
+    recentRates,
+    avgRecentCompletion,
+    readyForExposure,
+    readyForTransition,
+    exposureUpdate,
+    rawExposureCyclesCompleted: profile.exposureCyclesCompleted,
+    rawCycleCompletionRates: profile.cycleCompletionRates,
+  });
 
   // If ready for level transition, always transition first — even if pool is exhausted
   // This reopens a fresh pool at the new level and keeps users progressing correctly
