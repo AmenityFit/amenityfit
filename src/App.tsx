@@ -2352,15 +2352,11 @@ const pools: Record<string, string[]> = {
   "senior-intermediate-gym-and-bands": ["senior-intermediate-3x", "senior-intermediate-4x"],
 };
 const generateAIProgram = async (profile: any): Promise<{ programKey: string; profileUpdates?: any; generatedDays?: any[] }> => {
-  // ── Cycles 1-5: use deterministic goal-based routing ─────────────────────
-  // Cycle 6+ activates Month 6+ AI generation
+  // ── Cycle setup ───────────────────────────────────────────────────────────
+  // Level-up readiness (exposure/transition) is evaluated every cycle, not just cycle 6+
   const cycleNumber = profile.cycleNumber || 1;
-  if (cycleNumber < 6) {
-    const deterministicKey = selectProgram(profile);
-    if (deterministicKey) return { programKey: deterministicKey };
-  }
 
-  // ── Month 6+ check ────────────────────────────────────────────────────────
+  // ── Month 6+ / progression setup ─────────────────────────────────────────
   // Activates when pool is exhausted and user hasn't earned level transition
   const previousPrograms = profile.previousPrograms || [];
   const progressionPhase = profile.progressionPhase || "pool-rotation";
@@ -2414,10 +2410,21 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
     !previousPrograms.includes(k) && !injuryAvoidKeys.includes(k)
   );
   const poolExhausted = availableFromPool.length === 0;
+
+  // Level-up readiness — Step 1: strong, consistent pool-rotation performance earns "exposure"
+  // Step 2: sustained strong performance during exposure earns the actual level transition
+  const recentRates = profile.cycleCompletionRates?.slice(-3) || [];
+  const avgRecentCompletion = recentRates.length > 0 ? recentRates.reduce((a: number, b: number) => a + b, 0) / recentRates.length : 0;
+  const readyForExposure = progressionPhase === "pool-rotation"
+    && cycleNumber >= 3
+    && avgRecentCompletion >= 0.8;
   const readyForTransition = progressionPhase === "exposure"
     && (profile.exposureCyclesCompleted || 0) >= 3
-    && (profile.cycleCompletionRates?.slice(-3).reduce((a: number, b: number) => a + b, 0) / 3 || 0) >= 0.8
-    && profile.cycleCompletionRates?.slice(-3).some((r: number) => r >= 0.9);
+    && avgRecentCompletion >= 0.8
+    && recentRates.some((r: number) => r >= 0.9);
+  const exposureUpdate = readyForExposure
+    ? { progressionPhase: "exposure", exposureCyclesCompleted: (profile.exposureCyclesCompleted || 0) + 1 }
+    : {};
 
   // If ready for level transition, always transition first — even if pool is exhausted
   // This reopens a fresh pool at the new level and keeps users progressing correctly
@@ -2447,6 +2454,12 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
     };
   }
 
+  // Cycles 1-5: deterministic goal-based routing, with exposure-readiness applied
+  if (cycleNumber < 6) {
+    const deterministicKey = selectProgram(profile);
+    if (deterministicKey) return { programKey: deterministicKey, profileUpdates: { ...exposureUpdate, programSwaps: {} } };
+  }
+
   if (cycleNumber >= 6) {
     // Alternate between pool programs and Month 6+ generation
     // Even cycles (6, 8, 10...) use remaining pool programs
@@ -2458,7 +2471,7 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
       const nextProgram = availableFromPool[0];
       return {
         programKey: nextProgram,
-        profileUpdates: { programSwaps: {} },
+        profileUpdates: { ...exposureUpdate, programSwaps: {} },
       };
     }
     // Odd cycle or pool exhausted — use Month 6+ generation
@@ -2466,7 +2479,7 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
     return {
       programKey: month6Result.programKey,
       generatedDays: month6Result.generatedDays,
-      profileUpdates: { programSwaps: {} },
+      profileUpdates: { ...exposureUpdate, programSwaps: {} },
     };
   }
 
