@@ -1854,7 +1854,7 @@ const generateMonth6Program = (profile: any): { programKey: string; generatedDay
     const id = exId.toLowerCase();
     if (equipment === "bands" && !(eq.includes("band") || eq.includes("bodyweight") || eq.includes("resistance") || id.includes("band"))) return false;
     if (equipment === "gym" && (eq.includes("band") || id.startsWith("band-"))) return false;
-    return passesEquipmentCheck(eq, equipment, profile.buildingEquipment || []);
+    return passesEquipmentCheck(eq, equipment, profile.buildingEquipment || [], exId);
   };
 
   const isAppropriateForLevel = (ex: any, exId: string): boolean => {
@@ -6067,10 +6067,73 @@ const parseInjuryFlags = (injuryText: string): string[] => {
   return [...new Set(flags)];
 };
 
-// Shared, single source of truth for equipment compatibility — used identically by both
-// the regular display-time filter AND Month 6+ generation, so there is never a divergence
-// between what gets generated and what gets shown to the user.
-const passesEquipmentCheck = (eq: string, equipmentPreference: string, buildingEquipment: string[]): boolean => {
+// Exercises whose raw "equipment" text is genuinely ambiguous (bare "Machine", generic
+// "Row Machine", etc.) — resolved per-exercise-ID by what the exercise's name/coaching cue
+// actually describes, rather than guessed from the equipment string alone.
+const EQUIPMENT_ID_OVERRIDES: Record<string, string> = {
+  "machine-leg-extension": "leg-extension",
+  "machine-pause-single-leg-extension": "leg-extension",
+  "hyperextension-side-bend": "hyperextension-bench",
+  "hanging-knee-raise": "pull-up-bar",
+  "back-hyperextension": "hyperextension-bench",
+  "machine-calf-2to1": "calf-raise-machine",
+};
+
+// Canonical mapping from raw, messy "equipment" field text (lowercased) to the building
+// equipment IDs selectable in the manager dashboard. Bands, bodyweight, and a few universal
+// low-cost accessories (chair, low platform, step platform) are intentionally excluded from
+// this map — they're treated as always-available regardless of the building's equipment list.
+const EQUIPMENT_CANONICAL_MAP: Record<string, string> = {
+  "dumbbell": "dumbbells", "dumbbells": "dumbbells",
+  "barbell": "barbell",
+  "ez bar": "ez-bar", "ez_bar": "ez-bar",
+  "trap bar": "trap-bar", "hex bar": "trap-bar",
+  "bench": "bench",
+  "kettlebell": "kettlebells", "kettlebells": "kettlebells",
+  "smith machine": "smith-machine",
+  "cable machine": "cable-machine", "cable": "cable-machine", "cable_machine": "cable-machine",
+  "leg press machine": "leg-press",
+  "leg curl machine": "leg-curl",
+  "leg extension machine": "leg-extension",
+  "hack squat machine": "hack-squat-machine",
+  "calf raise machine": "calf-raise-machine",
+  "chest press machine": "chest-press-machine",
+  "shoulder press machine": "shoulder-press-machine",
+  "fly machine": "fly-machine", "pec deck machine": "fly-machine",
+  "ab curl machine": "ab-curl-machine",
+  "assisted dip machine": "assisted-dip-machine",
+  "assisted pull up machine": "assisted-pull-up-machine",
+  "row machine": "seated-row-machine",
+  "t-bar row machine": "t-bar-row-machine",
+  "treadmill": "treadmill",
+  "jump rope": "jump-rope",
+  "pull up bar": "pull-up-bar", "dip bar": "pull-up-bar", "captain's chair": "pull-up-bar",
+  "trx": "trx",
+  "swiss ball": "swiss-ball", "swiss_ball": "swiss-ball",
+  "medicine ball": "medicine-balls", "medicine_ball": "medicine-balls", "vipr": "medicine-balls",
+  "bosu ball": "bosu-ball", "bosu_ball": "bosu-ball",
+  "agility ladder": "agility-ladder",
+  "plyo box": "plyo-box",
+  "ab wheel": "ab-wheel",
+  "hyperextension bench": "hyperextension-bench",
+  "weight plate": "barbell",
+};
+
+// Raw equipment text (or exercise category) that is always allowed, regardless of the
+// building's equipment list — bands and bodyweight are Senz's deep, intentional fallback
+// content library for low-equipment scenarios, "varies" is a flexible pick-your-own-cardio
+// slot, and a few near-universal low-cost items aren't worth gating on.
+const isAlwaysAllowedEquipment = (eq: string): boolean => {
+  return eq.includes("band") || eq.includes("bodyweight") || eq === "" || eq === "varies"
+    || eq === "chair" || eq === "low platform" || eq === "step platform";
+};
+
+// Shared, single source of truth for equipment compatibility — used identically by the
+// regular display-time filter, Month 6+ generation, and manual exercise swaps, so there is
+// never a divergence between what gets generated and what gets shown to the user. Checks
+// the SPECIFIC piece of equipment an exercise needs against what the building actually has,
+// rather than only a handful of hardcoded machine types.
+const passesEquipmentCheck = (eq: string, equipmentPreference: string, buildingEquipment: string[], exerciseId: string = ""): boolean => {
   if (equipmentPreference === "bands" || equipmentPreference === "bands-only") {
     return eq.includes("band") || eq.includes("bodyweight") || eq === "";
   }
@@ -6080,25 +6143,17 @@ const passesEquipmentCheck = (eq: string, equipmentPreference: string, buildingE
   if (equipmentPreference === "gym" || equipmentPreference === "gym-only") {
     if (eq.includes("band") && !eq.includes("cable")) return false;
   }
-  if (buildingEquipment.length > 0) {
-    const hasDumbbells = buildingEquipment.includes("dumbbells");
-    const hasBarbell = buildingEquipment.includes("barbell") || buildingEquipment.includes("squat-rack");
-    const hasCable = buildingEquipment.includes("cables") || buildingEquipment.includes("cable-machine");
-    const hasSmith = buildingEquipment.includes("smith-machine");
-    const hasLegPress = buildingEquipment.includes("leg-press");
-    const hasLegCurl = buildingEquipment.includes("leg-curl");
-    const hasLegExtension = buildingEquipment.includes("leg-extension");
-    const hasChestPressMachine = buildingEquipment.includes("chest-press-machine");
-    const hasSeatedRow = buildingEquipment.includes("seated-row-machine");
-    if (eq.includes("cable") && !hasCable && !hasSmith) return false;
-    if (eq.includes("smith machine") && !hasSmith && !hasBarbell) return false;
-    if (eq === "leg press machine" && !hasLegPress) return false;
-    if (eq === "leg curl machine" && !hasLegCurl) return false;
-    if (eq === "leg extension machine" && !hasLegExtension) return false;
-    if (eq === "chest press machine" && !hasChestPressMachine && !hasDumbbells) return false;
-    if (eq === "seated row machine" && !hasSeatedRow && !hasCable) return false;
-    if ((eq === "barbell") && !hasBarbell && !hasSmith) return false;
-  }
+  if (isAlwaysAllowedEquipment(eq)) return true;
+  if (buildingEquipment.length === 0) return true;
+
+  const overrideKey = EQUIPMENT_ID_OVERRIDES[exerciseId];
+  if (overrideKey) return buildingEquipment.includes(overrideKey);
+
+  const canonicalKey = EQUIPMENT_CANONICAL_MAP[eq];
+  if (canonicalKey) return buildingEquipment.includes(canonicalKey);
+
+  // Unmapped/unrecognized equipment text — fail open rather than silently hide exercises
+  // due to a gap in the mapping table.
   return true;
 };
 
@@ -6119,7 +6174,7 @@ const filterExercisesByEquipment = (groups: any[], equipmentPreference: string, 
       if (!candidateData) continue;
       if (candidateData.muscle !== targetMuscle) continue;
       const candidateEq = (candidateData.equipment || "").toLowerCase();
-      if (!passesEquipmentCheck(candidateEq, equipmentPreference, buildingEquipment)) continue;
+      if (!passesEquipmentCheck(candidateEq, equipmentPreference, buildingEquipment, candidateId)) continue;
       // Has a video
       if (!(VIMEO_VIDEOS as any)[candidateId]) continue;
       return { ...removedEx, id: candidateId };
@@ -6140,7 +6195,7 @@ const filterExercisesByEquipment = (groups: any[], equipmentPreference: string, 
       const exData = (EXERCISES_DATA as any)[ex.id];
       if (!exData) { resultExercises.push(ex); continue; }
       const eq = (exData.equipment || "").toLowerCase();
-      if (passesEquipmentCheck(eq, equipmentPreference, buildingEquipment)) {
+      if (passesEquipmentCheck(eq, equipmentPreference, buildingEquipment, ex.id)) {
         resultExercises.push(ex);
         allUsedIds.add(ex.id);
       } else {
@@ -6542,7 +6597,7 @@ const dedupeExercisesInDay = (groups: any[], equipmentPreference: string = "gym-
         const hasVideo = (VIMEO_VIDEOS as any)[id] && (VIMEO_VIDEOS as any)[id].vimeoIds?.length > 0;
         if (!hasVideo) return false;
         const eq = (cand.equipment || "").toLowerCase();
-        return passesEquipmentCheck(eq, equipmentPreference, buildingEquipment);
+        return passesEquipmentCheck(eq, equipmentPreference, buildingEquipment, id);
       });
       if (substituteId) {
         seenIds.add(substituteId);
@@ -7216,10 +7271,10 @@ const getSwapCandidates = (
   // Equipment compatibility — uses the same shared, buildingEquipment-aware logic as
   // regular program display and Month 6+ generation, so manual swaps never suggest an
   // exercise the building doesn't actually have equipment for.
-  const isEquipmentCompatible = (exEquipment: string): boolean => {
+  const isEquipmentCompatible = (exEquipment: string, exId: string = ""): boolean => {
     if (!exEquipment) return false;
     const eq = exEquipment.toLowerCase();
-    return passesEquipmentCheck(eq, equipmentPreference, buildingEquipment);
+    return passesEquipmentCheck(eq, equipmentPreference, buildingEquipment, exId);
   };
 
   const candidates: Array<{ id: string; name: string; score: number }> = [];
@@ -7229,7 +7284,7 @@ const getSwapCandidates = (
     if (id === exerciseId && id !== originalExerciseId) return;
     if (id !== originalExerciseId && currentGroupExerciseIds.includes(id)) return;
     if (ex.muscle !== targetMuscle) return;
-    if (!isEquipmentCompatible(ex.equipment)) return;
+    if (!isEquipmentCompatible(ex.equipment, id)) return;
 
     // Skip if any of the user's parsed injury flags match this exercise's injury flags
     const activeInjuryFlags = parseInjuryFlags(injuries);
@@ -7245,7 +7300,7 @@ const getSwapCandidates = (
     let score = 0;
     if (fullProgramExerciseIds.includes(id)) score -= 15;      // deprioritize if already in program elsewhere
     if (ex.equipment === targetEquipment) score += 30;         // same equipment = highest priority
-    else if (isEquipmentCompatible(ex.equipment)) score += 10; // compatible equipment
+    else if (isEquipmentCompatible(ex.equipment, id)) score += 10; // compatible equipment
     if (ex.difficulty === targetDifficulty) score += 20;        // same difficulty
     else if (ex.difficulty === "beginner") score += 5;          // easier is safer than harder
 
@@ -14991,6 +15046,8 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
       items: [
         { id: "dumbbells", label: "Dumbbells" },
         { id: "barbell", label: "Barbell and Plates" },
+        { id: "ez-bar", label: "EZ Bar" },
+        { id: "trap-bar", label: "Trap Bar / Hex Bar" },
         { id: "bench", label: "Adjustable Bench" },
         { id: "squat-rack", label: "Squat Rack" },
         { id: "kettlebells", label: "Kettlebells" },
@@ -15003,11 +15060,18 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
         { id: "cable-machine", label: "Cable Machine" },
         { id: "wide-grip-lat-pulldown", label: "Lat Pulldown Machine" },
         { id: "seated-row-machine", label: "Seated Row Machine" },
+        { id: "t-bar-row-machine", label: "T-Bar Row Machine" },
         { id: "leg-press", label: "Leg Press" },
         { id: "leg-curl", label: "Leg Curl Machine" },
         { id: "leg-extension", label: "Leg Extension Machine" },
+        { id: "hack-squat-machine", label: "Hack Squat Machine" },
+        { id: "calf-raise-machine", label: "Calf Raise Machine" },
         { id: "chest-press-machine", label: "Chest Press Machine" },
-        { id: "fly-machine", label: "Chest Fly Machine" },
+        { id: "shoulder-press-machine", label: "Shoulder Press Machine" },
+        { id: "fly-machine", label: "Chest Fly / Pec Deck Machine" },
+        { id: "ab-curl-machine", label: "Ab Curl Machine" },
+        { id: "assisted-dip-machine", label: "Assisted Dip Machine" },
+        { id: "assisted-pull-up-machine", label: "Assisted Pull-Up Machine" },
       ],
     },
     {
@@ -15031,6 +15095,9 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
         { id: "jump-rope", label: "Jump Rope" },
         { id: "agility-ladder", label: "Agility Ladder" },
         { id: "bosu-ball", label: "Bosu Ball" },
+        { id: "plyo-box", label: "Plyo Box" },
+        { id: "ab-wheel", label: "Ab Wheel" },
+        { id: "hyperextension-bench", label: "Hyperextension Bench" },
       ],
     },
   ];
