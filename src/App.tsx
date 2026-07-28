@@ -6150,6 +6150,29 @@ const filterCardioNote = (note: string, buildingEquipment: string[]): string => 
   return filtered.join("\n");
 };
 
+// Recursively removes any undefined value anywhere in an object or array before it's sent
+// to Firestore. Firestore rejects writes containing undefined outright (it only allows a
+// real value, null, or the key being absent entirely), and undefined can sneak in from many
+// different nested sources (dynamically-built exercise data, optional fields, etc). Rather
+// than track down every individual possible source one at a time, this guarantees a write
+// can never fail for this reason again, no matter where the undefined value originated.
+const stripUndefinedDeep = (value: any): any => {
+  if (Array.isArray(value)) {
+    return value.map(stripUndefinedDeep);
+  }
+  if (value && typeof value === "object" && !(value instanceof Date)) {
+    const cleaned: Record<string, any> = {};
+    Object.keys(value).forEach(key => {
+      const v = value[key];
+      if (v !== undefined) {
+        cleaned[key] = stripUndefinedDeep(v);
+      }
+    });
+    return cleaned;
+  }
+  return value;
+};
+
 const parseInjuryFlags = (injuryText: string, isSenior: boolean = false): string[] => {
   const flags: string[] = [];
   // All seniors automatically get impact protection regardless of reported injuries —
@@ -16143,7 +16166,7 @@ const isInitialLoad = React.useRef(true);
 
     if (uid) {
       lastCompletionWrite.current = Date.now();
-      setDoc(doc(db, "users", uid), completionData, { merge: true })
+      setDoc(doc(db, "users", uid), stripUndefinedDeep(completionData), { merge: true })
         .catch(e => console.error("Completion write failed:", e.message));
     }
 
@@ -16199,7 +16222,7 @@ const isInitialLoad = React.useRef(true);
         if (newReEntrySessions >= reEntryTarget) {
           const reEntryExitUpdates = { reEntryMode: false, reEntryStartDate: null, reEntrySessions: 0 };
           setUserProfile(prev => ({ ...prev, ...reEntryExitUpdates }));
-          setDoc(doc(db, "users", uid), reEntryExitUpdates, { merge: true }).catch(e => console.error("Failed to clear re-entry state:", e));
+          setDoc(doc(db, "users", uid), stripUndefinedDeep(reEntryExitUpdates), { merge: true }).catch(e => console.error("Failed to clear re-entry state:", e));
           setScreen("re-entry-complete");
           return;
         } else {
@@ -16218,7 +16241,7 @@ const isInitialLoad = React.useRef(true);
     if (!stillNeedsAccessibility) {
       const exitUpdates = { accessibilityTrack: false, bmi: updatedBmi };
       setUserProfile((prev: any) => ({ ...prev, ...exitUpdates }));
-      setDoc(doc(db, "users", userProfile.uid), exitUpdates, { merge: true }).catch((e: any) => console.error("Failed to exit accessibility track:", e));
+      setDoc(doc(db, "users", userProfile.uid), stripUndefinedDeep(exitUpdates), { merge: true }).catch((e: any) => console.error("Failed to exit accessibility track:", e));
     }
   }
     const previousPrograms = userProfile.previousPrograms || [];
@@ -16280,7 +16303,7 @@ const isInitialLoad = React.useRef(true);
     // Persist new cycle to Firestore
     const uid = userProfile?.uid || currentUid || auth.currentUser?.uid;
     if (uid) {
-      setDoc(doc(db, "users", uid), newCycleProfile, { merge: true })
+      setDoc(doc(db, "users", uid), stripUndefinedDeep(newCycleProfile), { merge: true })
         .catch(e => console.error("Failed to persist new cycle:", e));
     }
 
@@ -16336,7 +16359,7 @@ const isInitialLoad = React.useRef(true);
         };
         // Only update these safe fields — never touch cycle, level, or progression data
         setUserProfile(prev => ({ ...prev, ...safeUpdates }));
-        setDoc(doc(db, "users", userProfile.uid), safeUpdates, { merge: true })
+        setDoc(doc(db, "users", userProfile.uid), stripUndefinedDeep(safeUpdates), { merge: true })
           .catch(e => console.error("Failed to save auto-generated Month 6+ days:", e));
       }
     }
@@ -16564,7 +16587,7 @@ const isInitialLoad = React.useRef(true);
     const uid = updated?.uid || currentUid || auth.currentUser?.uid;
     if (uid) {
       const { uid: _uid, ...dataToSave } = updated;
-      setDoc(doc(db, "users", uid), dataToSave, { merge: true })
+      setDoc(doc(db, "users", uid), stripUndefinedDeep(dataToSave), { merge: true })
         .catch(e => console.error("Failed to save profile update:", e));
     }
   }} onSignOut={resetToWelcome} onNavigate={navigate} onManagerAccess={() => setManagerLoggedIn(true)} />;
