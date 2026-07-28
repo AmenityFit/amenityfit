@@ -3903,7 +3903,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
       <div style={{ flex: 1, padding: "16px 24px 80px", overflowY: "auto" }}>
 
         {/* Today's Workout */}
-        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={currentDay?.focus} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _i.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
+        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={currentDay?.focus} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
 
         {/* View Full Week link */}
         <button onClick={onViewWeekly} style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20, marginTop: -8 }}>
@@ -6518,6 +6518,41 @@ const filterExercisesByInjury = (groups: any[], injuryText: string, equipmentPre
   }).filter(group => group.type === "cardio" || (group.exercises && group.exercises.length > 0));
 };
 
+// Universal safeguard against duplicate exercises within the same day — protects EVERY
+// program, static (hand-authored, which can contain authoring typos/duplicates) and
+// generated (Month 6+) alike. Runs as the final step of the display pipeline, after all
+// other filters, so whatever reaches the person never repeats the same exercise twice.
+const dedupeExercisesInDay = (groups: any[], equipmentPreference: string = "gym-and-bands", buildingEquipment: string[] = []): any[] => {
+  const seenIds = new Set<string>();
+  return groups.map((group: any) => {
+    if (group.type === "cardio") return group;
+    const newExercises = (group.exercises || []).map((ex: any) => {
+      if (!ex?.id) return ex;
+      if (!seenIds.has(ex.id)) {
+        seenIds.add(ex.id);
+        return ex;
+      }
+      // Duplicate found — try to find a same-muscle, equipment-compatible substitute
+      const original = (EXERCISES_DATA as any)[ex.id];
+      if (!original) return ex;
+      const substituteId = Object.keys(EXERCISES_DATA).find((id) => {
+        if (seenIds.has(id) || id === ex.id) return false;
+        const cand = (EXERCISES_DATA as any)[id];
+        if (!cand || cand.muscle !== original.muscle) return false;
+        const eq = (cand.equipment || "").toLowerCase();
+        return passesEquipmentCheck(eq, equipmentPreference, buildingEquipment);
+      });
+      if (substituteId) {
+        seenIds.add(substituteId);
+        return { ...ex, id: substituteId };
+      }
+      // No safe substitute found — better to show a repeat than silently drop the exercise
+      return ex;
+    });
+    return { ...group, exercises: newExercises };
+  });
+};
+
 const filterGroupsForReEntry = (groups: any[], effectiveLevel: string, progressionPhase: string): any[] => {
   const cardioGroups = groups.filter(g => g.type === "cardio");
   const nonCardioGroups = groups.filter(g => g.type !== "cardio");
@@ -8476,7 +8511,8 @@ const getWeekSchedule = (
     if (workout && !workout.isRest && workout.groups?.length > 0) {
       const _eq = filterExercisesByEquipment(workout.groups, equipmentPreference || "gym-and-bands", buildingEquipment || []);
       const _vid = filterExercisesByVideo(_eq);
-      workout.groups = injuries && injuries !== "none" ? filterExercisesByInjury(_vid, injuries, equipmentPreference || "gym-and-bands", buildingEquipment || []) : _vid;
+      const _inj = injuries && injuries !== "none" ? filterExercisesByInjury(_vid, injuries, equipmentPreference || "gym-and-bands", buildingEquipment || []) : _vid;
+      workout.groups = dedupeExercisesInDay(_inj, equipmentPreference || "gym-and-bands", buildingEquipment || []);
     }
     const isToday = date.toLocaleDateString() === today.toLocaleDateString();
     const isPast = i < 0;
@@ -9045,7 +9081,7 @@ const savedCompletedCellsRef = React.useRef<string[]>(savedProgress?.completedCe
     // Filter exercises based on user injury flags — hard filter, runs every workout
     const equipmentFiltered = filterExercisesByEquipment(reEntryAdjusted, reviewEquipmentPreference, profile?.buildingEquipment || []);
 const videoFiltered = filterExercisesByVideo(equipmentFiltered);
-const injuryFiltered = filterExercisesByInjury(videoFiltered, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []);
+const injuryFiltered = dedupeExercisesInDay(filterExercisesByInjury(videoFiltered, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []), profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []);
     // Filter cardio options to only show equipment the building actually has
     const buildingEquipment: string[] = profile?.buildingEquipment || [];
     // Calculate dynamic cardio minutes based on session length and remaining time
@@ -16245,7 +16281,7 @@ const isInitialLoad = React.useRef(true);
       const reEntryFiltered = userProfile?.reEntryMode ? filterGroupsForReEntry(sessionFiltered, userProfile?.effectiveLevel || userProfile?.experience || "intermediate", userProfile?.progressionPhase || "pool-rotation") : sessionFiltered;
       const equipFiltered = filterExercisesByEquipment(reEntryFiltered, userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || []);
       const videoFiltered = filterExercisesByVideo(equipFiltered);
-      const injuryFiltered = filterExercisesByInjury(videoFiltered, userProfile?.injuries || "none", userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || []);
+      const injuryFiltered = dedupeExercisesInDay(filterExercisesByInjury(videoFiltered, userProfile?.injuries || "none", userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || []), userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || []);
       const dynCardio = calculateCardioMinutes(injuryFiltered, previewSessionLength);
       return injuryFiltered.map(g => ({ ...g, cardioMinutes: g.type === "cardio" ? dynCardio : g.cardioMinutes }));
     })();
