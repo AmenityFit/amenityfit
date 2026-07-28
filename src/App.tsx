@@ -8452,7 +8452,7 @@ const GENERATED_QUOTES: string[] = [
   // From: success requires real risk, not just belief
   "Belief without action is just a good intention. At some point you have to bet on yourself.",
   // From: consistency even after the reward, discipline as identity
-  "The people who stay consistent after they've already won — those are the ones who keep winning.",
+  "The people who stay consistent after they've already won are the ones who keep winning.",
   // From: finish what you started, heart-led commitment
   "There's a version of this you haven't tried yet. Don't quit before you find out what it is.",
   // From: true success means lifting others
@@ -8492,7 +8492,7 @@ const GENERATED_QUOTES: string[] = [
   // From: failure is feedback, not an endpoint
   "Every miss is a correction. The ones who get good are the ones who keep taking the feedback.",
   // From: sacrifice is the hidden foundation of long-term success
-  "The quiet work nobody sees — that's where the gap between you and everyone else is built.",
+  "The quiet work nobody sees is where the gap between you and everyone else is built.",
   // From: zone in on yourself, stop spending energy on external noise
   "The person who needs the most of your attention is you. Act like it.",
   // From: define your vision, filter doubt
