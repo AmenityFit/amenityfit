@@ -8521,22 +8521,35 @@ const GENERATED_QUOTES: string[] = [
   "You won't know what you're capable of from where you're standing. You have to move first.",
 ];
 
-// Cycles: all of Senz's quotes first, then generated variants, then loops back
-const getMotivationalMessage = (sessionCount: number): string => {
+// Cycles: all of Senz's quotes first, then generated variants, then loops back.
+// Each user gets a stable, unique starting offset derived from their own uid, so two
+// people at the same session count almost never see the same quote on the same day,
+// while any single user still sees a consistent, non-repeating, deterministic sequence.
+const getUserQuoteOffset = (uid: string): number => {
+  if (!uid) return 0;
+  let hash = 0;
+  for (let i = 0; i < uid.length; i++) {
+    hash = (hash * 31 + uid.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+};
+
+const getMotivationalMessage = (sessionCount: number, uid: string = ""): string => {
   const primary = SENZ_QUOTES;
   const secondary = GENERATED_QUOTES;
   const total = primary.length + secondary.length;
   if (total === 0) return "You showed up. That's what separates you.";
-  const idx = sessionCount % total;
+  const offset = getUserQuoteOffset(uid);
+  const idx = (sessionCount + offset) % total;
   if (idx < primary.length) return primary[idx];
   return secondary[idx - primary.length];
 };
 
 // ─── Session Complete Screen ───────────────────────────────────────────────────
-const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount = 0, onDone }) => {
+const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount = 0, uid = "", onDone }) => {
   const mins = Math.floor(timeSeconds / 60);
   const secs = timeSeconds % 60;
-  const message = getMotivationalMessage(sessionCount);
+  const message = getMotivationalMessage(sessionCount, uid);
 
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px", textAlign: "center" }}>
@@ -9489,6 +9502,7 @@ onSaveState={(round: number, exerciseIndex: number, cells?: string[]) => {
       timeSeconds={Math.floor((Date.now() - startTime) / 1000)}
       userName={profile?.name ? (profile.name.split(" ")[0].charAt(0).toUpperCase() + profile.name.split(" ")[0].slice(1).toLowerCase()) : ""}
       sessionCount={profile?.sessionsCompleted || 0}
+      uid={profile?.uid || ""}
       onDone={() => onComplete({ groups: workoutGroups, sessionLength, weightsLogged: workoutFlowWeightsRef.current })}
     />
   );
