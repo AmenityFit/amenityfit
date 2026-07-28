@@ -1647,7 +1647,7 @@ const buildProgramSelectionPrompt = (profile: any) => {
   const isSenior = age >= 65;
 
   const levelKey = isSenior
-    ? (effectiveLevel === "intermediate" || effectiveLevel === "advanced" ? "senior-intermediate" : "senior-beginner")
+    ? (effectiveLevel === "advanced" ? "senior-advanced" : effectiveLevel === "intermediate" ? "senior-intermediate" : "senior-beginner")
     : effectiveLevel;
 
   const equipKey = equipment === "gym" ? "gym"
@@ -1686,7 +1686,7 @@ const buildProgramSelectionPrompt = (profile: any) => {
     "beginner": "intermediate",
     "senior-beginner": "senior-intermediate",
     "intermediate": "advanced",
-    "senior-intermediate": "advanced",
+    "senior-intermediate": "senior-advanced",
   };
   const nextLevel = nextLevelMap[levelKey] || levelKey;
   const nextPoolKey = `${nextLevel}-${equipKey}`;
@@ -1988,7 +1988,7 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
 
   // Select base program — pick one from their pool they've done least recently
   const levelKey = isSenior
-    ? (experience === "intermediate" || experience === "advanced" ? "senior-intermediate" : "senior-beginner")
+    ? (experience === "advanced" ? "senior-advanced" : experience === "intermediate" ? "senior-intermediate" : "senior-beginner")
     : experience;
   const equipKey = equipment === "gym" ? "gym" : equipment === "bands" ? "bands" : "gym-and-bands";
   const poolKey = `${levelKey}-${equipKey}`;
@@ -2004,7 +2004,7 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
     if (!isSenior && key.includes("senior")) return false;
     // Match experience level
     const levelKey = isSenior
-      ? (experience === "intermediate" || experience === "advanced" ? "senior-intermediate" : "senior-beginner")
+      ? (experience === "advanced" ? "senior-advanced" : experience === "intermediate" ? "senior-intermediate" : "senior-beginner")
       : experience;
     if (experience === "beginner" && (key.includes("intermediate") || key.includes("advanced"))) return false;
     if (experience === "intermediate" && key.includes("advanced") && !key.includes("intermediate")) return false;
@@ -2404,7 +2404,7 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
   }
 
   const levelKey = isSenior
-    ? (experience === "intermediate" || experience === "advanced" ? "senior-intermediate" : "senior-beginner")
+    ? (experience === "advanced" ? "senior-advanced" : experience === "intermediate" ? "senior-intermediate" : "senior-beginner")
     : experience;
   const equipKey = equipment === "gym" ? "gym" : equipment === "bands" ? "bands" : "gym-and-bands";
   const poolKey = `${levelKey}-${equipKey}`;
@@ -2422,7 +2422,7 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
   // transition readiness is irrelevant there. Without this guard, a consistently strong
   // Advanced user would keep re-triggering "transition" forever, endlessly refreshing their
   // pool and never actually reaching Month 6+ generation like everyone else eventually does.
-  const isAtCeilingLevel = experience === "advanced";
+  const isAtCeilingLevel = experience === "advanced" || experience === "senior-advanced";
   const readyForExposure = !isAtCeilingLevel
     && progressionPhase === "pool-rotation"
     && cycleNumber >= 3
@@ -2447,12 +2447,12 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
       beginner: "intermediate",
       intermediate: "advanced",
       "senior-beginner": "senior-intermediate",
-      "senior-intermediate": "advanced",
+      "senior-intermediate": "senior-advanced",
     };
     const currentLevel = profile.effectiveLevel || profile.experience || "beginner";
     const newLevel = levelMap[currentLevel] || currentLevel;
     const newLevelKey = isSenior
-      ? (newLevel === "intermediate" || newLevel === "advanced" ? "senior-intermediate" : "senior-beginner")
+      ? (newLevel === "advanced" ? "senior-advanced" : newLevel === "intermediate" ? "senior-intermediate" : "senior-beginner")
       : newLevel;
     const newPoolKey = `${newLevelKey}-${equipKey}`;
     const newPool = (pools as any)[newPoolKey] || [];
@@ -2562,7 +2562,7 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
           beginner: "intermediate",
           intermediate: "advanced",
           "senior-beginner": "senior-intermediate",
-          "senior-intermediate": "advanced",
+          "senior-intermediate": "senior-advanced",
         };
         const currentLevel = profile.effectiveLevel || profile.experience || "beginner";
         profileUpdates = {
