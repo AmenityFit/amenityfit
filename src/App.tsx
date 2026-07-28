@@ -16116,7 +16116,7 @@ const isInitialLoad = React.useRef(true);
     // Computed once here and included directly in completionData below, so it actually
     // gets persisted to Firestore (previously it was only ever updated in local React
     // state and never written to the database, silently resetting on every reload).
-    const newReEntrySessions = userProfile.reEntryMode ? (userProfile.reEntrySessions || 0) + 1 : userProfile.reEntrySessions;
+    const newReEntrySessions = userProfile.reEntryMode ? (userProfile.reEntrySessions || 0) + 1 : (userProfile.reEntrySessions ?? null);
     const completionData = {
       streak: newStreak,
       sessionsCompleted: newCompleted,
