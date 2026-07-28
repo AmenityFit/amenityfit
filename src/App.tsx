@@ -2417,10 +2417,17 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
   // Step 2: sustained strong performance during exposure earns the actual level transition
   const recentRates = profile.cycleCompletionRates?.slice(-3) || [];
   const avgRecentCompletion = recentRates.length > 0 ? recentRates.reduce((a: number, b: number) => a + b, 0) / recentRates.length : 0;
-  const readyForExposure = progressionPhase === "pool-rotation"
+  // Advanced is the ceiling level — there's nowhere higher to transition to, so exposure/
+  // transition readiness is irrelevant there. Without this guard, a consistently strong
+  // Advanced user would keep re-triggering "transition" forever, endlessly refreshing their
+  // pool and never actually reaching Month 6+ generation like everyone else eventually does.
+  const isAtCeilingLevel = experience === "advanced";
+  const readyForExposure = !isAtCeilingLevel
+    && progressionPhase === "pool-rotation"
     && cycleNumber >= 3
     && avgRecentCompletion >= 0.8;
-  const readyForTransition = progressionPhase === "exposure"
+  const readyForTransition = !isAtCeilingLevel
+    && progressionPhase === "exposure"
     && (profile.exposureCyclesCompleted || 0) >= 3
     && avgRecentCompletion >= 0.8
     && recentRates.some((r: number) => r >= 0.9);
