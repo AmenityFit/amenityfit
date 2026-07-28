@@ -16088,58 +16088,8 @@ const isInitialLoad = React.useRef(true);
     const completedSessionLength = snapshot?.sessionLength || userProfile.sessionLength || 45;
     let cycleFinished = false;
 
-    setUserProfile(prev => {
-      const now = new Date();
-      const todayStr = now.toDateString();
-      const lastSessionDate = prev.lastSessionDate;
-      const isToday = lastSessionDate === todayStr;
-
-      // Same-day guard — don't double count
-      if (isToday) return prev;
-
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const isYesterday = lastSessionDate === yesterday.toDateString();
-
-      const newStreak = isYesterday || !lastSessionDate ? (prev.streak || 0) + 1 : 1;
-      const newCompleted = (prev.sessionsCompleted || 0) + 1;
-      const currentProgramDay = prev.programDay || 1;
-
-      // Check if this completes the 30-day cycle
-      if (currentProgramDay >= 30) {
-        cycleFinished = true;
-      }
-
-      const newProgramDay = cycleFinished ? 30 : Math.min(currentProgramDay + 1, 31);
-
-      const dayOfWeek = now.getDay();
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-      startOfWeek.setHours(0, 0, 0, 0);
-      const lastWeekReset = prev.lastWeekReset;
-      const needsWeekReset = !lastWeekReset || new Date(lastWeekReset) < startOfWeek;
-      const sessionsThisWeek = needsWeekReset ? 1 : (prev.sessionsThisWeek || 0) + 1;
-
-      return {
-        ...prev,
-        streak: newStreak,
-        sessionsCompleted: newCompleted,
-        sessionsThisWeek,
-        lastWeekReset: needsWeekReset ? startOfWeek.toISOString() : prev.lastWeekReset,
-        lastSessionDate: todayStr,
-        programDay: newProgramDay,
-        cycleSessionsCompleted: (prev.cycleSessionsCompleted || 0) + 1,
-        completedProgramDays: [...new Set([...(prev.completedProgramDays || []), currentProgramDay])],
-        reEntrySessions: prev.reEntryMode ? (prev.reEntrySessions || 0) + 1 : prev.reEntrySessions,
-        lastWorkoutSnapshot: {
-          groups: completedGroups,
-          sessionLength: completedSessionLength,
-          equipmentPreference: prev.equipmentPreference || "gym-and-bands",
-          programDay: currentProgramDay,
-          date: todayStr,
-        },
-      };
-    });
+    // Same-day guard — don't double count
+    if (userProfile.lastSessionDate === new Date().toDateString()) return;
 
     const uid = resolvedUid || auth.currentUser?.uid || userProfile?.uid || currentUid;
     const now = new Date();
@@ -16150,6 +16100,12 @@ const isInitialLoad = React.useRef(true);
     const newStreak = isYesterday || !userProfile.lastSessionDate ? (userProfile.streak || 0) + 1 : 1;
     const newCompleted = (userProfile.sessionsCompleted || 0) + 1;
     const currentProgramDay = userProfile.programDay || 1;
+
+    // Check if this completes the 30-day cycle
+    if (currentProgramDay >= 30) {
+      cycleFinished = true;
+    }
+
     const newProgramDay = cycleFinished ? 30 : Math.min(currentProgramDay + 1, 31);
     const dayOfWeek = now.getDay();
     const startOfWeek = new Date(now);
@@ -16157,6 +16113,10 @@ const isInitialLoad = React.useRef(true);
     startOfWeek.setHours(0, 0, 0, 0);
     const needsWeekReset = !userProfile.lastWeekReset || new Date(userProfile.lastWeekReset) < startOfWeek;
     const sessionsThisWeek = needsWeekReset ? 1 : (userProfile.sessionsThisWeek || 0) + 1;
+    // Computed once here and included directly in completionData below, so it actually
+    // gets persisted to Firestore (previously it was only ever updated in local React
+    // state and never written to the database, silently resetting on every reload).
+    const newReEntrySessions = userProfile.reEntryMode ? (userProfile.reEntrySessions || 0) + 1 : userProfile.reEntrySessions;
     const completionData = {
       streak: newStreak,
       sessionsCompleted: newCompleted,
@@ -16166,19 +16126,19 @@ const isInitialLoad = React.useRef(true);
       programDay: newProgramDay,
       cycleSessionsCompleted: (userProfile.cycleSessionsCompleted || 0) + 1,
       completedProgramDays: [...new Set([...(userProfile.completedProgramDays || []), currentProgramDay])],
+      reEntrySessions: newReEntrySessions,
+      lastWorkoutSnapshot: {
+        groups: completedGroups,
+        sessionLength: completedSessionLength,
+        equipmentPreference: userProfile.equipmentPreference || "gym-and-bands",
+        programDay: currentProgramDay,
+        date: todayStr,
+      },
     };
 
     setUserProfile(prev => ({
       ...prev,
       ...completionData,
-      reEntrySessions: prev.reEntryMode ? (prev.reEntrySessions || 0) + 1 : prev.reEntrySessions,
-      lastWorkoutSnapshot: {
-        groups: completedGroups,
-        sessionLength: completedSessionLength,
-        equipmentPreference: prev.equipmentPreference || "gym-and-bands",
-        programDay: currentProgramDay,
-        date: todayStr,
-      },
     }));
 
     if (uid) {
