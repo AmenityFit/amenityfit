@@ -5103,7 +5103,7 @@ const VIMEO_VIDEOS: Record<string, { vimeoIds: string[]; equipment: string }> = 
   "resistance-band-curtsy-lunge": { vimeoIds: ["946420263"], equipment: "band" },
   "one-arm-bent-over-row-band": { vimeoIds: ["946446090"], equipment: "band" },  "resistance-band-ab-twist": { vimeoIds: ["946401761"], equipment: "band" },
   "resistance-band-bent-over-row": { vimeoIds: ["946436774"], equipment: "band" }, 
-  "overhead-extension-band": { vimeoIds: ["946588867"], equipment: "band" },  "donkey-kicks": { vimeoIds: ["946601321"], equipment: "band" },
+  "overhead-extension-band": { vimeoIds: ["946588867"], equipment: "band" },  "donkey-kicks": { vimeoIds: ["946601321"], equipment: "band" },  "band-stiff-leg-deadlift": { vimeoIds: ["946404684"], equipment: "band" },
   "thrusters-band": { vimeoIds: ["946453548"], equipment: "band" },
   "seated-lat-pulldown-band": { vimeoIds: ["946570675"], equipment: "band" }, "modified-medicine-ball-russian-twist": { vimeoIds: ["1183595949"], equipment: "bodyweight" }, "assisted-static-lunge": { vimeoIds: ["1183613050"], equipment: "bodyweight" },
   "adduction-ankle-straps": { vimeoIds: ["946450969"], equipment: "band" },
@@ -6539,6 +6539,8 @@ const dedupeExercisesInDay = (groups: any[], equipmentPreference: string = "gym-
         if (seenIds.has(id) || id === ex.id) return false;
         const cand = (EXERCISES_DATA as any)[id];
         if (!cand || cand.muscle !== original.muscle) return false;
+        const hasVideo = (VIMEO_VIDEOS as any)[id] && (VIMEO_VIDEOS as any)[id].vimeoIds?.length > 0;
+        if (!hasVideo) return false;
         const eq = (cand.equipment || "").toLowerCase();
         return passesEquipmentCheck(eq, equipmentPreference, buildingEquipment);
       });
