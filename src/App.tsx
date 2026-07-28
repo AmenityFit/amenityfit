@@ -1861,7 +1861,11 @@ const generateMonth6Program = (profile: any): { programKey: string; generatedDay
   const isAppropriateForLevel = (ex: any, exId: string): boolean => {
     const name = (ex.name || "").toLowerCase();
     const id = exId.toLowerCase();
-    if (experience === "advanced" || experience === "intermediate") {
+    // Seniors keep access to modified/assisted/senior-labeled variants regardless of their
+    // experience tier — these are genuinely safer, more appropriate options for someone 65+,
+    // not lesser ones. The exclusions below are only meant for young, non-senior users at
+    // advanced/intermediate levels who have outgrown the gentler variants.
+    if (!isSenior && (experience === "advanced" || experience === "intermediate")) {
       if (name.includes("modified") || name.includes("Modified")) return false;
       if (name.includes("assisted") || name.includes("Assisted")) return false;
       if (id.includes("senior") || name.includes("senior") || name.includes("Senior")) return false;
@@ -1870,7 +1874,7 @@ const generateMonth6Program = (profile: any): { programKey: string; generatedDay
       if (name.includes("seated march") || name.includes("Seated March")) return false;
       if (name.includes("wall sit march") || name.includes("Wall Sit March")) return false;
     }
-    if (experience === "advanced") {
+    if (!isSenior && experience === "advanced") {
       if (name.includes("high plank") || name.includes("High Plank") || id.includes("high-plank")) return false;
       if (ex.difficulty === "beginner" && (
         name.includes("march") || name.includes("March") ||
@@ -4030,7 +4034,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
       <div style={{ flex: 1, padding: "16px 24px 80px", overflowY: "auto" }}>
 
         {/* Today's Workout */}
-        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={currentDay?.focus} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
+        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={currentDay?.focus} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
 
         {/* View Full Week link */}
         <button onClick={onViewWeekly} style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20, marginTop: -8 }}>
@@ -6145,10 +6149,14 @@ const filterCardioNote = (note: string, buildingEquipment: string[]): string => 
   return filtered.join("\n");
 };
 
-const parseInjuryFlags = (injuryText: string): string[] => {
-  if (!injuryText || injuryText === "none") return [];
-  const text = injuryText.toLowerCase();
+const parseInjuryFlags = (injuryText: string, isSenior: boolean = false): string[] => {
   const flags: string[] = [];
+  // All seniors automatically get impact protection regardless of reported injuries —
+  // high-impact and jumping movements carry real fall/joint risk at any fitness level once
+  // someone is 65+, not just for those who happen to have entered a relevant injury.
+  if (isSenior) flags.push("ankle-impact", "knee-impact", "knee-shear");
+  if (!injuryText || injuryText === "none") return [...new Set(flags)];
+  const text = injuryText.toLowerCase();
   // Knee — catches: knee, knees, acl, mcl, meniscus, patella, kneecap, pcl
   if (text.includes("knee") || text.includes("knees") || text.includes("acl") || text.includes("mcl") || text.includes("meniscus") || text.includes("patella") || text.includes("kneecap") || text.includes("pcl")) {
     flags.push("knee-deep-flexion", "knee-impact", "knee-shear");
@@ -6642,8 +6650,8 @@ const getInjuryCategory = (flags: string[]): string[] => {
   return categories;
 };
 
-const filterExercisesByInjury = (groups: any[], injuryText: string, equipmentPreference: string = "gym-and-bands", buildingEquipment: string[] = []): any[] => {
-  const activeFlags = parseInjuryFlags(injuryText);
+const filterExercisesByInjury = (groups: any[], injuryText: string, equipmentPreference: string = "gym-and-bands", buildingEquipment: string[] = [], isSenior: boolean = false): any[] => {
+  const activeFlags = parseInjuryFlags(injuryText, isSenior);
   if (activeFlags.length === 0) return groups;
   const injuryCategories = getInjuryCategory(activeFlags);
 
@@ -7385,7 +7393,8 @@ const getSwapCandidates = (
   equipmentPreference: string,
   injuries: string,
   userDifficulty: string,
-  buildingEquipment: string[] = []
+  buildingEquipment: string[] = [],
+  isSenior: boolean = false
 ): Array<{ id: string; name: string; score: number }> => {
   const target = EXERCISES_DATA[exerciseId];
   if (!target) return [];
@@ -7414,7 +7423,7 @@ const getSwapCandidates = (
     if (!isEquipmentCompatible(ex.equipment, id)) return;
 
     // Skip if any of the user's parsed injury flags match this exercise's injury flags
-    const activeInjuryFlags = parseInjuryFlags(injuries);
+    const activeInjuryFlags = parseInjuryFlags(injuries, isSenior);
     if (ex.injuryFlags && activeInjuryFlags.length > 0) {
       const hasConflict = ex.injuryFlags.some((flag: string) => activeInjuryFlags.includes(flag));
       if (hasConflict) return;
@@ -8307,7 +8316,8 @@ if (showRest) {
           profile?.equipmentPreference || "gym-and-bands",
           profile?.injuries || "",
           profile?.experience || "beginner",
-          profile?.buildingEquipment || []
+          profile?.buildingEquipment || [],
+          (parseInt(String(profile?.age)) || 30) >= 65
         ).slice(0, 10); // show top 10 options
 
         return (
@@ -8678,8 +8688,10 @@ const getWeekSchedule = (
   generatedDays?: any[],
   injuries?: string,
   equipmentPreference?: string,
-  buildingEquipment?: string[]
+  buildingEquipment?: string[],
+  age?: number
 ) => {
+  const isSenior = (age || 30) >= 65;
   const today = todayOverride || new Date();
   const days = [];
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -8695,7 +8707,7 @@ const getWeekSchedule = (
     if (workout && !workout.isRest && workout.groups?.length > 0) {
       const _eq = filterExercisesByEquipment(workout.groups, equipmentPreference || "gym-and-bands", buildingEquipment || []);
       const _vid = filterExercisesByVideo(_eq);
-      const _inj = injuries && injuries !== "none" ? filterExercisesByInjury(_vid, injuries, equipmentPreference || "gym-and-bands", buildingEquipment || []) : _vid;
+      const _inj = (injuries && injuries !== "none") || isSenior ? filterExercisesByInjury(_vid, injuries || "none", equipmentPreference || "gym-and-bands", buildingEquipment || [], isSenior) : _vid;
       workout.groups = dedupeExercisesInDay(_inj, equipmentPreference || "gym-and-bands", buildingEquipment || []);
     }
     const isToday = date.toLocaleDateString() === today.toLocaleDateString();
@@ -8801,7 +8813,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
   }, [frequency]);
 
   const todayLocal = React.useMemo(() => new Date(), []);
-  const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment);
+  const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment, parseInt(String(profile?.age)) || 30);
   if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onBack={() => setScreen("dashboard")} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={() => handleWorkoutComplete({ groups: [], sessionLength: 0 })} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
 
   const todayDay = weekDays.find((d: any) => d.isToday) ?? null;
@@ -9265,7 +9277,7 @@ const savedCompletedCellsRef = React.useRef<string[]>(savedProgress?.completedCe
     // Filter exercises based on user injury flags — hard filter, runs every workout
     const equipmentFiltered = filterExercisesByEquipment(reEntryAdjusted, reviewEquipmentPreference, profile?.buildingEquipment || []);
 const videoFiltered = filterExercisesByVideo(equipmentFiltered);
-const injuryFiltered = dedupeExercisesInDay(filterExercisesByInjury(videoFiltered, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []), profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []);
+const injuryFiltered = dedupeExercisesInDay(filterExercisesByInjury(videoFiltered, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65), profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []);
     // Filter cardio options to only show equipment the building actually has
     const buildingEquipment: string[] = profile?.buildingEquipment || [];
     // Calculate dynamic cardio minutes based on session length and remaining time
@@ -16494,7 +16506,7 @@ const isInitialLoad = React.useRef(true);
       const reEntryFiltered = userProfile?.reEntryMode ? filterGroupsForReEntry(sessionFiltered, userProfile?.effectiveLevel || userProfile?.experience || "intermediate", userProfile?.progressionPhase || "pool-rotation") : sessionFiltered;
       const equipFiltered = filterExercisesByEquipment(reEntryFiltered, userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || []);
       const videoFiltered = filterExercisesByVideo(equipFiltered);
-      const injuryFiltered = dedupeExercisesInDay(filterExercisesByInjury(videoFiltered, userProfile?.injuries || "none", userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || []), userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || []);
+      const injuryFiltered = dedupeExercisesInDay(filterExercisesByInjury(videoFiltered, userProfile?.injuries || "none", userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || [], (parseInt(String(userProfile?.age)) || 30) >= 65), userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || []);
       const dynCardio = calculateCardioMinutes(injuryFiltered, previewSessionLength);
       return injuryFiltered.map(g => ({ ...g, cardioMinutes: g.type === "cardio" ? dynCardio : g.cardioMinutes }));
     })();
