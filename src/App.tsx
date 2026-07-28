@@ -1845,14 +1845,16 @@ const generateMonth6Program = (profile: any): { programKey: string; generatedDay
     }
   }
 
-  // Equipment compatibility check
+  // Equipment compatibility check — uses the same shared, buildingEquipment-aware logic
+  // as regular program display, so Month 6+ generation can never produce an exercise the
+  // building doesn't actually have equipment for.
   const isEquipmentCompatible = (exEquipment: string, exId: string = ""): boolean => {
     if (!exEquipment) return false;
     const eq = exEquipment.toLowerCase();
     const id = exId.toLowerCase();
-    if (equipment === "bands") return eq.includes("band") || eq.includes("bodyweight") || eq.includes("resistance") || id.includes("band");
-    if (equipment === "gym") return !eq.includes("band") && !id.startsWith("band-");
-    return true;
+    if (equipment === "bands" && !(eq.includes("band") || eq.includes("bodyweight") || eq.includes("resistance") || id.includes("band"))) return false;
+    if (equipment === "gym" && (eq.includes("band") || id.startsWith("band-"))) return false;
+    return passesEquipmentCheck(eq, equipment, profile.buildingEquipment || []);
   };
 
   const isAppropriateForLevel = (ex: any, exId: string): boolean => {
@@ -6058,43 +6060,45 @@ const parseInjuryFlags = (injuryText: string): string[] => {
   return [...new Set(flags)];
 };
 
+// Shared, single source of truth for equipment compatibility — used identically by both
+// the regular display-time filter AND Month 6+ generation, so there is never a divergence
+// between what gets generated and what gets shown to the user.
+const passesEquipmentCheck = (eq: string, equipmentPreference: string, buildingEquipment: string[]): boolean => {
+  if (equipmentPreference === "bands" || equipmentPreference === "bands-only") {
+    return eq.includes("band") || eq.includes("bodyweight") || eq === "";
+  }
+  if (equipmentPreference === "bodyweight-only") {
+    return eq.includes("bodyweight") || eq === "";
+  }
+  if (equipmentPreference === "gym" || equipmentPreference === "gym-only") {
+    if (eq.includes("band") && !eq.includes("cable")) return false;
+  }
+  if (buildingEquipment.length > 0) {
+    const hasDumbbells = buildingEquipment.includes("dumbbells");
+    const hasBarbell = buildingEquipment.includes("barbell") || buildingEquipment.includes("squat-rack");
+    const hasCable = buildingEquipment.includes("cables") || buildingEquipment.includes("cable-machine");
+    const hasSmith = buildingEquipment.includes("smith-machine");
+    const hasLegPress = buildingEquipment.includes("leg-press");
+    const hasLegCurl = buildingEquipment.includes("leg-curl");
+    const hasLegExtension = buildingEquipment.includes("leg-extension");
+    const hasChestPressMachine = buildingEquipment.includes("chest-press-machine");
+    const hasSeatedRow = buildingEquipment.includes("seated-row-machine");
+    if (eq.includes("cable") && !hasCable && !hasSmith) return false;
+    if (eq.includes("smith machine") && !hasSmith && !hasBarbell) return false;
+    if (eq === "leg press machine" && !hasLegPress) return false;
+    if (eq === "leg curl machine" && !hasLegCurl) return false;
+    if (eq === "leg extension machine" && !hasLegExtension) return false;
+    if (eq === "chest press machine" && !hasChestPressMachine && !hasDumbbells) return false;
+    if (eq === "seated row machine" && !hasSeatedRow && !hasCable) return false;
+    if ((eq === "barbell") && !hasBarbell && !hasSmith) return false;
+  }
+  return true;
+};
+
 const filterExercisesByEquipment = (groups: any[], equipmentPreference: string, buildingEquipment: string[] = []): any[] => {
   if (!equipmentPreference || equipmentPreference === "gym-and-bands") {
     if (buildingEquipment.length === 0) return groups;
   }
-
-  // Check if an exercise passes equipment constraints
-  const passesEquipmentCheck = (eq: string, equipmentPreference: string, buildingEquipment: string[]): boolean => {
-    if (equipmentPreference === "bands" || equipmentPreference === "bands-only") {
-      return eq.includes("band") || eq.includes("bodyweight") || eq === "";
-    }
-    if (equipmentPreference === "bodyweight-only") {
-      return eq.includes("bodyweight") || eq === "";
-    }
-    if (equipmentPreference === "gym" || equipmentPreference === "gym-only") {
-      if (eq.includes("band") && !eq.includes("cable")) return false;
-    }
-    if (buildingEquipment.length > 0) {
-      const hasDumbbells = buildingEquipment.includes("dumbbells");
-      const hasBarbell = buildingEquipment.includes("barbell") || buildingEquipment.includes("squat-rack");
-      const hasCable = buildingEquipment.includes("cables") || buildingEquipment.includes("cable-machine");
-      const hasSmith = buildingEquipment.includes("smith-machine");
-      const hasLegPress = buildingEquipment.includes("leg-press");
-      const hasLegCurl = buildingEquipment.includes("leg-curl");
-      const hasLegExtension = buildingEquipment.includes("leg-extension");
-      const hasChestPressMachine = buildingEquipment.includes("chest-press-machine");
-      const hasSeatedRow = buildingEquipment.includes("seated-row-machine");
-      if (eq.includes("cable") && !hasCable && !hasSmith) return false;
-      if (eq.includes("smith machine") && !hasSmith && !hasBarbell) return false;
-      if (eq === "leg press machine" && !hasLegPress) return false;
-      if (eq === "leg curl machine" && !hasLegCurl) return false;
-      if (eq === "leg extension machine" && !hasLegExtension) return false;
-      if (eq === "chest press machine" && !hasChestPressMachine && !hasDumbbells) return false;
-      if (eq === "seated row machine" && !hasSeatedRow && !hasCable) return false;
-      if ((eq === "barbell") && !hasBarbell && !hasSmith) return false;
-    }
-    return true;
-  };
 
   // Find a swap for a removed exercise — same muscle group, passes equipment check, not already in workout
   const findEquipmentSwap = (removedEx: any, usedIds: Set<string>, equipmentPreference: string, buildingEquipment: string[]): any | null => {
@@ -7154,7 +7158,8 @@ const getSwapCandidates = (
   fullProgramExerciseIds: string[],  // all exercises used anywhere in the current program
   equipmentPreference: string,
   injuries: string,
-  userDifficulty: string
+  userDifficulty: string,
+  buildingEquipment: string[] = []
 ): Array<{ id: string; name: string; score: number }> => {
   const target = EXERCISES_DATA[exerciseId];
   if (!target) return [];
@@ -7164,20 +7169,13 @@ const getSwapCandidates = (
   const targetDifficulty = target.difficulty || userDifficulty || "beginner";
   const injuryList = injuries ? injuries.split(",").map(i => i.trim().toLowerCase()) : [];
 
-  // Equipment compatibility based on user preference
+  // Equipment compatibility — uses the same shared, buildingEquipment-aware logic as
+  // regular program display and Month 6+ generation, so manual swaps never suggest an
+  // exercise the building doesn't actually have equipment for.
   const isEquipmentCompatible = (exEquipment: string): boolean => {
     if (!exEquipment) return false;
     const eq = exEquipment.toLowerCase();
-    if (equipmentPreference === "bands") {
-      // Bands only — allow band, bodyweight, resistance band
-      return eq.includes("band") || eq.includes("bodyweight") || eq.includes("resistance");
-    }
-    if (equipmentPreference === "gym") {
-      // Gym only — allow machines, dumbbells, barbell, cable, bodyweight — no bands
-      return !eq.includes("band") && !eq.includes("resistance");
-    }
-    // gym-and-bands — allow everything
-    return true;
+    return passesEquipmentCheck(eq, equipmentPreference, buildingEquipment);
   };
 
   const candidates: Array<{ id: string; name: string; score: number }> = [];
@@ -8082,7 +8080,8 @@ if (showRest) {
           fullProgramExerciseIds,
           profile?.equipmentPreference || "gym-and-bands",
           profile?.injuries || "",
-          profile?.experience || "beginner"
+          profile?.experience || "beginner",
+          profile?.buildingEquipment || []
         ).slice(0, 10); // show top 10 options
 
         return (
