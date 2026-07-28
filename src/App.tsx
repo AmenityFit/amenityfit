@@ -7111,7 +7111,7 @@ const expandDayTitle = (title: string): string => {
 };
 
 // ─── Workout Exercise List Screen ─────────────────────────────────────────────
-const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage = "https://res.cloudinary.com/dk5g9itw8/image/upload/upper-body_n0f8tv", programDay = 1, programWeek = 1, isReview = false, bgPosition = "center top", equipmentPreference = "gym-and-bands", historyMeta = null as any, isInProgress = false, currentGroupIndex = 0, workoutType = "full-body", workoutDoneToday = false }) => {
+const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage = "https://res.cloudinary.com/dk5g9itw8/image/upload/upper-body_n0f8tv", programDay = 1, programWeek = 1, isReview = false, bgPosition = "center top", equipmentPreference = "gym-and-bands", historyMeta = null as any, isInProgress = false, currentGroupIndex = 0, workoutType = "full-body", workoutDoneToday = false, buildingEquipment = [] as string[] }) => {
   const groups = filteredGroups || day.groups;
   const isPureCardio = groups.every(g => g.type === "cardio");
   const totalExercises = groups.reduce((acc, g) => acc + (g.exercises?.length || 0), 0);
@@ -7247,14 +7247,12 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
                 <p style={{ color: "#1DB954", fontWeight: 700, fontSize: 15, margin: "0 0 6px" }}>Cardio: {group.cardioMinutes} minutes</p>
                 <div>
                 {(() => {
-                  const lines = (group.cardioNote || "").split("\n").filter(Boolean)
+                  // Use the same filterCardioNote function as the in-workout screen, so the
+                  // cardio options shown here (before starting) always match exactly what
+                  // the person sees mid-workout, based on the building's real equipment.
+                  const filteredNote = filterCardioNote(group.cardioNote || "", buildingEquipment);
+                  const lines = filteredNote.split("\n").filter(Boolean)
                     .filter(line => !(/^\d/.test(line) && line.toLowerCase().includes("minute")));
-                  const hasRowing = lines.some(l => l.toLowerCase().includes("rowing"));
-                  if (!hasRowing) {
-                    const ellipticalIdx = lines.findIndex(l => l.toLowerCase().includes("elliptical"));
-                    if (ellipticalIdx !== -1) lines.splice(ellipticalIdx, 0, "• Rowing Machine");
-                    else lines.push("• Rowing Machine");
-                  }
                   return lines.map((line, i) => (
                     <p key={i} style={{ color: line.startsWith("•") ? COLORS.white : COLORS.textSecondary, fontSize: 13, margin: "0 0 4px", lineHeight: 1.5 }}>{line}</p>
                   ));
@@ -9379,7 +9377,7 @@ const workoutGroups = injuryFiltered.map(group => ({
 
   if (phase === "list") {
     const pinnedImage = getWorkoutImage(workoutType, actualCompletedDay);
-    return <WorkoutListScreen day={dayWithUpdatedNotes} filteredGroups={workoutGroups} onStart={() => setPhase("active")} onBack={onBack} workoutImage={pinnedImage} programDay={actualCompletedDay} programWeek={profile?.programWeek || 1} isReview={isReview} bgPosition={workoutType === "upper-body" || workoutType === "push" ? "center top" : workoutType === "lower-body" ? "center 60%" : "center"} equipmentPreference={reviewEquipmentPreference} isInProgress={currentGroupIndex > 0 || (savedProgress?.currentGroupIndex ?? 0) > 0 || (savedProgress?.completedCells?.length ?? 0) > 0} currentGroupIndex={currentGroupIndex} workoutType={workoutType} workoutDoneToday={isReview || workoutWasDoneToday} />;
+    return <WorkoutListScreen day={dayWithUpdatedNotes} filteredGroups={workoutGroups} onStart={() => setPhase("active")} onBack={onBack} workoutImage={pinnedImage} programDay={actualCompletedDay} programWeek={profile?.programWeek || 1} isReview={isReview} bgPosition={workoutType === "upper-body" || workoutType === "push" ? "center top" : workoutType === "lower-body" ? "center 60%" : "center"} equipmentPreference={reviewEquipmentPreference} isInProgress={currentGroupIndex > 0 || (savedProgress?.currentGroupIndex ?? 0) > 0 || (savedProgress?.completedCells?.length ?? 0) > 0} currentGroupIndex={currentGroupIndex} workoutType={workoutType} workoutDoneToday={isReview || workoutWasDoneToday} buildingEquipment={profile?.buildingEquipment || []} />;
   }
 
   if (phase === "overview") {
@@ -11304,6 +11302,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
                 isReview={true}
                 bgPosition={bgPos}
                 equipmentPreference={selectedSession.equipmentPreference || profile?.equipmentPreference || "gym-and-bands"}
+                buildingEquipment={profile?.buildingEquipment || []}
                 historyMeta={{
                   completedDateStr: selectedSession.completedDateStr,
                   programLabel: selectedSession.programLabel,
@@ -11473,6 +11472,7 @@ const HistoryScreen = ({ profile, onBack, onNavigate = (s: string) => {} }) => {
         isReview={true}
         bgPosition={bgPos}
         equipmentPreference={selectedSession.equipmentPreference || profile?.equipmentPreference || "gym-and-bands"}
+        buildingEquipment={profile?.buildingEquipment || []}
         historyMeta={{
           completedDateStr: selectedSession.completedDateStr,
           programLabel: selectedSession.programLabel,
@@ -16513,7 +16513,7 @@ const isInitialLoad = React.useRef(true);
       const dynCardio = calculateCardioMinutes(injuryFiltered, previewSessionLength);
       return injuryFiltered.map(g => ({ ...g, cardioMinutes: g.type === "cardio" ? dynCardio : g.cardioMinutes }));
     })();
-    return <WorkoutListScreen day={previewDay} filteredGroups={previewFiltered} onStart={null} onBack={() => { setPreviewDay(null); setScreen("weekly"); }} programDay={previewDay.programDay} programWeek={Math.ceil((previewDay.programDay || 1) / 7)} isReview={false} workoutImage={previewImage} bgPosition={previewBgPos} equipmentPreference={userProfile?.equipmentPreference || "gym-and-bands"} />;
+    return <WorkoutListScreen day={previewDay} filteredGroups={previewFiltered} onStart={null} onBack={() => { setPreviewDay(null); setScreen("weekly"); }} programDay={previewDay.programDay} programWeek={Math.ceil((previewDay.programDay || 1) / 7)} isReview={false} workoutImage={previewImage} bgPosition={previewBgPos} equipmentPreference={userProfile?.equipmentPreference || "gym-and-bands"} buildingEquipment={userProfile?.buildingEquipment || []} />;
   }
   if (screen === "level-up") return <LevelUpScreen profile={liveProfile} onContinue={() => setScreen("dashboard")} />;
   if (screen === "badge-unlocked") return <BadgeUnlockedScreen profile={liveProfile} onContinue={() => setScreen("dashboard")} />;
