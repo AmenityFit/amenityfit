@@ -3780,7 +3780,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
   const userName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
   const sessionLength = profile.sessionLength || 45;
   const frequency = profile.frequency || 4;
-  const experience = EXPERIENCE_LABELS[profile.experience] || "Intermediate";
+  const experience = EXPERIENCE_LABELS[profile.effectiveLevel || profile.experience] || "Intermediate";
   const goal = GOAL_LABELS[profile.primaryGoal] || "General Fitness";
   const rawProgramDay = profile.programDay || 1;
   const programWeek = profile.programWeek || 1;
@@ -8567,7 +8567,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
   const currentProgramDay = workoutWasDoneToday ? Math.max(rawProgramDay - 1, 1) : rawProgramDay;
   const completedProgramDays = profile?.completedProgramDays || [];
   const lastSessionDate = profile?.lastSessionDate || "";
-  const experience = profile?.experience || "beginner";
+  const experience = profile?.effectiveLevel || profile?.experience || "beginner";
   const sessionLength = profile?.sessionLength || 45;
 
   // Reset selected day if frequency changes so stale selections don't persist
@@ -9270,7 +9270,7 @@ const getSuggestedQuestions = (profile: any): string[] => {
   const programDay = profile?.programDay || 1;
   const programKey = profile?.programKey || "";
   const workoutDoneToday = profile?.lastSessionDate === new Date().toDateString();
-  const experience = profile?.experience || "beginner";
+  const experience = profile?.effectiveLevel || profile?.experience || "beginner";
   const goal = profile?.primaryGoal || "general_fitness";
   const injuries = profile?.injuries && profile.injuries !== "none" ? profile.injuries : null;
   const gender = profile?.gender || "prefer_not";
@@ -9425,7 +9425,7 @@ const buildSystemPrompt = (profile: any) => {
   const secondaryGoal = profile?.secondaryGoal ? ` and ${
     { fat_loss: "fat loss", muscle_gain: "muscle gain", general_fitness: "general fitness" }[profile.secondaryGoal] || profile.secondaryGoal
   }` : "";
-  const experience = profile?.experience || "beginner";
+  const experience = profile?.effectiveLevel || profile?.experience || "beginner";
   const frequency = profile?.frequency || 3;
   const sessionLength = profile?.sessionLength || 45;
   const age = profile?.age ? `${profile.age} years old` : "age not specified";
