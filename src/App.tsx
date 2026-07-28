@@ -4035,7 +4035,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
       <div style={{ flex: 1, padding: "16px 24px 80px", overflowY: "auto" }}>
 
         {/* Today's Workout */}
-        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={currentDay?.focus} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
+        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={currentDay?.focus} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
 
         {/* View Full Week link */}
         <button onClick={onViewWeekly} style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20, marginTop: -8 }}>
@@ -6883,7 +6883,12 @@ const filterGroupsForReEntry = (groups: any[], effectiveLevel: string, progressi
   return [...selectedGroups, ...cardioGroups];
 };
 
-const filterGroupsForSessionLength = (groups: any[], sessionLength: number) => {
+const filterGroupsForSessionLength = (groups: any[], sessionLength: number, experience: string = "intermediate") => {
+  // Beginners get slightly fewer exercises per session (more coaching-cue time and rest
+  // per movement while building form); advanced trainees get slightly more (they move more
+  // efficiently and can handle more variety in the same window). Intermediate keeps the
+  // original default caps unchanged.
+  const levelDelta = experience === "beginner" ? -1 : experience === "advanced" ? 1 : 0;
   const exerciseGroups = groups.filter(g => g.type !== "cardio");
   const cardioGroups = groups.filter(g => g.type === "cardio");
   const dayFocus = getDayFocus(groups);
@@ -6950,15 +6955,15 @@ const filterGroupsForSessionLength = (groups: any[], sessionLength: number) => {
     // 45 min: max 6 exercises + 1 abs group (or cardio instead of abs on cardio days)
     // If cardio is in the program, cap main exercises at 4-5 to leave room for cardio
     const hasCardio = cardioGroups.length > 0;
-    const mainExCap = hasCardio ? 4 : 6;
+    const mainExCap = (hasCardio ? 4 : 6) + levelDelta;
     let selected = selectUpToExCount(scored, mainExCap, true);
     if (absGroups[0] && !hasCardio) selected.push(absGroups[0]);
     if (hasCardio) selected.push(...cardioGroups);
     return selected;
   }
 
-  // 30 min: max 4 exercises total, no abs, no cardio
-  const selected = selectUpToExCount(scored, 4, true);
+  // 30 min: max 4 exercises total (adjusted by level), no abs, no cardio
+  const selected = selectUpToExCount(scored, 4 + levelDelta, true);
   // For circuits at 30 min: reduce to 2 rounds by updating label and notes
   return selected.map((group: any) => {
     if (group.restBetweenSets !== "None") return group;
@@ -9255,7 +9260,7 @@ const savedCompletedCellsRef = React.useRef<string[]>(savedProgress?.completedCe
 
   const rawGroups = (isReview && snapshotGroups && snapshotGroups.length > 0)
     ? snapshotGroups
-    : filterGroupsForSessionLength(day.groups, sessionLength);
+    : filterGroupsForSessionLength(day.groups, sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate");
   // If session is 30min and has circuit groups, update day notes to reflect 2 rounds
   const dayWithUpdatedNotes = React.useMemo(() => {
     if (sessionLength >= 45 || isReview) return day;
@@ -16517,7 +16522,7 @@ const isInitialLoad = React.useRef(true);
     const previewBgPos = previewType === "lower-body" ? "center 60%" : previewType === "upper-body" || previewType === "push" ? "center top" : "center";
     const previewSessionLength = userProfile?.sessionLength || 60;
     const previewFiltered = (() => {
-      const sessionFiltered = filterGroupsForSessionLength(previewDay.groups || [], previewSessionLength);
+      const sessionFiltered = filterGroupsForSessionLength(previewDay.groups || [], previewSessionLength, userProfile?.effectiveLevel || userProfile?.experience || "intermediate");
       const reEntryFiltered = userProfile?.reEntryMode ? filterGroupsForReEntry(sessionFiltered, userProfile?.effectiveLevel || userProfile?.experience || "intermediate", userProfile?.progressionPhase || "pool-rotation") : sessionFiltered;
       const equipFiltered = filterExercisesByEquipment(reEntryFiltered, userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || []);
       const videoFiltered = filterExercisesByVideo(equipFiltered);
