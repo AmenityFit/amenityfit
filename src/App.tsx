@@ -42,6 +42,7 @@ import {
   Sprout,
   BarChart2,
   Trophy,
+  Crown,
   Calendar,
   Clock,
   User,
