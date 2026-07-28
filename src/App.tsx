@@ -2473,6 +2473,7 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
         progressionPhase: "pool-rotation",
         exposureCyclesCompleted: 0,
         programSwaps: {},
+        levelTransition: true,
       },
     };
   }
