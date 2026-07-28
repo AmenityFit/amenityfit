@@ -2351,8 +2351,10 @@ const pools: Record<string, string[]> = {
     "senior-virtue-and-patience", "senior-winners-delight",
   ],
   // SENIOR INTERMEDIATE
-  "senior-intermediate-gym": ["senior-intermediate-3x", "senior-intermediate-4x"],
-  "senior-intermediate-gym-and-bands": ["senior-intermediate-3x", "senior-intermediate-4x"],
+  "senior-intermediate-gym": ["senior-intermediate-3x", "senior-intermediate-4x", "senior-intermediate-5x", "senior-intermediate-6x"],
+  "senior-intermediate-gym-and-bands": ["senior-intermediate-3x", "senior-intermediate-4x", "senior-intermediate-5x", "senior-intermediate-6x"],
+  "senior-advanced-gym": ["senior-advanced-3x", "senior-advanced-4x", "senior-advanced-5x", "senior-advanced-6x"],
+  "senior-advanced-gym-and-bands": ["senior-advanced-3x", "senior-advanced-4x", "senior-advanced-5x", "senior-advanced-6x"],
 };
 const generateAIProgram = async (profile: any): Promise<{ programKey: string; profileUpdates?: any; generatedDays?: any[] }> => {
   // ── Cycle setup ───────────────────────────────────────────────────────────
