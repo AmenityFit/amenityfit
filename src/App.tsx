@@ -2995,7 +2995,7 @@ const getEvolvedProgramName = (programKey: string): string => {
 };
 
 const getMasteryBadge = (cycleNumber: number) => {
-  if (cycleNumber >= 15) return { label: "Platinum", icon: "trophy", color: "#FFFFFF", bg: "rgba(255,255,255,0.1)", border: "rgba(255,255,255,0.5)" };
+  if (cycleNumber >= 15) return { label: "Platinum", icon: "crown", color: "#FFFFFF", bg: "rgba(255,255,255,0.1)", border: "rgba(255,255,255,0.5)" };
   if (cycleNumber >= 10) return { label: "Gold", icon: "trophy", color: "#FFD166", bg: "rgba(255,209,102,0.15)", border: "rgba(255,209,102,0.45)" };
   if (cycleNumber >= 6) return { label: "Silver", icon: "shield", color: "#A8B8CC", bg: "rgba(140,160,185,0.15)", border: "rgba(140,160,185,0.45)" };
   if (cycleNumber >= 3) return { label: "Bronze", icon: "flame", color: "#E8A87C", bg: "rgba(232,168,124,0.15)", border: "rgba(232,168,124,0.4)" };
