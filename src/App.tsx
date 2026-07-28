@@ -2777,6 +2777,112 @@ const LevelUpScreen = ({ profile, onContinue }) => {
   );
 };
 
+const BADGE_ICON_MAP: Record<string, any> = { crown: Crown, trophy: Trophy, shield: Shield, flame: Flame };
+
+const BadgeUnlockedScreen = ({ profile, onContinue }) => {
+  const badge = getMasteryBadge(profile.cycleNumber || 1);
+  const BadgeIcon = BADGE_ICON_MAP[badge?.icon || "flame"] || Flame;
+  const badgeColor = badge?.color || COLORS.accent;
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 100);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div style={{
+      minHeight: "100vh", background: COLORS.background,
+      fontFamily: "'Inter', sans-serif", display: "flex",
+      flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
+      padding: "48px 28px 40px", textAlign: "center", overflowY: "auto",
+    }}>
+      <div style={{
+        width: 90, height: 90, borderRadius: 99, marginBottom: 20,
+        background: `${badgeColor}18`,
+        border: `2px solid ${badgeColor}50`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: `0 0 48px ${badgeColor}25`,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "scale(1)" : "scale(0.85)",
+        transition: "all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)",
+      }}>
+        <BadgeIcon size={40} color={badgeColor} strokeWidth={1.5} />
+      </div>
+
+      <div style={{
+        display: "inline-flex", alignItems: "center",
+        background: `${badgeColor}18`, borderRadius: 99,
+        padding: "4px 14px", marginBottom: 14,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(10px)",
+        transition: "all 0.5s ease 0.2s",
+      }}>
+        <span style={{ color: badgeColor, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
+          Badge Unlocked
+        </span>
+      </div>
+
+      <h1 style={{
+        color: COLORS.white, fontSize: 38, fontWeight: 900,
+        margin: "0 0 10px", letterSpacing: -1, lineHeight: 1.05,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(10px)",
+        transition: "all 0.5s ease 0.3s",
+      }}>
+        {badge?.label || "Bronze"}
+      </h1>
+
+      <p style={{
+        color: COLORS.textSecondary, fontSize: 15, lineHeight: 1.65,
+        margin: "0 0 36px", maxWidth: 280,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(10px)",
+        transition: "all 0.5s ease 0.4s",
+      }}>
+        You have completed {profile.cycleNumber || 1} full cycles. This one is not about how hard the workouts were. It is about showing up, cycle after cycle. That consistency is rare, and it is the whole game.
+      </p>
+
+      <div style={{
+        display: "flex", gap: 10, width: "100%", marginBottom: 32,
+        opacity: visible ? 1 : 0,
+        transition: "all 0.5s ease 0.5s",
+      }}>
+        {[
+          { label: "Cycles", value: String(profile.cycleNumber || 1), color: badgeColor },
+          { label: "Sessions", value: String(profile.sessionsCompleted || 0), color: COLORS.success },
+          { label: "Streak", value: String(profile.streak || 0), color: COLORS.primary },
+        ].map((stat, i) => (
+          <div key={i} style={{
+            flex: 1, background: COLORS.card, borderRadius: 16,
+            padding: "18px 8px", border: `1px solid ${COLORS.border}`,
+            textAlign: "center",
+          }}>
+            <p style={{ color: stat.color, fontSize: 26, fontWeight: 900, margin: "0 0 5px", letterSpacing: -0.5 }}>{stat.value}</p>
+            <p style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, margin: 0, lineHeight: 1.3 }}>{stat.label}</p>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={onContinue}
+        style={{
+          width: "100%", padding: "18px", borderRadius: 16, border: "none",
+          background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`,
+          color: COLORS.white, fontSize: 16, fontWeight: 800,
+          cursor: "pointer", letterSpacing: 0.3,
+          boxShadow: `0 8px 32px ${COLORS.primary}50`,
+          opacity: visible ? 1 : 0,
+          transform: visible ? "translateY(0)" : "translateY(10px)",
+          transition: "all 0.5s ease 0.6s",
+        }}
+      >
+        Keep Going
+      </button>
+    </div>
+  );
+};
+
 // ─── Cycle Complete Screen ────────────────────────────────────────────────────
 const CycleCompleteScreen = ({ profile, onStartNewCycle }) => {
   const [phase, setPhase] = useState<"celebrate" | "ready">("celebrate");
@@ -3000,6 +3106,12 @@ const getMasteryBadge = (cycleNumber: number) => {
   if (cycleNumber >= 6) return { label: "Silver", icon: "shield", color: "#A8B8CC", bg: "rgba(140,160,185,0.15)", border: "rgba(140,160,185,0.45)" };
   if (cycleNumber >= 3) return { label: "Bronze", icon: "flame", color: "#E8A87C", bg: "rgba(232,168,124,0.15)", border: "rgba(232,168,124,0.4)" };
   return null;
+};
+
+const getMasteryBadgeExplainer = (badgeLabel: string): string => {
+  const thresholds: Record<string, number> = { Bronze: 3, Silver: 6, Gold: 10, Platinum: 15 };
+  const n = thresholds[badgeLabel] || 3;
+  return `${badgeLabel}. Earned by completing ${n} full program cycles. This tracks consistency, not skill level.`;
 };
 
 const WelcomeBackScreen = ({ profile, onContinue }) => {
@@ -3735,6 +3847,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [showBadgeInfo, setShowBadgeInfo] = useState(false);
 
   React.useEffect(() => {
     if (!profile?.uid) return;
@@ -3809,7 +3922,18 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
           <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 4px", fontWeight: 500 }}>{getGreeting()}</p>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <h1 style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.8 }}>{userName || "Athlete"}</h1>
-              {(() => { const b = getMasteryBadge(profile?.cycleNumber || 1); return b ? <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.1, textTransform: "uppercase", color: b.color, background: b.bg, border: `1px solid ${b.border}`, borderRadius: 99, padding: "3px 10px 3px 7px", display: "inline-flex", alignItems: "center", gap: 5, opacity: reEntryMode ? 0.4 : 1, transition: "opacity 0.4s ease" }}>{b.icon === "crown" ? <Crown size={11} color={b.color} strokeWidth={2} /> : b.icon === "trophy" ? <Trophy size={11} color={b.color} strokeWidth={2} /> : b.icon === "shield" ? <Shield size={11} color={b.color} strokeWidth={2} /> : <Flame size={11} color={b.color} strokeWidth={2} />}{b.label}</span> : null; })()}
+              {(() => { const b = getMasteryBadge(profile?.cycleNumber || 1); return b ? (
+                <span style={{ display: "inline-flex", flexDirection: "column" as const, alignItems: "flex-end" }}>
+                  <span onClick={() => setShowBadgeInfo(v => !v)} style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.1, textTransform: "uppercase", color: b.color, background: b.bg, border: `1px solid ${b.border}`, borderRadius: 99, padding: "3px 10px 3px 7px", display: "inline-flex", alignItems: "center", gap: 5, opacity: reEntryMode ? 0.4 : 1, transition: "opacity 0.4s ease", cursor: "pointer" }}>
+                    {b.icon === "crown" ? <Crown size={11} color={b.color} strokeWidth={2} /> : b.icon === "trophy" ? <Trophy size={11} color={b.color} strokeWidth={2} /> : b.icon === "shield" ? <Shield size={11} color={b.color} strokeWidth={2} /> : <Flame size={11} color={b.color} strokeWidth={2} />}{b.label}
+                  </span>
+                  {showBadgeInfo && (
+                    <span style={{ color: COLORS.textSecondary, fontSize: 11, lineHeight: 1.4, marginTop: 6, maxWidth: 160, textAlign: "right" as const }}>
+                      {getMasteryBadgeExplainer(b.label)}
+                    </span>
+                  )}
+                </span>
+              ) : null; })()}
             </div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
@@ -16168,7 +16292,24 @@ const isInitialLoad = React.useRef(true);
     if (progressionUpdates.levelTransition) {
       setScreen("level-up");
     } else {
-      setScreen("dashboard");
+      // Detect if this cycle completion crossed into a new mastery badge tier
+      // (Bronze/Silver/Gold/Platinum) — celebrate the moment rather than let
+      // it silently update in the background.
+      const oldBadge = getMasteryBadge(currentCycle);
+      const newBadge = getMasteryBadge(currentCycle + 1);
+      if (newBadge && newBadge.label !== oldBadge?.label) {
+        setScreen("badge-unlocked");
+        if (uid) {
+          addDoc(collection(db, "users", uid, "notifications"), {
+            type: "badge-unlocked",
+            message: `${newBadge.label} unlocked. ${currentCycle + 1} cycles complete and still showing up.`,
+            read: false,
+            createdAt: serverTimestamp(),
+          }).catch(e => console.error("Failed to save badge notification:", e));
+        }
+      } else {
+        setScreen("dashboard");
+      }
     }
   };
 
@@ -16357,6 +16498,7 @@ const isInitialLoad = React.useRef(true);
     return <WorkoutListScreen day={previewDay} filteredGroups={previewFiltered} onStart={null} onBack={() => { setPreviewDay(null); setScreen("weekly"); }} programDay={previewDay.programDay} programWeek={Math.ceil((previewDay.programDay || 1) / 7)} isReview={false} workoutImage={previewImage} bgPosition={previewBgPos} equipmentPreference={userProfile?.equipmentPreference || "gym-and-bands"} />;
   }
   if (screen === "level-up") return <LevelUpScreen profile={liveProfile} onContinue={() => setScreen("dashboard")} />;
+  if (screen === "badge-unlocked") return <BadgeUnlockedScreen profile={liveProfile} onContinue={() => setScreen("dashboard")} />;
   if (screen === "welcome-back") return <WelcomeBackScreen profile={liveProfile} onContinue={() => setScreen("dashboard")} />;
   if (screen === "re-entry-complete") return (
     <div style={{ minHeight: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 28px 40px", textAlign: "center" }}>
