@@ -7527,6 +7527,84 @@ const [pendingWeightGroup, setPendingWeightGroup] = useState<any>(null);
 const [sessionWeights, setSessionWeights] = useState<Record<string, number>>({});
 const [wheelValues, setWheelValues] = useState<Record<string, number>>({});
 
+  const isMetric = !!(profile?.heightCm || profile?.weightKg);
+
+  const getWeightOptions = (category: string): (string | number)[] => {
+    if (category === "bodyweight") return [];
+    if (category === "medicineball") return isMetric
+      ? [2, 3, 4, 5, 6, 8, 10, 12, 15, 20]
+      : [4, 6, 8, 10, 12, 15, 20, 25, 30, 35, 40, 50];
+    if (category === "band") return ["Light Band", "Medium Band", "Heavy Band", "X-Heavy Band"];
+    if (category === "kettlebell") return [8,12,16,20,24,28,32,36,40,44,48];
+    if (category === "dumbbell") {
+      if (isMetric) {
+        const opts: number[] = [];
+        for (let w = 1; w <= 90; w = Math.round((w + 1) * 10) / 10) opts.push(w);
+        return opts;
+      }
+      const opts: number[] = [];
+      for (let w = 2.5; w <= 200; w = Math.round((w + 2.5) * 10) / 10) opts.push(w);
+      return opts;
+    }
+    if (category === "ezbar") {
+      if (isMetric) {
+        const opts: number[] = []; for (let w = 5; w <= 70; w += 2.5) opts.push(Math.round(w * 10) / 10); return opts;
+      }
+      const opts: number[] = [];
+      for (let w = 15; w <= 150; w += 5) opts.push(w);
+      return opts;
+    }
+    if (category === "barbell") {
+      if (isMetric) {
+        const opts: number[] = []; for (let w = 20; w <= 270; w += 2.5) opts.push(Math.round(w * 10) / 10); return opts;
+      }
+      const opts: number[] = [];
+      for (let w = 45; w <= 600; w += 5) opts.push(w);
+      return opts;
+    }
+    if (category === "legpress") {
+      if (isMetric) {
+        const opts: number[] = []; for (let w = 20; w <= 400; w += 5) opts.push(w); return opts;
+      }
+      const opts: number[] = [];
+      for (let w = 50; w <= 900; w += 10) opts.push(w);
+      return opts;
+    }
+    if (category === "cable") {
+      if (isMetric) {
+        const opts: number[] = []; for (let w = 2.5; w <= 135; w += 2.5) opts.push(Math.round(w * 10) / 10); return opts;
+      }
+      const opts: number[] = [];
+      for (let w = 5; w <= 300; w += 5) opts.push(w);
+      return opts;
+    }
+    return [];
+  };
+
+  const formatWeightLabel = React.useCallback((w: string | number, category: string): string => {
+    if (category === "band") return w as string;
+    if (category === "kettlebell") return `${w} kg`;
+    if (category === "medicineball") return isMetric ? `${w} kg ball` : `${w} lb ball`;
+    return isMetric ? `${w} kg` : `${w} lbs`;
+  }, [isMetric]);
+
+  // Memoize weight options per category so WheelPickerScroll's React.memo can
+  // actually skip re-rendering pickers the user isn't touching. Without this,
+  // a brand-new options array was built on every render for every exercise,
+  // defeating memo and causing the whole list to flicker on every scroll commit.
+  const weightOptionsByCategory = React.useMemo(() => {
+    const categories = ["bodyweight", "medicineball", "band", "kettlebell", "dumbbell", "ezbar", "barbell", "legpress", "cable"];
+    const map: Record<string, (string | number)[]> = {};
+    categories.forEach(cat => { map[cat] = getWeightOptions(cat); });
+    return map;
+  }, [isMetric]);
+
+  // Stable handler so WheelPickerScroll's onChange prop never changes identity
+  // between renders (same reason as above).
+  const handleWeightChange = React.useCallback((exId: string, val: string | number) => {
+    setWheelValues(prev => ({ ...prev, [exId]: val }));
+  }, []);
+
 const weightOptions = (() => {
   const opts: number[] = [0];
   for (let w = 2.5; w <= 50; w += 2.5) opts.push(w);
@@ -7878,7 +7956,6 @@ if (showWeightLogger && pendingWeightGroup) {
     return muscle !== "cardio";
   }) || [];
   const itemHeight = 44;
-  const isMetric = !!(profile?.heightCm || profile?.weightKg);
 
   const BODYWEIGHT_ONLY_IDS = new Set([
     "pronated-inverted-row", "supinated-inverted-row", "towel-grip-inverted-row",
@@ -7918,82 +7995,6 @@ if (showWeightLogger && pendingWeightGroup) {
     if (["band","resistanceband"].some(x => e.includes(x))) return "band";
     return "bodyweight";
   };
-
-  const getWeightOptions = (category: string): (string | number)[] => {
-    if (category === "bodyweight") return [];
-    if (category === "medicineball") return isMetric
-      ? [2, 3, 4, 5, 6, 8, 10, 12, 15, 20]
-      : [4, 6, 8, 10, 12, 15, 20, 25, 30, 35, 40, 50];
-    if (category === "band") return ["Light Band", "Medium Band", "Heavy Band", "X-Heavy Band"];
-    if (category === "kettlebell") return [8,12,16,20,24,28,32,36,40,44,48];
-    if (category === "dumbbell") {
-      if (isMetric) {
-        const opts: number[] = [];
-        for (let w = 1; w <= 90; w = Math.round((w + 1) * 10) / 10) opts.push(w);
-        return opts;
-      }
-      const opts: number[] = [];
-      for (let w = 2.5; w <= 200; w = Math.round((w + 2.5) * 10) / 10) opts.push(w);
-      return opts;
-    }
-    if (category === "ezbar") {
-      if (isMetric) {
-        const opts: number[] = []; for (let w = 5; w <= 70; w += 2.5) opts.push(Math.round(w * 10) / 10); return opts;
-      }
-      const opts: number[] = [];
-      for (let w = 15; w <= 150; w += 5) opts.push(w);
-      return opts;
-    }
-    if (category === "barbell") {
-      if (isMetric) {
-        const opts: number[] = []; for (let w = 20; w <= 270; w += 2.5) opts.push(Math.round(w * 10) / 10); return opts;
-      }
-      const opts: number[] = [];
-      for (let w = 45; w <= 600; w += 5) opts.push(w);
-      return opts;
-    }
-    if (category === "legpress") {
-      if (isMetric) {
-        const opts: number[] = []; for (let w = 20; w <= 400; w += 5) opts.push(w); return opts;
-      }
-      const opts: number[] = [];
-      for (let w = 50; w <= 900; w += 10) opts.push(w);
-      return opts;
-    }
-    if (category === "cable") {
-      if (isMetric) {
-        const opts: number[] = []; for (let w = 2.5; w <= 135; w += 2.5) opts.push(Math.round(w * 10) / 10); return opts;
-      }
-      const opts: number[] = [];
-      for (let w = 5; w <= 300; w += 5) opts.push(w);
-      return opts;
-    }
-    return [];
-  };
-
-  const formatWeightLabel = React.useCallback((w: string | number, category: string): string => {
-    if (category === "band") return w as string;
-    if (category === "kettlebell") return `${w} kg`;
-    if (category === "medicineball") return isMetric ? `${w} kg ball` : `${w} lb ball`;
-    return isMetric ? `${w} kg` : `${w} lbs`;
-  }, [isMetric]);
-
-  // Memoize weight options per category so WheelPickerScroll's React.memo can
-  // actually skip re-rendering pickers the user isn't touching. Without this,
-  // a brand-new options array was built on every render for every exercise,
-  // defeating memo and causing the whole list to flicker on every scroll commit.
-  const weightOptionsByCategory = React.useMemo(() => {
-    const categories = ["bodyweight", "medicineball", "band", "kettlebell", "dumbbell", "ezbar", "barbell", "legpress", "cable"];
-    const map: Record<string, (string | number)[]> = {};
-    categories.forEach(cat => { map[cat] = getWeightOptions(cat); });
-    return map;
-  }, [isMetric]);
-
-  // Stable handler so WheelPickerScroll's onChange prop never changes identity
-  // between renders (same reason as above).
-  const handleWeightChange = React.useCallback((exId: string, val: string | number) => {
-    setWheelValues(prev => ({ ...prev, [exId]: val }));
-  }, []);
 
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
