@@ -8655,6 +8655,29 @@ const getWorkoutTypeForProgramDay = (
     }
   }
 
+  // Any other program with generatedDays (e.g. frequency-adapted via adaptProgramToFrequency,
+  // which already bakes in the correct rest days for the chosen frequency) — read directly by
+  // day index, using the exact same lookup getProgramDay uses for the real workout screen.
+  // Without this, the weekly calendar could show a title or content pulled from the static,
+  // un-adapted PROGRAMS entry instead, mismatching what the person actually sees once they
+  // open that day.
+  if (!programKey?.startsWith("month6-") && generatedDays && generatedDays.length > 0) {
+    const idx = (programDay - 1) % generatedDays.length;
+    const day = generatedDays[idx];
+    if (day) {
+      if (day.isRest) {
+        return { type: "rest", label: "Rest Day", focus: "Recovery", isRest: true, groups: [] };
+      }
+      return {
+        type: day.type || "full-body",
+        label: expandDayTitle(day.title || day.focus || "Workout"),
+        focus: day.focus || "Workout",
+        isRest: false,
+        groups: day.groups || [],
+      };
+    }
+  }
+
   // If we have a program key, read directly from the program data
   if (programKey && PROGRAMS[programKey]) {
     const program = PROGRAMS[programKey];
