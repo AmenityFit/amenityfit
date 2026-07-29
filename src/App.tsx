@@ -8729,7 +8729,9 @@ const getWeekSchedule = (
   injuries?: string,
   equipmentPreference?: string,
   buildingEquipment?: string[],
-  age?: number
+  age?: number,
+  sessionLength?: number,
+  experience?: string
 ) => {
   const isSenior = (age || 30) >= 65;
   const today = todayOverride || new Date();
@@ -8745,7 +8747,14 @@ const getWeekSchedule = (
     const workout = getWorkoutTypeForProgramDay(programDay, frequency, date.getDay(), programKey, generatedDays);
     // Apply filters so weekly titles match actual workout content
     if (workout && !workout.isRest && workout.groups?.length > 0) {
-      const _eq = filterExercisesByEquipment(workout.groups, equipmentPreference || "gym-and-bands", buildingEquipment || []);
+      // Session length must be filtered FIRST, matching the exact order used by the real
+      // per-day workout screen — this is what can drop groups entirely (e.g. abs is dropped
+      // whenever cardio is present at shorter durations). Without this step here, the weekly
+      // list's title could show a group (like "Abs") that never actually appears once the
+      // person opens the day, since that drop only happened downstream, not in this title
+      // computation.
+      const _sess = filterGroupsForSessionLength(workout.groups, sessionLength || 60, experience || "intermediate");
+      const _eq = filterExercisesByEquipment(_sess, equipmentPreference || "gym-and-bands", buildingEquipment || []);
       const _vid = filterExercisesByVideo(_eq);
       const _inj = (injuries && injuries !== "none") || isSenior ? filterExercisesByInjury(_vid, injuries || "none", equipmentPreference || "gym-and-bands", buildingEquipment || [], isSenior) : _vid;
       workout.groups = dedupeExercisesInDay(_inj, equipmentPreference || "gym-and-bands", buildingEquipment || []);
@@ -8853,7 +8862,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
   }, [frequency]);
 
   const todayLocal = React.useMemo(() => new Date(), []);
-  const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment, parseInt(String(profile?.age)) || 30);
+  const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment, parseInt(String(profile?.age)) || 30, profile?.sessionLength || 60, profile?.effectiveLevel || profile?.experience || "intermediate");
   if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onBack={() => setScreen("dashboard")} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={() => handleWorkoutComplete({ groups: [], sessionLength: 0 })} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
 
   const todayDay = weekDays.find((d: any) => d.isToday) ?? null;
