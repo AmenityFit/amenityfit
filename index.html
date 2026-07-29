@@ -6,6 +6,11 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>amenityfit</title>
+    <!-- Preload the splash-screen logo so the browser starts fetching it
+         immediately in parallel with the JS bundle, instead of waiting for
+         React to render and request it. This is currently ~58% of Largest
+         Contentful Paint time per Lighthouse. -->
+    <link rel="preload" as="image" href="https://res.cloudinary.com/dk5g9itw8/image/upload/Logo_rkq0cv" fetchpriority="high" />
   </head>
   <body>
     <div id="root"></div>
