@@ -13297,6 +13297,14 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                 <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>Active Users</p>
               </div>
             </div>
+            {/* Portfolio-wide live presence */}
+            <div style={{ background: totalLiveNow > 0 ? `${COLORS.success}12` : COLORS.card, borderRadius: 16, padding: "14px 16px", border: `1px solid ${totalLiveNow > 0 ? COLORS.success + "40" : COLORS.border}`, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 99, background: totalLiveNow > 0 ? COLORS.success : COLORS.border, boxShadow: totalLiveNow > 0 ? `0 0 8px ${COLORS.success}` : "none" }} />
+              <p style={{ color: totalLiveNow > 0 ? COLORS.success : COLORS.textSecondary, fontSize: 13, fontWeight: 700, margin: 0 }}>
+                {totalLiveNow > 0 ? `${totalLiveNow} active across your portfolio right now` : "Nobody active across your portfolio right now"}
+              </p>
+            </div>
+
             <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
               <div style={{ flex: 1, background: COLORS.card, borderRadius: 16, padding: "16px 14px", border: `1px solid ${COLORS.border}` }}>
                 <p style={{ color: "#FF6B35", fontSize: 24, fontWeight: 900, margin: "0 0 4px" }}>{totalWorkouts.toLocaleString()}</p>
