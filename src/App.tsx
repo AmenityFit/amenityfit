@@ -7776,7 +7776,7 @@ const handleRestDone = () => {
 
 
 
-const WheelPickerScroll = React.memo(({ options, selected, itemHeight, formatLabel, onChange }: any) => {
+const WheelPickerScroll = React.memo(({ options, selected, itemHeight, category, exId, formatLabel, onChange }: any) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const commitTimeout = React.useRef<any>(null);
 
@@ -7814,7 +7814,7 @@ const WheelPickerScroll = React.memo(({ options, selected, itemHeight, formatLab
     // has actually settled, instead of on every scroll frame.
     if (commitTimeout.current) clearTimeout(commitTimeout.current);
     commitTimeout.current = setTimeout(() => {
-      if (options[clamped] !== selected) onChange(options[clamped]);
+      if (options[clamped] !== selected) onChange(exId, options[clamped]);
     }, 120);
   };
 
@@ -7851,7 +7851,7 @@ const WheelPickerScroll = React.memo(({ options, selected, itemHeight, formatLab
             if (el) el.scrollTo({ top: i * itemHeight, behavior: "smooth" });
             setLocalIdx(i);
             if (commitTimeout.current) clearTimeout(commitTimeout.current);
-            onChange(opt);
+            onChange(exId, opt);
           }}
         >
           <span style={{
@@ -7860,7 +7860,7 @@ const WheelPickerScroll = React.memo(({ options, selected, itemHeight, formatLab
             fontWeight: i === localIdx ? 700 : 400,
             fontFamily: "'Inter', sans-serif",
           }}>
-            {formatLabel(opt)}
+            {formatLabel(opt, category)}
           </span>
         </div>
       ))}
@@ -7971,12 +7971,29 @@ if (showWeightLogger && pendingWeightGroup) {
     return [];
   };
 
-  const formatWeightLabel = (w: string | number, category: string): string => {
+  const formatWeightLabel = React.useCallback((w: string | number, category: string): string => {
     if (category === "band") return w as string;
     if (category === "kettlebell") return `${w} kg`;
     if (category === "medicineball") return isMetric ? `${w} kg ball` : `${w} lb ball`;
     return isMetric ? `${w} kg` : `${w} lbs`;
-  };
+  }, [isMetric]);
+
+  // Memoize weight options per category so WheelPickerScroll's React.memo can
+  // actually skip re-rendering pickers the user isn't touching. Without this,
+  // a brand-new options array was built on every render for every exercise,
+  // defeating memo and causing the whole list to flicker on every scroll commit.
+  const weightOptionsByCategory = React.useMemo(() => {
+    const categories = ["bodyweight", "medicineball", "band", "kettlebell", "dumbbell", "ezbar", "barbell", "legpress", "cable"];
+    const map: Record<string, (string | number)[]> = {};
+    categories.forEach(cat => { map[cat] = getWeightOptions(cat); });
+    return map;
+  }, [isMetric]);
+
+  // Stable handler so WheelPickerScroll's onChange prop never changes identity
+  // between renders (same reason as above).
+  const handleWeightChange = React.useCallback((exId: string, val: string | number) => {
+    setWheelValues(prev => ({ ...prev, [exId]: val }));
+  }, []);
 
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
@@ -7990,7 +8007,7 @@ if (showWeightLogger && pendingWeightGroup) {
         {strengthExes.map((ex: any) => {
           const exData = (EXERCISES_DATA as any)[ex.id];
           const category = getEquipmentCategory(exData?.equipment || "", ex.id);
-          const options = getWeightOptions(category);
+          const options = weightOptionsByCategory[category];
           const defaultVal = isMetric
             ? (category === "dumbbell" ? 10 : category === "barbell" ? 60 : category === "ezbar" ? 20 : category === "cable" ? 17.5 : category === "legpress" ? 45 : category === "kettlebell" ? 16 : category === "medicineball" ? 6 : options[0])
             : (category === "dumbbell" ? 25 : category === "barbell" ? 135 : category === "ezbar" ? 45 : category === "cable" ? 40 : category === "legpress" ? 100 : category === "kettlebell" ? 16 : category === "medicineball" ? 15 : options[0]);
@@ -8025,8 +8042,10 @@ if (showWeightLogger && pendingWeightGroup) {
                   options={options}
                   selected={wheelValues[ex.id] ?? options[0]}
                   itemHeight={itemHeight}
-                  formatLabel={(w) => formatWeightLabel(w, category)}
-                  onChange={(val) => setWheelValues(prev => ({ ...prev, [ex.id]: val }))}
+                  category={category}
+                  exId={ex.id}
+                  formatLabel={formatWeightLabel}
+                  onChange={handleWeightChange}
                 />
               </div>
             </div>
