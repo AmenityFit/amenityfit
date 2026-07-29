@@ -7733,7 +7733,14 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
       // This avoids any race condition with session-doc creation timing -
       // setDoc with merge:true creates the doc if missing or merges into it if present.
       const targetSessionId = sessionId || `${profile.uid}_${today}`;
-      await setDoc(doc(db, "workoutSessions", targetSessionId), { weightsLogged: validWeights }, { merge: true });
+      // Use dot-notation field paths (updateMap) rather than a nested object
+      // literal here. Firestore's merge:true only preserves fields you don't
+      // explicitly touch - assigning a whole object to weightsLogged replaces
+      // the entire map, silently wiping any exercises logged by an earlier
+      // group in the same workout. Dot-path keys merge each exercise in
+      // individually, so every group's save accumulates instead of clobbering
+      // the previous one.
+      await setDoc(doc(db, "workoutSessions", targetSessionId), updateMap, { merge: true });
     }
   } catch (e) {
     console.error("Failed to write weights to session:", e);
@@ -9290,11 +9297,17 @@ const WorkoutFlow = ({ profile, onComplete, onBack, onGoHomeSave, onProfileUpdat
     const today = new Date().toISOString().split("T")[0];
     const id = `${profile.uid}_${today}`;
     activeSessionIdRef.current = id;
+    // Note: weightsLogged is deliberately NOT initialized here. If this effect
+    // re-runs on a remount mid-workout (e.g. between exercise groups), writing
+    // weightsLogged as a full object - even an empty one - would replace the
+    // whole map and wipe out anything already saved by an earlier group. The
+    // first real per-exercise save (see saveWeightsToFirestore) creates this
+    // field itself via dot-notation paths, and merge:true creates the
+    // document if it doesn't exist yet, so this isn't needed.
     setDoc(doc(db, "workoutSessions", id), {
       uid: profile.uid,
       date: today,
       programDay: profile?.programDay || 1,
-      weightsLogged: {},
     }, { merge: true }).catch(() => {});
   }, []);
   const [phase, setPhase] = useState<"list" | "active" | "complete">(savedProgress ? "list" : "list");
