@@ -7512,6 +7512,100 @@ const getSwapCandidates = (
   return candidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 };
 
+const WheelPickerScroll = React.memo(({ options, selected, itemHeight, category, exId, formatLabel, onChange }: any) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const commitTimeout = React.useRef<any>(null);
+
+  const selectedIndex = options.indexOf(selected);
+
+  // Local, cheap-to-update index that drives the visual highlight during scroll.
+  // This is decoupled from the parent's onChange so dragging never forces a
+  // re-render of sibling pickers (which was the source of the scroll jank).
+  const [localIdx, setLocalIdx] = React.useState(selectedIndex < 0 ? 0 : selectedIndex);
+
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const targetScrollTop = selectedIndex * itemHeight;
+    el.scrollTop = targetScrollTop;
+    setLocalIdx(selectedIndex < 0 ? 0 : selectedIndex);
+  }, []);
+
+  // Keep local highlight in sync if the selected value changes from outside
+  // (e.g. unit system toggle recalculating defaults).
+  React.useEffect(() => {
+    if (selectedIndex >= 0) setLocalIdx(selectedIndex);
+  }, [selected]);
+
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    const idx = Math.round(el.scrollTop / itemHeight);
+    const clamped = Math.max(0, Math.min(idx, options.length - 1));
+
+    // Update the visual highlight immediately (local state, this component only).
+    setLocalIdx(prev => (prev !== clamped ? clamped : prev));
+
+    // Only commit to the parent (and therefore the exercise list) once scrolling
+    // has actually settled, instead of on every scroll frame.
+    if (commitTimeout.current) clearTimeout(commitTimeout.current);
+    commitTimeout.current = setTimeout(() => {
+      if (options[clamped] !== selected) onChange(exId, options[clamped]);
+    }, 120);
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      style={{
+        height: itemHeight * 5,
+        overflowY: "scroll",
+        scrollSnapType: "y mandatory",
+        WebkitOverflowScrolling: "touch" as any,
+        scrollbarWidth: "none" as any,
+        msOverflowStyle: "none" as any,
+        position: "relative",
+      }}
+    >
+      {/* Top padding spacer */}
+      <div style={{ height: itemHeight * 2, flexShrink: 0 }} />
+      {options.map((opt, i) => (
+        <div
+          key={i}
+          style={{
+            height: itemHeight,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            scrollSnapAlign: "center",
+            cursor: "pointer",
+            opacity: i === localIdx ? 1 : 0.4,
+          }}
+          onClick={() => {
+            const el = containerRef.current;
+            if (el) el.scrollTo({ top: i * itemHeight, behavior: "smooth" });
+            setLocalIdx(i);
+            if (commitTimeout.current) clearTimeout(commitTimeout.current);
+            onChange(exId, opt);
+          }}
+        >
+          <span style={{
+            color: COLORS.white,
+            fontSize: i === localIdx ? 20 : 16,
+            fontWeight: i === localIdx ? 700 : 400,
+            fontFamily: "'Inter', sans-serif",
+          }}>
+            {formatLabel(opt, category)}
+          </span>
+        </div>
+      ))}
+      {/* Bottom padding spacer */}
+      <div style={{ height: itemHeight * 2, flexShrink: 0 }} />
+    </div>
+  );
+});
+
 const ActiveExerciseScreen = ({ group, groupIndex, totalGroups, onGroupComplete, onBack, onGoHome, onShowOverview, profile, initialRound = 1, initialExerciseIndex = 0, initialCompletedCells = [], initialWeights = {} as Record<string, number>, onSaveState = (round: number, exerciseIndex: number, cells?: string[]) => {}, onSwap = (swapKey: string, newId: string) => {}, onWeightsSaved = (weights: Record<string, number>) => {}, initialSwaps = {} as Record<string, string>, sessionId = null as string | null }) => {
   const [currentRound, setCurrentRound] = useState(initialRound);
 const [currentExerciseIndex, setCurrentExerciseIndex] = useState(initialExerciseIndex);
@@ -7854,99 +7948,6 @@ const handleRestDone = () => {
 
 
 
-const WheelPickerScroll = React.memo(({ options, selected, itemHeight, category, exId, formatLabel, onChange }: any) => {
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const commitTimeout = React.useRef<any>(null);
-
-  const selectedIndex = options.indexOf(selected);
-
-  // Local, cheap-to-update index that drives the visual highlight during scroll.
-  // This is decoupled from the parent's onChange so dragging never forces a
-  // re-render of sibling pickers (which was the source of the scroll jank).
-  const [localIdx, setLocalIdx] = React.useState(selectedIndex < 0 ? 0 : selectedIndex);
-
-  React.useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const targetScrollTop = selectedIndex * itemHeight;
-    el.scrollTop = targetScrollTop;
-    setLocalIdx(selectedIndex < 0 ? 0 : selectedIndex);
-  }, []);
-
-  // Keep local highlight in sync if the selected value changes from outside
-  // (e.g. unit system toggle recalculating defaults).
-  React.useEffect(() => {
-    if (selectedIndex >= 0) setLocalIdx(selectedIndex);
-  }, [selected]);
-
-  const handleScroll = () => {
-    const el = containerRef.current;
-    if (!el) return;
-    const idx = Math.round(el.scrollTop / itemHeight);
-    const clamped = Math.max(0, Math.min(idx, options.length - 1));
-
-    // Update the visual highlight immediately (local state, this component only).
-    setLocalIdx(prev => (prev !== clamped ? clamped : prev));
-
-    // Only commit to the parent (and therefore the exercise list) once scrolling
-    // has actually settled, instead of on every scroll frame.
-    if (commitTimeout.current) clearTimeout(commitTimeout.current);
-    commitTimeout.current = setTimeout(() => {
-      if (options[clamped] !== selected) onChange(exId, options[clamped]);
-    }, 120);
-  };
-
-  return (
-    <div
-      ref={containerRef}
-      onScroll={handleScroll}
-      style={{
-        height: itemHeight * 5,
-        overflowY: "scroll",
-        scrollSnapType: "y mandatory",
-        WebkitOverflowScrolling: "touch" as any,
-        scrollbarWidth: "none" as any,
-        msOverflowStyle: "none" as any,
-        position: "relative",
-      }}
-    >
-      {/* Top padding spacer */}
-      <div style={{ height: itemHeight * 2, flexShrink: 0 }} />
-      {options.map((opt, i) => (
-        <div
-          key={i}
-          style={{
-            height: itemHeight,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            scrollSnapAlign: "center",
-            cursor: "pointer",
-            opacity: i === localIdx ? 1 : 0.4,
-          }}
-          onClick={() => {
-            const el = containerRef.current;
-            if (el) el.scrollTo({ top: i * itemHeight, behavior: "smooth" });
-            setLocalIdx(i);
-            if (commitTimeout.current) clearTimeout(commitTimeout.current);
-            onChange(exId, opt);
-          }}
-        >
-          <span style={{
-            color: COLORS.white,
-            fontSize: i === localIdx ? 20 : 16,
-            fontWeight: i === localIdx ? 700 : 400,
-            fontFamily: "'Inter', sans-serif",
-          }}>
-            {formatLabel(opt, category)}
-          </span>
-        </div>
-      ))}
-      {/* Bottom padding spacer */}
-      <div style={{ height: itemHeight * 2, flexShrink: 0 }} />
-    </div>
-  );
-});
 
 if (showWeightLogger && pendingWeightGroup) {
   const strengthExes = pendingWeightGroup.exercises?.filter((ex: any) => {
