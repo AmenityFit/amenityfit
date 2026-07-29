@@ -3297,7 +3297,13 @@ const PlaylistCard = () => (
       window.location.href = "spotify://playlist/1vZ4MOciV3rtd3a67JWKv2";
       setTimeout(() => {
         if (!document.hidden) {
-          window.location.href = spotifyWebUrl;
+          // On mobile with the Spotify app installed, document.hidden becomes true above and
+          // this never runs — the native app correctly takes over and switching back to
+          // AmenityFit works naturally. This fallback only fires when there's no app to hand
+          // off to (desktop web, or mobile without Spotify installed), so it opens a new tab
+          // instead of navigating the current one away — otherwise the AmenityFit session
+          // would be replaced entirely with no way back.
+          window.open(spotifyWebUrl, "_blank");
         }
       }, 1500);
     }}
