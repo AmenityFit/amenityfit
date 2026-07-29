@@ -339,15 +339,10 @@ const pingPresence = async (uid: string, buildingId: string, role: string) => {
 // Fetch presence data for Super Admin — all users seen in last 5 minutes
 const fetchLivePresence = async (): Promise<any[]> => {
   try {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    const snap = await getDocs(collection(db, "users"));
-    return snap.docs
-      .map(d => ({ uid: d.id, ...d.data() }))
-      .filter((u: any) => {
-        if (!u.lastSeen) return false;
-        const lastSeen = u.lastSeen.toDate ? u.lastSeen.toDate() : new Date(u.lastSeen);
-        return lastSeen > fiveMinutesAgo;
-      });
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const liveQuery = query(collection(db, "users"), where("lastSeen", ">", tenMinutesAgo));
+    const snap = await getDocs(liveQuery);
+    return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
   } catch (e) {
     return [];
   }
@@ -16020,6 +16015,29 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+
+  // Recurring presence ping — keeps "live" status accurate while the app
+  // stays open, not just at login. Only pings while the tab is visible
+  // (foregrounded), to keep write costs minimal at scale.
+  useEffect(() => {
+    if (!currentUid || !userProfile?.role) return;
+    if (userProfile.role !== 'resident' && userProfile.role !== 'manager') return;
+
+    const doPing = () => {
+      if (document.visibilityState === 'visible') {
+        pingPresence(currentUid, userProfile.buildingId || 'unknown', userProfile.role);
+      }
+    };
+
+    const interval = setInterval(doPing, 8 * 60 * 1000);
+    document.addEventListener('visibilitychange', doPing);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', doPing);
+    };
+  }, [currentUid, userProfile?.role, userProfile?.buildingId]);
+
   const [managerLoggedIn, setManagerLoggedIn] = useState(false);
   const [superAdminLoggedIn, setSuperAdminLoggedIn] = useState(false);
   const [authReady, setAuthReady] = useState(false);
