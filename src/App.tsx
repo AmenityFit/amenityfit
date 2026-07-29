@@ -7769,7 +7769,11 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
       }
     } catch (e) {}
   }
-  await Promise.all(batch);
+  try {
+    await Promise.all(batch);
+  } catch (e) {
+    console.error("One or more weight/PR writes failed:", e);
+  }
 };
   if (!group) return null;
   if (group.type === "cardio") {
@@ -8072,13 +8076,20 @@ if (showWeightLogger && pendingWeightGroup) {
             setSessionWeights(toSave);
             onWeightsSaved(toSave);
             setWeightSaved(true);
-            await saveWeightsToFirestore(toSave, pendingWeightGroup, sessionId || undefined);
-            setTimeout(() => {
-              setShowWeightLogger(false);
-              setPendingWeightGroup(null);
-              setWeightSaved(false);
-              onGroupComplete();
-            }, 600);
+            try {
+              await saveWeightsToFirestore(toSave, pendingWeightGroup, sessionId || undefined);
+            } catch (e) {
+              // Never let a flaky save block the workout flow - the weights are
+              // already reflected locally via onWeightsSaved above regardless.
+              console.error("saveWeightsToFirestore failed, continuing anyway:", e);
+            } finally {
+              setTimeout(() => {
+                setShowWeightLogger(false);
+                setPendingWeightGroup(null);
+                setWeightSaved(false);
+                onGroupComplete();
+              }, 600);
+            }
           }}
           style={{ flex: 2, padding: "16px", borderRadius: 14, border: "none", background: weightSaved ? COLORS.success : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter', sans-serif", boxShadow: `0 6px 20px ${COLORS.primary}40`, transition: "background 0.3s ease" }}
         >
