@@ -2534,6 +2534,7 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
     // Odd cycles (7, 9, 11...) use Month 6+ generation
     // Once pool is exhausted, permanently use Month 6+
     const isEvenCycle = cycleNumber % 2 === 0;
+    console.log("DEBUG pool check:", { cycleNumber, isEvenCycle, availableFromPoolLength: availableFromPool.length, availableFromPool, previousPrograms, gender: profile.gender, primaryGoal: profile.primaryGoal, currentPoolLength: currentPool.length });
     if (isEvenCycle && availableFromPool.length > 0) {
       // Pick next unused pool program — prefer one that already matches the
       // user's chosen frequency exactly; otherwise fall back to a frequency-correct generic
