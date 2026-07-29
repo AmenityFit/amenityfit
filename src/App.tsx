@@ -1786,6 +1786,15 @@ const isProgramGenderCompatible = (key: string, gender: string): boolean => {
   return false;
 };
 
+// Athletic-tagged programs are a distinct, specialized category (sport-specific, agility-
+// focused work) that never appears outside the athletic_performance goal anywhere in
+// getAdvancedProgramPath's paths — unlike the named/hypertrophy programs, which legitimately
+// overlap across multiple goals and shouldn't be artificially restricted.
+const isProgramGoalCompatible = (key: string, goal: string): boolean => {
+  if (key.includes("athletic")) return goal === "athletic_performance";
+  return true;
+};
+
 const generateMonth6Program = (profile: any): { programKey: string; generatedDays?: any[] } => {
   const previousPrograms = profile.previousPrograms || [];
   const experience = profile.effectiveLevel || profile.experience || "beginner";
@@ -2034,6 +2043,8 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
     // Match gender preference — never assign a mens-/womens- named program to someone
     // who didn't select that gender, including on into ongoing Month 6+ generation
     if (!isProgramGenderCompatible(key, profile.gender)) return false;
+    // Match goal preference — athletic-specific programs only for athletic performance goal
+    if (!isProgramGoalCompatible(key, profile.primaryGoal || "general_fitness")) return false;
     return true;
   });
 
@@ -2442,7 +2453,7 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
   const isGenderCompatible = (key: string): boolean => isProgramGenderCompatible(key, profile.gender);
 
   const availableFromPool = currentPool.filter((k: string) =>
-    !previousPrograms.includes(k) && !injuryAvoidKeys.includes(k) && isGenderCompatible(k)
+    !previousPrograms.includes(k) && !injuryAvoidKeys.includes(k) && isGenderCompatible(k) && isProgramGoalCompatible(k, profile.primaryGoal || "general_fitness")
   );
   const poolExhausted = availableFromPool.length === 0;
 
@@ -2487,7 +2498,7 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
       ? (newLevel === "advanced" ? "senior-advanced" : newLevel === "intermediate" ? "senior-intermediate" : "senior-beginner")
       : newLevel;
     const newPoolKey = `${newLevelKey}-${equipKey}`;
-    const newPool = ((pools as any)[newPoolKey] || []).filter(isGenderCompatible);
+    const newPool = ((pools as any)[newPoolKey] || []).filter((k: string) => isGenderCompatible(k) && isProgramGoalCompatible(k, profile.primaryGoal || "general_fitness"));
     const rawFreshProgram = newPool[0] || selectProgram({ ...profile, experience: newLevel });
     const freshProgram = ensureFrequencyMatch(rawFreshProgram, profile.frequency || 3, newLevelKey);
     const freshProgramAdapted = adaptProgramToFrequency(freshProgram, profile.frequency || 3);
