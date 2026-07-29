@@ -8651,6 +8651,7 @@ const getWorkoutTypeForProgramDay = (
         focus: day.focus || "Workout",
         isRest: false,
         groups: day.groups || [],
+        notes: day.notes || [],
       };
     }
   }
@@ -8674,6 +8675,7 @@ const getWorkoutTypeForProgramDay = (
         focus: day.focus || "Workout",
         isRest: false,
         groups: day.groups || [],
+        notes: day.notes || [],
       };
     }
   }
@@ -8719,6 +8721,7 @@ const getWorkoutTypeForProgramDay = (
           focus: derivedFocus,
           isRest: false,
           groups: rawGroups,
+          notes: day.notes || [],
         };
       }
     }
