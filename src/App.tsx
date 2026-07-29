@@ -1771,6 +1771,21 @@ Respond with ONLY a JSON object, nothing else:
 // Activates when pool is exhausted and user hasn't earned level transition yet.
 // Takes a matching base program from the 74, swaps 1 exercise per superset
 // with a verified alternative the user hasn't seen, keeps structure identical.
+// Determines whether a gender-named program (mens-*/womens-*) is appropriate for someone's
+// selected gender. Anyone who selected female or male gets that gender's named programs;
+// anyone else (non-binary, prefer not to say, or unset) only ever gets the fully gender-neutral
+// programs already in every pool (e.g. advanced-6x, advanced-hypertrophy-month-1) — never a
+// mens-/womens- named one. Shared by generateAIProgram and generateMonth6Program so both the
+// initial pool-rotation years and the ongoing Month 6+ generation respect this consistently.
+const isProgramGenderCompatible = (key: string, gender: string): boolean => {
+  const isMensProgram = key.startsWith("mens-");
+  const isWomensProgram = key.startsWith("womens-");
+  if (!isMensProgram && !isWomensProgram) return true;
+  if (gender === "male") return isMensProgram;
+  if (gender === "female") return isWomensProgram;
+  return false;
+};
+
 const generateMonth6Program = (profile: any): { programKey: string; generatedDays?: any[] } => {
   const previousPrograms = profile.previousPrograms || [];
   const experience = profile.effectiveLevel || profile.experience || "beginner";
@@ -2016,6 +2031,9 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
     // Match equipment preference roughly
     if (equipment === "bands" && !key.includes("band")) return false;
     if (equipment === "gym" && key.includes("band")) return false;
+    // Match gender preference — never assign a mens-/womens- named program to someone
+    // who didn't select that gender, including on into ongoing Month 6+ generation
+    if (!isProgramGenderCompatible(key, profile.gender)) return false;
     return true;
   });
 
@@ -2415,8 +2433,16 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
   const equipKey = equipment === "gym" ? "gym" : equipment === "bands" ? "bands" : "gym-and-bands";
   const poolKey = `${levelKey}-${equipKey}`;
   const currentPool = (pools as any)[poolKey] || [];
+
+  // Gender-compatible pool filtering — pools mix mens-/womens-/gender-neutral named programs
+  // together. A "mens-" program should never go to someone who selected female, nonbinary,
+  // or prefer not to say, and vice versa. Anyone who isn't specifically male or female only
+  // ever draws from the fully gender-neutral programs already in the pool (e.g. advanced-6x,
+  // advanced-hypertrophy-month-1) — never a mens-/womens- named one.
+  const isGenderCompatible = (key: string): boolean => isProgramGenderCompatible(key, profile.gender);
+
   const availableFromPool = currentPool.filter((k: string) =>
-    !previousPrograms.includes(k) && !injuryAvoidKeys.includes(k)
+    !previousPrograms.includes(k) && !injuryAvoidKeys.includes(k) && isGenderCompatible(k)
   );
   const poolExhausted = availableFromPool.length === 0;
 
@@ -2461,7 +2487,7 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
       ? (newLevel === "advanced" ? "senior-advanced" : newLevel === "intermediate" ? "senior-intermediate" : "senior-beginner")
       : newLevel;
     const newPoolKey = `${newLevelKey}-${equipKey}`;
-    const newPool = (pools as any)[newPoolKey] || [];
+    const newPool = ((pools as any)[newPoolKey] || []).filter(isGenderCompatible);
     const rawFreshProgram = newPool[0] || selectProgram({ ...profile, experience: newLevel });
     const freshProgram = ensureFrequencyMatch(rawFreshProgram, profile.frequency || 3, newLevelKey);
     const freshProgramAdapted = adaptProgramToFrequency(freshProgram, profile.frequency || 3);
