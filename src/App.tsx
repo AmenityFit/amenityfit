@@ -14,7 +14,9 @@ import {
   sendPasswordResetEmail,
 } from "firebase/auth";
 import {
-  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   doc,
   setDoc,
   getDoc,
@@ -309,7 +311,14 @@ const refreshFitbitToken = async (refreshToken: string, clientId: string): Promi
     
     const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
+// Offline persistence: queues writes locally (weight logs, session state, etc.)
+// whenever connectivity is degraded or briefly lost - e.g. weak gym WiFi/cellular
+// mid-workout - and automatically syncs them once the connection recovers.
+// Without this, a write attempted during a network hiccup could simply fail
+// and be lost; with it, nothing is lost, it just completes a little later.
+const db = initializeFirestore(firebaseApp, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 const googleProvider = new GoogleAuthProvider();
 
 // ─── Firestore helpers ────────────────────────────────────────────────────────
