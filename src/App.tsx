@@ -26,6 +26,7 @@ import {
   collection,
   addDoc,
   getDocs,
+  getDocsFromServer,
   query,
   orderBy,
   where,
@@ -8914,7 +8915,20 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
           }
           return todayUTC;
         })();
-        const sessQuery = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)));
+        // Force a real server read here too, for the same reason as
+        // loadUserProfile: this effect fires the instant a workout is marked
+        // complete, and a plain getDocs() can serve a cached query snapshot
+        // that hasn't caught up with the weight save that just happened a
+        // moment earlier - which is exactly what showed as an empty
+        // "Weights Logged" section until navigating away and back gave the
+        // cache time to catch up. Falling back to the normal cache-tolerant
+        // getDocs only if genuinely offline.
+        let sessQuery;
+        try {
+          sessQuery = await getDocsFromServer(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)));
+        } catch (serverErr) {
+          sessQuery = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)));
+        }
         const dayLogs: Record<string, number> = {};
         if (sessQuery.docs.length > 0) {
           const weightsLogged = sessQuery.docs[0].data().weightsLogged || {};
