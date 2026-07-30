@@ -20,6 +20,7 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocFromServer,
   updateDoc,
   serverTimestamp,
   collection,
@@ -399,7 +400,21 @@ const updateBuildingBranding = async (buildingId: string, programName: string): 
 
 const loadUserProfile = async (uid: string) => {
   try {
-    const snap = await getDoc(doc(db, "users", uid));
+    // Force a real server read here rather than the default cache-or-server
+    // behavior. This is the profile load that happens at login and drives
+    // things like the "resume workout" screen (workoutProgress) - with
+    // offline persistence enabled, a plain getDoc() can legitimately return
+    // a stale locally-cached copy first, which is exactly what caused the
+    // "stale workout, then correct workout" flash. Falling back to the
+    // ordinary cache-tolerant getDoc only if the device is genuinely
+    // offline/unreachable preserves offline login while eliminating the
+    // stale-flash case whenever a real connection is available.
+    let snap;
+    try {
+      snap = await getDocFromServer(doc(db, "users", uid));
+    } catch (serverErr) {
+      snap = await getDoc(doc(db, "users", uid));
+    }
     return snap.exists() ? { ...snap.data(), uid } : null;
   } catch (e) {
     console.error("loadUserProfile error:", e);
@@ -7718,7 +7733,9 @@ const weightOptions = (() => {
 const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any, sessionId?: string) => {
   if (!profile?.uid) return;
   const today = new Date().toISOString().split("T")[0];
-  // Write weights into today's workoutSession so Progress screen can show them
+  // Write weights into today's workoutSession so Progress screen can show them.
+  // This is the only part the caller actually awaits - it drives the "Saved"
+  // confirmation and lets the workout flow advance, so it needs to stay fast.
   try {
     const validWeights: Record<string, any> = {};
     for (const [exId, weight] of Object.entries(weights)) {
@@ -7729,26 +7746,36 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
       for (const [exId, w] of Object.entries(validWeights)) {
         updateMap[`weightsLogged.${exId}`] = w;
       }
-      // Always write directly to the deterministic {uid}_{date} document ID.
-      // This avoids any race condition with session-doc creation timing -
-      // setDoc with merge:true creates the doc if missing or merges into it if present.
       const targetSessionId = sessionId || `${profile.uid}_${today}`;
-      // Use dot-notation field paths (updateMap) rather than a nested object
-      // literal here. Firestore's merge:true only preserves fields you don't
-      // explicitly touch - assigning a whole object to weightsLogged replaces
-      // the entire map, silently wiping any exercises logged by an earlier
-      // group in the same workout. Dot-path keys merge each exercise in
-      // individually, so every group's save accumulates instead of clobbering
-      // the previous one.
       await setDoc(doc(db, "workoutSessions", targetSessionId), updateMap, { merge: true });
     }
   } catch (e) {
     console.error("Failed to write weights to session:", e);
   }
-  // Fetch all previous weight logs once (not per-exercise) to avoid N full-scans
+
+  // Historical weightLog entries and personal-record notifications require a
+  // full-collection read of the user's entire weight history just to compute
+  // each exercise's previous best. That is genuinely slow and was previously
+  // sitting directly in the path the resident had to wait on before the
+  // workout flow would advance - almost certainly the source of the ~20
+  // second lag. It is deliberately NOT awaited here; it now runs in the
+  // background after this function returns, so the visible save/advance is
+  // no longer gated on it.
+  logWeightHistoryInBackground(weights, profile.uid, profile?.programKey, profile?.programDay, today).catch((e) => {
+    console.error("Background weight history logging failed:", e);
+  });
+};
+
+const logWeightHistoryInBackground = async (
+  weights: Record<string, number>,
+  uid: string,
+  programKey: string | undefined,
+  programDay: number | undefined,
+  today: string
+) => {
   let allPrevDocs: any[] = [];
   try {
-    const prevSnap = await getDocs(collection(db, "users", profile.uid, "weightLog"));
+    const prevSnap = await getDocs(collection(db, "users", uid, "weightLog"));
     allPrevDocs = prevSnap.docs;
   } catch (e) {
     console.error("Failed to fetch previous weight logs:", e);
@@ -7757,14 +7784,14 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
   const batch: Promise<any>[] = [];
   for (const [exId, weight] of Object.entries(weights)) {
     if (weight === 0) continue;
-    const logRef = doc(db, "users", profile.uid, "weightLog", `${today}_${exId}`);
+    const logRef = doc(db, "users", uid, "weightLog", `${today}_${exId}`);
     batch.push(setDoc(logRef, {
       exerciseId: exId,
       weight,
       unit: "lbs",
       date: today,
-      programKey: profile?.programKey || "",
-      programDay: profile?.programDay || 1,
+      programKey: programKey || "",
+      programDay: programDay || 1,
       loggedAt: serverTimestamp(),
     }, { merge: true }));
     try {
@@ -7772,7 +7799,7 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
         .filter(d => d.data().exerciseId === exId && d.id !== `${today}_${exId}`)
         .reduce((best, d) => Math.max(best, d.data().weight || 0), 0);
       if (weight > prevBest && prevBest > 0) {
-        batch.push(addDoc(collection(db, "users", profile.uid, "notifications"), {
+        batch.push(addDoc(collection(db, "users", uid, "notifications"), {
           type: "pr",
           exerciseId: exId,
           exerciseName: (EXERCISES_DATA as any)[exId]?.name || exId,
