@@ -9564,9 +9564,12 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
       const dowIndex = (day.date.getDay() + weekNum * 3) % pool.length;
       return pool[dowIndex];
     }
-    // For workout days: stable daily seed, offset per type
-    const seed = (day.programDay * 17 + 7) ^ (day.programDay * 13);
-    return pool[Math.abs(seed) % pool.length];
+    // For actual workout days, use the exact same shared function as every
+    // other screen (Home dashboard, preview, Progress history) instead of a
+    // separate, independently-computed formula. Previously this used its own
+    // seed math, which could - and did - land on a completely different image
+    // than what the same day showed everywhere else in the app.
+    return getWorkoutImage(day.type, day.programDay);
   };
 
   const expLabel = experience === "beginner" ? "Beginner" : experience === "intermediate" ? "Intermediate" : "Advanced";
