@@ -478,11 +478,24 @@ const sanitizeForFirestore = (obj: any): any => {
 const saveWorkoutSession = async (uid: string, session: any, sessionId?: string) => {
   try {
     const today = new Date().toISOString().split("T")[0];
-    // Find today's existing session doc written by per-group saves
+    // Find today's existing session doc written by per-group saves.
+    // This is the same real bug found and fixed twice earlier tonight in two
+    // other spots (loadUserProfile, the dayWeightLog fetch): a plain getDocs()
+    // here can return a cached snapshot that hasn't caught up with the very
+    // per-group weight saves this function is trying to read and merge with,
+    // silently dropping earlier exercise groups' weights from the final
+    // document. Forcing a real server read here closes the same gap a third
+    // time, in the one place that matters most - this is the final write for
+    // the whole workout.
     let existingId: string | null = null;
     let existingWeights: Record<string, any> = {};
     try {
-      const sessSnap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", uid), where("date", "==", today)));
+      let sessSnap;
+      try {
+        sessSnap = await getDocsFromServer(query(collection(db, "workoutSessions"), where("uid", "==", uid), where("date", "==", today)));
+      } catch (serverErr) {
+        sessSnap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", uid), where("date", "==", today)));
+      }
       if (!sessSnap.empty) {
         existingId = sessSnap.docs[0].id;
         existingWeights = sessSnap.docs[0].data()?.weightsLogged || {};
@@ -490,6 +503,10 @@ const saveWorkoutSession = async (uid: string, session: any, sessionId?: string)
     } catch {}
     const id = existingId || sessionId || `${uid}_${Date.now()}`;
     const mergedWeights = { ...existingWeights, ...(session.weightsLogged || {}) };
+    // merge: true here too - previously this was a full-document setDoc with
+    // no merge option, meaning any field on the existing document not
+    // included in this specific call would be silently wiped, on top of
+    // whatever the stale read above already got wrong.
     await setDoc(doc(db, "workoutSessions", id), {
       uid,
       ...session,
@@ -497,7 +514,7 @@ const saveWorkoutSession = async (uid: string, session: any, sessionId?: string)
       sessionId: id,
       date: today,
       completedAt: serverTimestamp(),
-    });
+    }, { merge: true });
     return id;
   } catch (e) {
     console.error("saveWorkoutSession error:", e);
@@ -508,8 +525,15 @@ const saveWorkoutSession = async (uid: string, session: any, sessionId?: string)
 // Fetch the user's full workout session history from Firestore
 const fetchWorkoutHistory = async (uid: string): Promise<any[]> => {
   try {
-    // Simple collection fetch — no index required, sort client-side
-    const snap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", uid)));
+    // Simple collection fetch — no index required, sort client-side.
+    // Same fix as the other spots tonight - force a real server read so a
+    // just-completed session's data doesn't get missed by a stale cache.
+    let snap;
+    try {
+      snap = await getDocsFromServer(query(collection(db, "workoutSessions"), where("uid", "==", uid)));
+    } catch (serverErr) {
+      snap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", uid)));
+    }
     return snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       // Require completedAt - this is only ever set by saveWorkoutSession, the
@@ -3965,7 +3989,12 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
     const fetchNotifs = async () => {
       setNotifLoading(true);
       try {
-        const snap = await getDocs(collection(db, "users", profile.uid, "notifications"));
+        let snap;
+        try {
+          snap = await getDocsFromServer(collection(db, "users", profile.uid, "notifications"));
+        } catch (serverErr) {
+          snap = await getDocs(collection(db, "users", profile.uid, "notifications"));
+        }
         const thirtyDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
         const notifs = snap.docs
           .map(d => ({ id: d.id, ...d.data() }))
