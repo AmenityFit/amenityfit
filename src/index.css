@@ -51,16 +51,25 @@
 }
 
 #root {
-  width: 1126px;
+  /* The width/margin/border-inline properties that used to be here (1126px
+     centered column with a 1px side border) were leftover Vite starter-template
+     styling, unrelated to this app's actual UI, which is built with inline
+     styles throughout App.tsx. That's what was causing the visible vertical
+     borders on either side of the app on a phone screen - not a safe-area or
+     notch issue. Removed so the app genuinely fills the full device width like
+     any other native-feeling app. Safe-area padding added below now that
+     index.html's viewport-fit=cover lets content extend under the notch and
+     home-indicator area - without this, content could get physically hidden
+     behind those areas instead of just avoiding them. */
+  width: 100%;
   max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
   overflow-y: auto;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 html, body {
