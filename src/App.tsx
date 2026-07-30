@@ -9443,7 +9443,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
       setSelectedDay((prev: any) => prev);
     }
   }, []);
-  const [dayWeightLog, setDayWeightLog] = useState<Record<string, number>>({});
+  const [dayWeightLog, setDayWeightLog] = useState<Record<string, number | string>>({});
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -9477,11 +9477,13 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
         } catch (serverErr) {
           sessQuery = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)));
         }
-        const dayLogs: Record<string, number> = {};
+        const dayLogs: Record<string, number | string> = {};
         if (sessQuery.docs.length > 0) {
           const weightsLogged = sessQuery.docs[0].data().weightsLogged || {};
           Object.entries(weightsLogged).forEach(([exId, weight]) => {
             if (typeof weight === "number" && weight > 0) {
+              dayLogs[exId] = weight;
+            } else if (typeof weight === "string" && weight.trim().length > 0) {
               dayLogs[exId] = weight;
             }
           });
@@ -9710,10 +9712,11 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                           {Object.entries(dayWeightLog).map(([exId, weight]) => {
                             const exData = (EXERCISES_DATA as any)[exId];
                             const weightUnit = profile?.heightFt ? "lbs" : "kg";
+                            const displayValue = typeof weight === "number" ? `${weight} ${weightUnit}` : weight;
                             return (
                               <div key={exId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${COLORS.border}` }}>
                                 <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 500 }}>{exData?.name || exId}</span>
-                                <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{weight} {weightUnit}</span>
+                                <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{displayValue}</span>
                               </div>
                             );
                           })}
@@ -9752,10 +9755,11 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                       {Object.entries(dayWeightLog).map(([exId, weight]) => {
                         const exData = (EXERCISES_DATA as any)[exId];
                         const weightUnit = profile?.heightFt ? "lbs" : "kg";
+                        const displayValue = typeof weight === "number" ? `${weight} ${weightUnit}` : weight;
                         return (
                           <div key={exId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: i < 6 ? `1px solid ${COLORS.border}` : "none" }}>
                             <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 500 }}>{exData?.name || exId}</span>
-                            <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{weight} {weightUnit}</span>
+                            <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{displayValue}</span>
                           </div>
                         );
                       })}
