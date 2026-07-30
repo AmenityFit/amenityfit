@@ -11961,13 +11961,20 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
           if (selectedSession) {
             const groups = selectedSession.groups || [];
             // Determine hero image from workout type (same logic as active workout)
-            // dayFocus is actually built from the specific muscles the exercises
-            // hit (e.g. "Quads, Hamstrings, Calves, Glutes"), not the day's
-            // title text - so this needs to match real muscle names, not just
-            // words like "leg" or "lower" which won't appear in muscle lists
-            // at all. Found this gap directly from a real mismatched image
-            // tonight.
-            const focusLower = (selectedSession.dayFocus || "").toLowerCase();
+            // dayFocus turns out to be a broken, generic fallback field that
+            // just says "Workout" in real data - confirmed directly in
+            // Firestore. It cannot be trusted at all. Deriving fresh from the
+            // session's actual exercises (the same real data the muscle-list
+            // subtitle itself is built from) is the only reliable source.
+            const realMuscles: string[] = [];
+            groups.forEach((g: any) => {
+              if (g.type === "cardio") return;
+              (g.exercises || []).forEach((ex: any) => {
+                const m = (EXERCISES_DATA as any)[ex.id]?.muscle || "";
+                if (m && !realMuscles.includes(m)) realMuscles.push(m);
+              });
+            });
+            const focusLower = realMuscles.join(", ").toLowerCase();
             const wType = focusLower.includes("leg") || focusLower.includes("lower") || focusLower.includes("glute") || focusLower.includes("hamstring") || focusLower.includes("quad") || focusLower.includes("calf") || focusLower.includes("calve")
               ? "lower-body"
               : focusLower.includes("chest") || focusLower.includes("push") || focusLower.includes("tricep") || focusLower.includes("shoulder")
@@ -12158,17 +12165,25 @@ const HistoryScreen = ({ profile, onBack, onNavigate = (s: string) => {} }) => {
     // value sitting where a day-level type should be. Never trusting any
     // stored type/image field here means this screen can't be affected by
     // that class of problem regardless of its root cause.
-    // Same real-muscle-name matching gap as the other block - dayFocus is
-    // built from actual muscle names ("Quads, Hamstrings, Calves, Glutes"),
-    // not day-title words, so "hamstring"/"quad"/"calf" etc need to be
-    // checked directly, not just "leg"/"lower".
+    // dayFocus turns out to be a broken, generic fallback field that just
+    // says "Workout" in real data - confirmed directly in Firestore. Deriving
+    // fresh from the session's actual exercises is the only reliable source.
+    const realMuscles2: string[] = [];
+    groups.forEach((g: any) => {
+      if (g.type === "cardio") return;
+      (g.exercises || []).forEach((ex: any) => {
+        const m = (EXERCISES_DATA as any)[ex.id]?.muscle || "";
+        if (m && !realMuscles2.includes(m)) realMuscles2.push(m);
+      });
+    });
+    const focusLower2 = realMuscles2.join(", ").toLowerCase();
     const wType =
-      (selectedSession.dayFocus?.toLowerCase().includes("lower") || selectedSession.dayFocus?.toLowerCase().includes("leg") || selectedSession.dayFocus?.toLowerCase().includes("glute") || selectedSession.dayFocus?.toLowerCase().includes("hamstring") || selectedSession.dayFocus?.toLowerCase().includes("quad") || selectedSession.dayFocus?.toLowerCase().includes("calf") || selectedSession.dayFocus?.toLowerCase().includes("calve") ? "lower-body"
-      : selectedSession.dayFocus?.toLowerCase().includes("push") || selectedSession.dayFocus?.toLowerCase().includes("chest") || selectedSession.dayFocus?.toLowerCase().includes("tricep") || selectedSession.dayFocus?.toLowerCase().includes("shoulder") ? "push"
-      : selectedSession.dayFocus?.toLowerCase().includes("pull") || selectedSession.dayFocus?.toLowerCase().includes("back") || selectedSession.dayFocus?.toLowerCase().includes("bicep") || selectedSession.dayFocus?.toLowerCase().includes("lat") ? "upper-body"
-      : selectedSession.dayFocus?.toLowerCase().includes("upper") ? "upper-body"
-      : selectedSession.dayFocus?.toLowerCase().includes("abs") || selectedSession.dayFocus?.toLowerCase().includes("core") ? "core"
-      : selectedSession.dayFocus?.toLowerCase().includes("cardio") ? "cardio"
+      (focusLower2.includes("lower") || focusLower2.includes("leg") || focusLower2.includes("glute") || focusLower2.includes("hamstring") || focusLower2.includes("quad") || focusLower2.includes("calf") || focusLower2.includes("calve") ? "lower-body"
+      : focusLower2.includes("push") || focusLower2.includes("chest") || focusLower2.includes("tricep") || focusLower2.includes("shoulder") ? "push"
+      : focusLower2.includes("pull") || focusLower2.includes("back") || focusLower2.includes("bicep") || focusLower2.includes("lat") ? "upper-body"
+      : focusLower2.includes("upper") ? "upper-body"
+      : focusLower2.includes("abs") || focusLower2.includes("core") ? "core"
+      : focusLower2.includes("cardio") ? "cardio"
       : "full-body");
       const heroImage = getWorkoutImage(wType, selectedSession.programDay || 1);
     const bgPos = wType === "lower-body" ? "center 60%" : "center top";
