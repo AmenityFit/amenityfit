@@ -63,6 +63,7 @@
      behind those areas instead of just avoiding them. */
   width: 100%;
   max-width: 100%;
+  text-align: center;
   min-height: 100svh;
   display: flex;
   flex-direction: column;
