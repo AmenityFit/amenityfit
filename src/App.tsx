@@ -16573,7 +16573,15 @@ const isInitialLoad = React.useRef(true);
     onSecretAdmin={() => { setManagerLoggedIn(false); setScreen("super-admin-login"); }}
   />;
   if (superAdminLoggedIn) return <SuperAdminDashboard onSignOut={resetToWelcome} />;
-  if (screen === "super-admin-login") return <SuperAdminLogin onLogin={() => setSuperAdminLoggedIn(true)} onBack={() => setScreen("splash")} />;
+  // Back from super-admin login goes straight to Welcome, not back through the
+  // splash screen. Splash is a one-time boot sequence - by the time someone taps
+  // 5x for admin access and then backs out, Firebase's background auth check has
+  // often already resolved, so re-showing splash a second time could silently
+  // consume that already-resolved navigation target and skip Welcome/login
+  // entirely, even for an already-signed-in session that was never actually
+  // meant to auto-resume here. Going straight to Welcome removes that race
+  // entirely, since Welcome is always a safe, explicit landing point.
+  if (screen === "super-admin-login") return <SuperAdminLogin onLogin={() => setSuperAdminLoggedIn(true)} onBack={() => setScreen("welcome")} />;
   if (pendingNavigation === 'churned') return <ChurnedBuildingScreen onSignOut={resetToWelcome} />;
   if (pendingNavigation === 'pm-dashboard' && userProfile?.companyId) return <PropertyManagerDashboard companyId={userProfile.companyId} companyName={userProfile.companyName || userProfile.companyId} onSignOut={resetToWelcome} />;
   if (managerLoggedIn && userProfile?.passwordChangeRequired) return <ForcePasswordChangeScreen
