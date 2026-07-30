@@ -3230,7 +3230,30 @@ const getGreeting = () => {
   return "Good evening";
 };
 
-const TodayWorkoutCard = ({ type = "upper-body", sessionLength = 45, experience = "Intermediate", programDay = 1, programWeek = 1, workoutDoneToday = false, isInProgress = false, onStartWorkout = () => {}, onCompleteRestDay = () => {}, exerciseCount = 0, dayFocus = "", groups = [] as any[] }) => (  <div style={{
+const TodayWorkoutCard = ({ type = "upper-body", sessionLength = 45, experience = "Intermediate", programDay = 1, programWeek = 1, workoutDoneToday = false, isInProgress = false, onStartWorkout = () => {}, onCompleteRestDay = () => {}, exerciseCount = 0, dayFocus = "", groups = [] as any[] }) => {
+  // Preload today's exercise thumbnails as soon as this card renders (i.e. the
+  // moment the Dashboard loads), well before the user actually taps into the
+  // workout screen. Without this, the exercise-list screen's <img> tags only
+  // start fetching from vumbnail.com the instant that screen renders, which is
+  // exactly why a brief flash/placeholder was visible on first open. Creating
+  // an in-memory Image() and setting its src causes the browser to fetch and
+  // cache that exact URL immediately, so by the time the exercise list
+  // actually renders, the same URL is already in the browser's cache and
+  // displays instantly instead of triggering a fresh network fetch.
+  React.useEffect(() => {
+    if (!groups || groups.length === 0) return;
+    groups.forEach((g: any) => {
+      (g.exercises || []).forEach((ex: any) => {
+        const vid = getVimeoId(ex.id, programDay);
+        if (vid) {
+          const preloadImg = new window.Image();
+          preloadImg.src = `https://vumbnail.com/${vid}_medium.jpg`;
+        }
+      });
+    });
+  }, [groups, programDay]);
+  return (
+  <div style={{
     borderRadius: 24, overflow: "hidden", marginBottom: 20, position: "relative",
     boxShadow: `0 16px 48px ${COLORS.primary}55`, cursor: "pointer",
     minHeight: 260,
@@ -3313,7 +3336,8 @@ const TodayWorkoutCard = ({ type = "upper-body", sessionLength = 45, experience 
       )}
     </div>
   </div>
-);
+  );
+};
 
 const StatCard = ({ label, value, sub, icon: Icon, color }) => (
   <div style={{ flex: 1, background: COLORS.card, borderRadius: 18, padding: "16px 14px", border: `1px solid ${COLORS.border}`, display: "flex", flexDirection: "column" }}>
