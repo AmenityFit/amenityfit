@@ -523,19 +523,10 @@ const saveWorkoutSession = async (uid: string, session: any, sessionId?: string)
 };
 
 // Fetch the user's full workout session history from Firestore
-const fetchWorkoutHistory = async (uid: string): Promise<any[]> => {
+const fetchWorkoutHistory = async (uid: string, onFastResult?: (sessions: any[]) => void): Promise<any[]> => {
   try {
-    // Simple collection fetch — no index required, sort client-side.
-    // Same fix as the other spots tonight - force a real server read so a
-    // just-completed session's data doesn't get missed by a stale cache.
-    let snap;
-    try {
-      snap = await getDocsFromServer(query(collection(db, "workoutSessions"), where("uid", "==", uid)));
-    } catch (serverErr) {
-      snap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", uid)));
-    }
-    return snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
+    const parseSnap = (snap: any) => snap.docs
+      .map((d: any) => ({ id: d.id, ...d.data() }))
       // Require completedAt - this is only ever set by saveWorkoutSession, the
       // real completion path. A bare document can exist just from opening the
       // workout screen (see the session-init effect), with no real completion
@@ -547,6 +538,25 @@ const fetchWorkoutHistory = async (uid: string): Promise<any[]> => {
         const bTime = b.completedAt?.toMillis ? b.completedAt.toMillis() : new Date(b.completedAt || 0).getTime();
         return bTime - aTime;
       });
+    // Fast-then-verify: show cached history immediately (if a caller wants
+    // that), then confirm with a real server read and return the verified
+    // result as this function's actual resolved value. Fixes the real
+    // 30-40 second waits on a slow connection from always forcing the
+    // server read before showing anything, while still guaranteeing the
+    // final displayed state is server-verified, not stale.
+    if (onFastResult) {
+      try {
+        const fastSnap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", uid)));
+        onFastResult(parseSnap(fastSnap));
+      } catch {}
+    }
+    let snap;
+    try {
+      snap = await getDocsFromServer(query(collection(db, "workoutSessions"), where("uid", "==", uid)));
+    } catch (serverErr) {
+      snap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", uid)));
+    }
+    return parseSnap(snap);
   } catch (e) {
     console.error("fetchWorkoutHistory error:", e);
     return [];
@@ -3978,7 +3988,6 @@ const _dailySeed = new Date().getDate() * 31 + new Date().getMonth() * 127;
 // sees different images as they progress through the 30-day program
 const getWorkoutImage = (type: string, programDay: number = 1): string => {
   const pool = IMAGE_POOLS[type] || IMAGE_POOLS["full-body"];
-  console.log("getWorkoutImage called with type:", type, "programDay:", programDay, "pool has", pool.length, "images");
   // Use a hash that guarantees each type and programDay combination
   // picks a different image — even across types with similar pool sizes.
   // Large prime offsets prevent collisions between upper/push/pull which
@@ -3986,7 +3995,6 @@ const getWorkoutImage = (type: string, programDay: number = 1): string => {
   const typeHash = type === "upper-body" ? 3 : type === "lower-body" ? 37 : type === "core" ? 71 : type === "push" ? 11 : type === "pull" ? 53 : type === "cardio" ? 29 : type === "rest" ? 97 : 19;
   const seed = (_dailySeed * 7 + programDay * 13 + typeHash) & 0x7FFFFFFF;
   const chosenIndex = seed % pool.length;
-  console.log("getWorkoutImage result - index:", chosenIndex, "url:", pool[chosenIndex]);
   return pool[chosenIndex];
 };
 
@@ -9466,32 +9474,35 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
           }
           return todayUTC;
         })();
-        // Force a real server read here too, for the same reason as
-        // loadUserProfile: this effect fires the instant a workout is marked
-        // complete, and a plain getDocs() can serve a cached query snapshot
-        // that hasn't caught up with the weight save that just happened a
-        // moment earlier - which is exactly what showed as an empty
-        // "Weights Logged" section until navigating away and back gave the
-        // cache time to catch up. Falling back to the normal cache-tolerant
-        // getDocs only if genuinely offline.
-        let sessQuery;
+        // Fast-then-verify pattern: show whatever's cached immediately so
+        // this doesn't block on a network round-trip, then quietly confirm
+        // with a real server read a moment later and correct the display if
+        // a just-completed group's weight wasn't reflected in the cached
+        // version. This replaces the earlier fix that forced the server read
+        // BEFORE showing anything - that fixed the correctness problem but
+        // introduced real, sometimes 30+ second waits on a slow connection.
+        // This gives both: instant display, and eventual correctness.
+        const parseDayLogs = (snap: any): Record<string, number | string> => {
+          const logs: Record<string, number | string> = {};
+          if (snap.docs.length > 0) {
+            const weightsLogged = snap.docs[0].data().weightsLogged || {};
+            Object.entries(weightsLogged).forEach(([exId, weight]) => {
+              if (typeof weight === "number" && weight > 0) {
+                logs[exId] = weight;
+              } else if (typeof weight === "string" && weight.trim().length > 0) {
+                logs[exId] = weight;
+              }
+            });
+          }
+          return logs;
+        };
         try {
-          sessQuery = await getDocsFromServer(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)));
-        } catch (serverErr) {
-          sessQuery = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)));
-        }
-        const dayLogs: Record<string, number | string> = {};
-        if (sessQuery.docs.length > 0) {
-          const weightsLogged = sessQuery.docs[0].data().weightsLogged || {};
-          Object.entries(weightsLogged).forEach(([exId, weight]) => {
-            if (typeof weight === "number" && weight > 0) {
-              dayLogs[exId] = weight;
-            } else if (typeof weight === "string" && weight.trim().length > 0) {
-              dayLogs[exId] = weight;
-            }
-          });
-        }
-        setDayWeightLog(dayLogs);
+          const fastSnap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)));
+          setDayWeightLog(parseDayLogs(fastSnap));
+        } catch {}
+        getDocsFromServer(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)))
+          .then(serverSnap => setDayWeightLog(parseDayLogs(serverSnap)))
+          .catch(() => {});
       } catch (e) { setDayWeightLog({}); }
     };
     fetchWeightLog();
@@ -11529,7 +11540,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
       setHistoryLoading(true);
       setHistoryLoaded(false);
       // Small delay to ensure Firestore write from workout completion has propagated
-      fetchWorkoutHistory(profile.uid).then(sessions => {
+      fetchWorkoutHistory(profile.uid, (fastSessions) => setSessionHistory(fastSessions)).then(sessions => {
         setSessionHistory(sessions);
         setHistoryLoaded(true);
         setHistoryLoading(false);
@@ -11540,7 +11551,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
   useEffect(() => {
     const uid = profile?.uid || auth.currentUser?.uid;
     if (uid) {
-      fetchWorkoutHistory(uid).then(sessions => {
+      fetchWorkoutHistory(uid, (fastSessions) => setSessionHistory(fastSessions)).then(sessions => {
         setSessionHistory(sessions);
         setHistoryLoaded(true);
         setHistoryLoading(false);
@@ -12144,7 +12155,7 @@ const HistoryScreen = ({ profile, onBack, onNavigate = (s: string) => {} }) => {
 
   useEffect(() => {
     if (profile?.uid) {
-      fetchWorkoutHistory(profile?.uid || auth.currentUser?.uid || "").then(s => {
+      fetchWorkoutHistory(profile?.uid || auth.currentUser?.uid || "", (fastS) => setSessions(fastS)).then(s => {
         setSessions(s);
         setLoading(false);
         // Auto-expand current year and most recent month
