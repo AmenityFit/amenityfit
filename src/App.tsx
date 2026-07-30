@@ -7356,7 +7356,7 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
                       <div style={{ width: 64, height: 44, borderRadius: 12, background: `${COLORS.primary}20`, display: "flex", alignItems: "center", justifyContent: "center", marginRight: 14, flexShrink: 0, position: "relative", overflow: "hidden" }}>
                         {vid ? (
                           <>
-                            <img src={`https://vumbnail.com/${vid}_295x166.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12 }} />
+                            <img src={`https://vumbnail.com/${vid}_medium.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12 }} />
                             <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.25)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
                               <div style={{ width: 24, height: 24, borderRadius: 99, background: "rgba(255,255,255,0.2)", border: "1.5px solid rgba(255,255,255,0.6)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <span style={{ color: "#fff", fontSize: 9, fontWeight: 900, paddingLeft: 2 }}>▶</span>
@@ -8509,7 +8509,7 @@ if (showRest) {
                     >
                       <div style={{ width: 52, height: 36, borderRadius: 10, background: `${COLORS.primary}20`, flexShrink: 0, overflow: "hidden", position: "relative" }}>
                         {vid ? (
-                          <img src={`https://vumbnail.com/${vid}_295x166.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <img src={`https://vumbnail.com/${vid}_medium.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                         ) : (
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
                             <Dumbbell size={16} color={COLORS.accent} />
