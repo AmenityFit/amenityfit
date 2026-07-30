@@ -648,8 +648,17 @@ const validateInviteCode = async (code: string): Promise<any | null> => {
 // Mark a code as used by a uid (called after successful account creation)
 const markCodeUsed = async (code: string, uid: string): Promise<void> => {
   try {
+    // Same read-then-write shape as the other real bugs found tonight - force
+    // a real server read so a near-simultaneous redemption of the same
+    // shared building code by a different resident can't get silently
+    // dropped from the usedBy array.
     const ref = doc(db, "inviteCodes", code);
-    const snap = await getDoc(ref);
+    let snap;
+    try {
+      snap = await getDocFromServer(ref);
+    } catch (serverErr) {
+      snap = await getDoc(ref);
+    }
     if (snap.exists()) {
       const usedBy = snap.data().usedBy || [];
       if (!usedBy.includes(uid)) {
@@ -10733,8 +10742,17 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     setLongPressIdx(null);
     setSelectedMsg(null);
     try {
+      // Same read-merge-write shape as the workout weight bugs found tonight -
+      // force a real server read so a just-saved note from a moment ago can't
+      // get silently dropped by a stale cached read, and use merge:true as a
+      // second layer of protection on the write itself.
       const notesRef = doc(db, "users", uid, "coachingNotes", "notes");
-      const snap = await getDoc(notesRef);
+      let snap;
+      try {
+        snap = await getDocFromServer(notesRef);
+      } catch (serverErr) {
+        snap = await getDoc(notesRef);
+      }
       const existing = snap.exists() ? (snap.data().notes || []) : [];
       const newNote = {
         id: Date.now().toString(),
@@ -10744,7 +10762,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
       };
       let updated = [newNote, ...existing];
       if (updated.length > 200) updated = updated.slice(0, 200);
-      await setDoc(notesRef, { notes: updated });
+      await setDoc(notesRef, { notes: updated }, { merge: true });
       setNoteSavedIdx(idx);
       setTimeout(() => setNoteSavedIdx(null), 2000);
       setNoteToast(true);
