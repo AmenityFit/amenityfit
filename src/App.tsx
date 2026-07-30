@@ -8551,86 +8551,46 @@ const SENZ_QUOTES: string[] = [
 // SECONDARY: Generated variants rooted in Senz's philosophy — never copying his exact words,
 // but drawing from the ideas, themes, and worldview in his captions
 const GENERATED_QUOTES: string[] = [
-  // From: words shape reality, self-talk is the most influential voice you have
   "The conversation you have with yourself every day is setting the ceiling on what you think is possible.",
-  // From: don't wait for perfect conditions, start now with what you have
-  "The gap between where you are and where you want to be doesn't close by waiting. It closes by moving.",
-  // From: filter noise that doesn't serve your plan
-  "Not every opinion deserves a seat at your table. Learn to tell the difference.",
-  // From: worry is misplaced energy, small wins build momentum
-  "Stop rehearsing the worst case. Start building the evidence that it won't happen.",
-  // From: trust your intuition, stop overanalyzing
+  "The gap between where you are now and where you want to be doesn't close by waiting. It closes by moving and taking action.",
+  "Not every opinion deserves a seat at your table. Learn to tell the difference between what's for you and what's simply noise.",
+  "Stop rehearsing the worst case scenario and start building the evidence that it won't happen.",
   "You already know more than you think you do. The overthinking is the interference, not the answer.",
-  // From: success requires real risk, not just belief
-  "Belief without action is just a good intention. At some point you have to bet on yourself.",
-  // From: consistency even after the reward, discipline as identity
+  "Belief without action is just a good intention. At some point you have to bet on yourself and get going.",
   "The people who stay consistent after they've already won are the ones who keep winning.",
-  // From: finish what you started, heart-led commitment
-  "There's a version of this you haven't tried yet. Don't quit before you find out what it is.",
-  // From: true success means lifting others
-  "At some point the scoreboard stops being about you. That's when the real game starts.",
-  // From: stop trying to figure everything out, follow what satisfies you
-  "You don't need the whole map. You just need to know the next step and have the courage to take it.",
-  // From: optimism as fuel, lean into good energy
+  "You don't need to know how everything will work out. You just need to know the next step and have the courage to take it.",
   "A good feeling is data. Don't dismiss it because you can't explain it.",
-  // From: self-observation is the foundation of growth
   "You'll never outgrow a version of yourself you haven't examined.",
-  // From: authenticity attracts authenticity, real things take time
   "Stop performing for people who wouldn't recognize the real thing if it showed up.",
-  // From: imagination and love as drivers of a full life
   "The life you want started as an idea you had. Don't abandon it before you build it.",
-  // From: experience over age, seek what challenges you
-  "You don't age into wisdom. You earn it. Go earn it.",
-  // From: you create your own reality, self-doubt is the only real obstacle
-  "Everything you're waiting for permission to do. You already have it.",
-  // From: temporary defeat vs. permanent failure, resilience as a skill
+  "You don't age into wisdom, you earn it. So, go earn it.",
+  "Everything you're waiting for permission to do you already have it.",
   "A setback is a draft, not a final. Keep rewriting.",
-  // From: live by an ideal of who you want to be
   "Every decision is either moving you toward who you're becoming or away from it. There's no neutral.",
-  // From: steady wins the race, embrace your pace
   "You don't have to be the fastest in the room. You just have to still be moving when others have stopped.",
-  // From: success is a process, rapid change comes from long-term work
   "The overnight success was ten years in the making. Keep building.",
-  // From: daily improvement compounds over time
-  "One percent better every day doesn't feel like anything. Until you look back a year later.",
-  // From: knowing who you don't want to be clarifies who you are
+  "One percent better every day doesn't feel like anything until you look back a year later.",
   "Sometimes the clearest direction comes from a hard no. Follow it.",
-  // From: what you put out returns to you
-  "Your actions today are interest-bearing. The return just comes on its own schedule.",
-  // From: emotional distance from inconsistent people
   "You can love people from a distance. Peace and proximity aren't the same thing.",
-  // From: life keeps moving no matter what
-  "The day doesn't stop for your hesitation. Neither should you.",
-  // From: failure is feedback, not an endpoint
-  "Every miss is a correction. The ones who get good are the ones who keep taking the feedback.",
-  // From: sacrifice is the hidden foundation of long-term success
+  "The day doesn't stop for your hesitation, so neither should you.",
   "The quiet work nobody sees is where the gap between you and everyone else is built.",
-  // From: zone in on yourself, stop spending energy on external noise
   "The person who needs the most of your attention is you. Act like it.",
-  // From: define your vision, filter doubt
   "A clear enough vision makes doubt irrelevant. Get specific about where you're going.",
-  // From: fight for your future self, decisions today build tomorrow
   "Your future self is counting on what you do right now. Don't let them down.",
-  // From: positivity without action is incomplete
   "Feeling good about it is the start. Doing something about it is the point.",
-  // From: patience and consistent effort lead to results
-  "Most people quit right before the compound interest kicks in. Stay in.",
-  // From: limiting beliefs hold you back from what's possible
+  "Most people quit right before the compound interest kicks in. Stay in it.",
   "The ceiling you keep hitting is usually one you built yourself.",
-  // From: old fears shrink when you face them in small steps
   "The fear doesn't go away when you ignore it. It goes away when you walk through it.",
-  // From: closed doors redirect, adapt and move
-  "A no today is sometimes the thing that points you toward a better yes.",
-  // From: routine and consistency build results over time
-  "You don't need motivation every day. You need a system you show up to.",
-  // From: joy in the present moment, not contingent on achievement
-  "You don't have to earn the right to feel good today. You can just feel good today.",
-  // From: intrinsic motivation over external validation
+  "A no today is sometimes the thing that points you toward a better yes tomorrow.",
+  "You don't need motivation every day, you need a system you show up to.",
+  "You don't have to earn the right to feel good today. You can just decide to feel good today.",
   "The day you stop needing applause for your work is the day the work gets serious.",
-  // From: monotony is what real success looks like from the inside
   "Behind every result that looks remarkable from the outside is a routine that looked boring from the inside.",
-  // From: your potential expands as you explore it
   "You won't know what you're capable of from where you're standing. You have to move first.",
+  "At a certain point, you have to stop asking too many people what they think and start trusting your own direction.",
+  "The highest form of love is consideration, because if you really love someone, you consider them.",
+  "The hardest betrayal isn't the one you see coming, it's usually from the people you've already let close.",
+  "Not everything needs an immediate response.",
 ];
 
 // Cycles: all of Senz's quotes first, then generated variants, then loops back.
