@@ -512,7 +512,12 @@ const fetchWorkoutHistory = async (uid: string): Promise<any[]> => {
     const snap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", uid)));
     return snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
-      .filter((s: any) => s.uid === uid)
+      // Require completedAt - this is only ever set by saveWorkoutSession, the
+      // real completion path. A bare document can exist just from opening the
+      // workout screen (see the session-init effect), with no real completion
+      // evidence at all - without this filter, that stray doc shows up in
+      // history as a generic, data-less "Workout" entry.
+      .filter((s: any) => s.uid === uid && !!s.completedAt)
       .sort((a: any, b: any) => {
         const aTime = a.completedAt?.toMillis ? a.completedAt.toMillis() : new Date(a.completedAt || 0).getTime();
         const bTime = b.completedAt?.toMillis ? b.completedAt.toMillis() : new Date(b.completedAt || 0).getTime();
@@ -8995,7 +9000,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
 
   const todayLocal = React.useMemo(() => new Date(), []);
   const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment, parseInt(String(profile?.age)) || 30, profile?.sessionLength || 60, profile?.effectiveLevel || profile?.experience || "intermediate");
-  if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onBack={() => setScreen("dashboard")} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={() => handleWorkoutComplete({ groups: [], sessionLength: 0 })} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onBack={() => setScreen("dashboard")} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
 
   const todayDay = weekDays.find((d: any) => d.isToday) ?? null;
   const didAutoSelect = React.useRef(false);
@@ -16410,6 +16415,33 @@ const isInitialLoad = React.useRef(true);
     }
   };
 
+  // Rest days previously only ran handleWorkoutComplete (streak/session bookkeeping
+  // on the user profile) and never touched the workoutSessions collection at all.
+  // That meant a completed rest day never actually got recorded as a real,
+  // properly-labeled history entry - so whatever showed up in Progress for that
+  // day was either nothing, or a leftover bare document created just by opening
+  // the workout screen earlier (see the "Create session doc at workout start"
+  // effect), which has no dayTitle/dayFocus set and falls back to the generic
+  // word "Workout" with no data. This mirrors the real-workout completion path
+  // (saveWorkoutSession) so a completed rest day gets its own correctly labeled,
+  // complete entry - and since saveWorkoutSession looks up any existing doc for
+  // today's date first, it will properly fill in and fix a stray bare doc from
+  // earlier today rather than creating a duplicate.
+  const handleCompleteRestDay = () => {
+    handleWorkoutComplete({ groups: [], sessionLength: 0 });
+    const uid = auth.currentUser?.uid || userProfile?.uid || currentUid;
+    if (uid) {
+      saveWorkoutSession(uid, {
+        uid,
+        programKey: userProfile.programKey,
+        programDay: userProfile.programDay,
+        dayTitle: "Rest Day",
+        dayFocus: "Recovery",
+        weightsLogged: {},
+      }).catch(() => {});
+    }
+  };
+
   const handleNewCycle = async () => {
   // Re-evaluate accessibility track at each new cycle
   // If user has updated weight and BMI has dropped below threshold, exit silently
@@ -16684,7 +16716,7 @@ const isInitialLoad = React.useRef(true);
     }
     setScreen("dashboard");
   }} />;
-  if (screen === "weekly") return <WeeklyProgramView key={screen + new Date().toDateString()} profile={liveProfile} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={() => handleWorkoutComplete({ groups: [], sessionLength: 0 })} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  if (screen === "weekly") return <WeeklyProgramView key={screen + new Date().toDateString()} profile={liveProfile} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
   if (screen === "preview" && previewDay) {
     const previewType = previewDay.type || "full-body";
     const previewImage = getWorkoutImage(previewType, previewDay.programDay || 1);
@@ -16717,7 +16749,7 @@ const isInitialLoad = React.useRef(true);
       <button onClick={() => setScreen("dashboard")} style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: "pointer", letterSpacing: 0.3, boxShadow: `0 8px 24px ${COLORS.primary}50` }}>Back to Dashboard</button>
     </div>
   );
-  if (screen === "dashboard") return <Dashboard profile={liveProfile} onStartWorkout={() => setScreen("workout")} onCompleteRestDay={() => handleWorkoutComplete({ groups: [], sessionLength: 0 })} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} onNavigate={navigate} onViewWeekly={() => setScreen("weekly")} reEntryMode={userProfile?.reEntryMode} reEntrySessions={userProfile?.reEntrySessions || 0} reEntryTarget={Math.round((userProfile?.frequency || 3) * 2)} wearableModifier={getWorkoutModifier(userProfile)} onWearableOverride={() => setUserProfile((prev: any) => ({ ...prev, wearableOverride: true }))} />;
+  if (screen === "dashboard") return <Dashboard profile={liveProfile} onStartWorkout={() => setScreen("workout")} onCompleteRestDay={handleCompleteRestDay} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} onNavigate={navigate} onViewWeekly={() => setScreen("weekly")} reEntryMode={userProfile?.reEntryMode} reEntrySessions={userProfile?.reEntrySessions || 0} reEntryTarget={Math.round((userProfile?.frequency || 3) * 2)} wearableModifier={getWorkoutModifier(userProfile)} onWearableOverride={() => setUserProfile((prev: any) => ({ ...prev, wearableOverride: true }))} />;
   if (screen === "cycle-complete") return <CycleCompleteScreen profile={liveProfile} onStartNewCycle={handleNewCycle} />;
   if (screen === "workout") return <WorkoutFlow profile={liveProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onComplete={async (snapshot) => {
     const uid = auth.currentUser?.uid || userProfile?.uid || currentUid || authUid || (await new Promise<string>(resolve => {
