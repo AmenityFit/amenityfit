@@ -4006,22 +4006,26 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
 
   React.useEffect(() => {
     if (!profile?.uid) return;
+    const parseNotifs = (snap: any) => {
+      const thirtyDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
+      return snap.docs
+        .map((d: any) => ({ id: d.id, ...d.data() }))
+        .filter((n: any) => (n.createdAt?.seconds || 0) >= thirtyDaysAgo)
+        .sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+        .slice(0, 20);
+    };
     const fetchNotifs = async () => {
       setNotifLoading(true);
+      // Fast-then-verify: show cached notifications immediately, then
+      // confirm with a real server read and correct if anything was missed.
       try {
-        let snap;
-        try {
-          snap = await getDocsFromServer(collection(db, "users", profile.uid, "notifications"));
-        } catch (serverErr) {
-          snap = await getDocs(collection(db, "users", profile.uid, "notifications"));
-        }
-        const thirtyDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
-        const notifs = snap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter((n: any) => (n.createdAt?.seconds || 0) >= thirtyDaysAgo)
-          .sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-          .slice(0, 20);
-        setNotifications(notifs);
+        const fastSnap = await getDocs(collection(db, "users", profile.uid, "notifications"));
+        setNotifications(parseNotifs(fastSnap));
+        setNotifLoading(false);
+      } catch {}
+      try {
+        const snap = await getDocsFromServer(collection(db, "users", profile.uid, "notifications"));
+        setNotifications(parseNotifs(snap));
       } catch (e) {}
       setNotifLoading(false);
     };
