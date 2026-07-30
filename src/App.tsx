@@ -3978,13 +3978,16 @@ const _dailySeed = new Date().getDate() * 31 + new Date().getMonth() * 127;
 // sees different images as they progress through the 30-day program
 const getWorkoutImage = (type: string, programDay: number = 1): string => {
   const pool = IMAGE_POOLS[type] || IMAGE_POOLS["full-body"];
+  console.log("getWorkoutImage called with type:", type, "programDay:", programDay, "pool has", pool.length, "images");
   // Use a hash that guarantees each type and programDay combination
   // picks a different image — even across types with similar pool sizes.
   // Large prime offsets prevent collisions between upper/push/pull which
   // share similar exercises and used to show the same hero image.
   const typeHash = type === "upper-body" ? 3 : type === "lower-body" ? 37 : type === "core" ? 71 : type === "push" ? 11 : type === "pull" ? 53 : type === "cardio" ? 29 : type === "rest" ? 97 : 19;
   const seed = (_dailySeed * 7 + programDay * 13 + typeHash) & 0x7FFFFFFF;
-  return pool[seed % pool.length];
+  const chosenIndex = seed % pool.length;
+  console.log("getWorkoutImage result - index:", chosenIndex, "url:", pool[chosenIndex]);
+  return pool[chosenIndex];
 };
 
 const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, workoutDoneToday = false, isInProgress = false, onNavigate = (s) => {}, onViewWeekly = () => {}, reEntryMode = false, reEntrySessions = 0, reEntryTarget = 6, wearableModifier = null, onWearableOverride = () => {} }) => {
