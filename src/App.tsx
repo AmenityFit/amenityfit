@@ -7625,7 +7625,7 @@ const VideoModal = ({ exercise, exData, vimeoId, onClose, sets, reps }) => (
     <style>{`.vm-scroll::-webkit-scrollbar{display:none}`}</style>
     <div onClick={e => e.stopPropagation()} className="vm-scroll" style={{ background: COLORS.card, borderRadius: "24px 24px 0 0", width: "100%", maxWidth: 480, margin: "0 auto", maxHeight: "92vh", overflowY: "auto", scrollbarWidth: "none" as any }}>
       <div style={{ position: "relative", width: "100%", paddingTop: "56.25%", background: "#000", borderRadius: "24px 24px 0 0", overflow: "hidden" }}>
-        <iframe src={`https://player.vimeo.com/video/${vimeoId}?autoplay=1&loop=1&muted=1&color=4A90D9&title=0&byline=0&portrait=0`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
+        <iframe src={`https://player.vimeo.com/video/${vimeoId}?autoplay=1&loop=1&muted=1&color=4A90D9&title=0&byline=0&portrait=0&speed=0&pip=0`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
         <button onClick={onClose} style={{ position: "absolute", top: 12, right: 12, zIndex: 10, width: 36, height: 36, borderRadius: 99, background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', sans-serif", lineHeight: 1 }}>×</button>
       </div>
       <div style={{ padding: "20px 24px 48px" }}>
@@ -8730,7 +8730,7 @@ if (showRest) {
         return vimeoId ? (
           <div style={{ margin: "0 0 20px", borderRadius: 0, overflow: "hidden", position: "relative", background: "#000", flexShrink: 0, height: 240 }}>
             <iframe
-              src={`https://player.vimeo.com/video/${vimeoId}?autoplay=1&loop=1&muted=1&color=4A90D9&title=0&byline=0&portrait=0`}
+              src={`https://player.vimeo.com/video/${vimeoId}?autoplay=1&loop=1&muted=1&color=4A90D9&title=0&byline=0&portrait=0&speed=0&pip=0`}
               style={{ width: "100%", height: "100%", border: "none", display: "block" }}
               allow="autoplay; fullscreen; picture-in-picture"
               allowFullScreen
@@ -8899,7 +8899,7 @@ if (showRest) {
             </div>
             {vid && (
               <div style={{ margin: "0 0 20px", borderRadius: 0, overflow: "hidden", height: 240, background: "#000", flexShrink: 0, width: "100%" }}>
-                <iframe key={vid} src={`https://player.vimeo.com/video/${vid}?autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0`} style={{ width: "100%", height: "100%", border: "none", display: "block" }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
+                <iframe key={vid} src={`https://player.vimeo.com/video/${vid}?autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&speed=0&pip=0`} style={{ width: "100%", height: "100%", border: "none", display: "block" }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
               </div>
             )}
             <div className="ae-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 24px", scrollbarWidth: "none" as any }}>
