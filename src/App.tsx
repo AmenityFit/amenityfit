@@ -11969,7 +11969,14 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
               : focusLower.includes("back") || focusLower.includes("pull") || focusLower.includes("bicep")
               ? "upper-body"
               : "full-body";
-              const heroImage = selectedSession.heroImage || getWorkoutImage(wType, selectedSession.programDay || 1);
+              // Never trust a stored heroImage - always compute fresh from the
+              // validated, text-derived wType above. A real polluted session
+              // document was found tonight with a group-level value sitting
+              // where a day-level type should be, which had gotten permanently
+              // baked into a stored heroImage. Recomputing fresh here means
+              // this screen can never show a stale or contaminated image,
+              // regardless of what any past write may have gotten wrong.
+              const heroImage = getWorkoutImage(wType, selectedSession.programDay || 1);
             const bgPos = wType === "lower-body" ? "center 60%" : "center top";
 
             // Build a fake day object for WorkoutListScreen
@@ -12135,14 +12142,20 @@ const HistoryScreen = ({ profile, onBack, onNavigate = (s: string) => {} }) => {
 
   if (selectedSession) {
     const groups = selectedSession.groups || [];
-    const wType = selectedSession.workoutType ||
+    // Deliberately not trusting selectedSession.workoutType or heroImage at
+    // all - always derive purely from dayFocus text and recompute fresh. A
+    // real polluted session document was found tonight with a group-level
+    // value sitting where a day-level type should be. Never trusting any
+    // stored type/image field here means this screen can't be affected by
+    // that class of problem regardless of its root cause.
+    const wType =
       (selectedSession.dayFocus?.toLowerCase().includes("lower") || selectedSession.dayFocus?.toLowerCase().includes("leg") || selectedSession.dayFocus?.toLowerCase().includes("glute") ? "lower-body"
       : selectedSession.dayFocus?.toLowerCase().includes("push") || selectedSession.dayFocus?.toLowerCase().includes("chest") || selectedSession.dayFocus?.toLowerCase().includes("tricep") ? "push"
       : selectedSession.dayFocus?.toLowerCase().includes("pull") || selectedSession.dayFocus?.toLowerCase().includes("back") || selectedSession.dayFocus?.toLowerCase().includes("bicep") ? "upper-body"
       : selectedSession.dayFocus?.toLowerCase().includes("upper") ? "upper-body"
       : selectedSession.dayFocus?.toLowerCase().includes("abs") || selectedSession.dayFocus?.toLowerCase().includes("core") ? "core"
       : "full-body");
-      const heroImage = selectedSession.heroImage || getWorkoutImage(wType, selectedSession.programDay || 1);
+      const heroImage = getWorkoutImage(wType, selectedSession.programDay || 1);
     const bgPos = wType === "lower-body" ? "center 60%" : "center top";
     const fakeDay = {
       dayNum: selectedSession.programDay || 1,
@@ -17325,7 +17338,23 @@ const isInitialLoad = React.useRef(true);
           sessionLength: snapshot.sessionLength,
           groups: sanitizeForFirestore(snapshot.groups),
           workoutType: progDay?.type || (progDay?.focus?.toLowerCase().includes("lower") || progDay?.focus?.toLowerCase().includes("leg") || progDay?.focus?.toLowerCase().includes("glute") ? "lower-body" : progDay?.focus?.toLowerCase().includes("push") || progDay?.focus?.toLowerCase().includes("chest") ? "push" : progDay?.focus?.toLowerCase().includes("pull") || progDay?.focus?.toLowerCase().includes("back") || progDay?.focus?.toLowerCase().includes("bicep") ? "upper-body" : progDay?.focus?.toLowerCase().includes("upper") ? "upper-body" : progDay?.focus?.toLowerCase().includes("core") || progDay?.focus?.toLowerCase().includes("abs") ? "core" : "full-body"),
-          heroImage: getWorkoutImage(progDay?.type ? progDay.type : progDay?.focus?.toLowerCase().includes("lower") ? "lower-body" : progDay?.focus?.toLowerCase().includes("upper") || progDay?.focus?.toLowerCase().includes("push") ? "upper-body" : progDay?.focus?.toLowerCase().includes("cardio") ? "cardio" : "full-body", snapshot.programDay || userProfile.programDay || 1),
+          heroImage: getWorkoutImage((() => {
+            // Validate against the actual known image-pool categories before
+            // trusting progDay.type at all. Found a real session document
+            // tonight with "superset" sitting in a type-shaped field at the
+            // top level - a group-level value, not a valid day category. If
+            // that kind of value ever ends up here again from any source, it
+            // must never be trusted blindly - always fall through to
+            // inferring the real category from the day's focus text instead.
+            const validTypes = ["upper-body", "lower-body", "core", "cardio", "rest", "full-body", "push", "pull"];
+            if (progDay?.type && validTypes.includes(progDay.type)) return progDay.type;
+            const focusText = (progDay?.focus || "").toLowerCase();
+            if (focusText.includes("lower") || focusText.includes("leg")) return "lower-body";
+            if (focusText.includes("upper") || focusText.includes("push") || focusText.includes("pull")) return "upper-body";
+            if (focusText.includes("core") || focusText.includes("ab")) return "core";
+            if (focusText.includes("cardio")) return "cardio";
+            return "full-body";
+          })(), snapshot.programDay || userProfile.programDay || 1),
           equipmentPreference: userProfile.equipmentPreference,
           completedDateStr: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
           cycleNumber: userProfile.cycleNumber || 1,
