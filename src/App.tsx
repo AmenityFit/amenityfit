@@ -13834,7 +13834,7 @@ const SuperAdminLogin = ({ onLogin, onBack }) => {
   const inputStyle = (filled: boolean) => ({
     width: "100%", padding: "16px 18px", borderRadius: 14,
     border: `1.5px solid ${filled ? COLORS.accent : COLORS.border}`,
-    background: COLORS.card, color: COLORS.white, fontSize: 15,
+    background: COLORS.card, color: COLORS.white, fontSize: 16,
     fontFamily: "'Inter', sans-serif", outline: "none",
     boxSizing: "border-box" as const, marginBottom: 14,
   });
@@ -15796,14 +15796,14 @@ const ManagerLoginScreen = ({ onLogin, onBack }: { onLogin: (profile: any) => vo
   const inputStyle = (filled: boolean) => ({
     width: "100%", padding: "16px 18px", borderRadius: 14,
     border: `1.5px solid ${filled ? COLORS.accent : COLORS.border}`,
-    background: COLORS.card, color: COLORS.white, fontSize: 15,
+    background: COLORS.card, color: COLORS.white, fontSize: 16,
     fontFamily: "'Inter', sans-serif", outline: "none",
     boxSizing: "border-box" as const, transition: "all 0.2s ease", marginBottom: 14,
   });
 
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto" }}>
-      <div style={{ padding: "52px 24px 32px", background: `linear-gradient(180deg, ${COLORS.primary}20 0%, transparent 100%)` }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", justifyContent: "center", overflow: "hidden" }}>
+      <div style={{ padding: "24px 24px 32px", background: `linear-gradient(180deg, ${COLORS.primary}20 0%, transparent 100%)` }}>
         <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", marginBottom: 28 }}>
           <ArrowLeft size={18} color={COLORS.white} />
         </button>
@@ -16216,9 +16216,9 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
   );
 
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden" }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Header — image as atmospheric background, stats are the focus */}
-      <div style={{ position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "relative", overflow: "hidden", flexShrink: 0 }}>
         <div style={{
           position: "absolute", inset: 0,
           backgroundImage: `url(${MANAGER_TAB_IMAGES[activeTab]})`,
@@ -16249,7 +16249,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: "flex", gap: 0, padding: "0 24px", borderBottom: `1px solid ${COLORS.border}`, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+      <div style={{ display: "flex", gap: 0, padding: "0 24px", borderBottom: `1px solid ${COLORS.border}`, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", flexShrink: 0 }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id as any)} style={{
             padding: "12px 16px", background: "none", border: "none", cursor: "pointer",
@@ -16261,7 +16261,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
         ))}
       </div>
 
-      <div style={{ flex: 1, padding: "20px 24px 80px", overflowY: "auto", overflowX: "hidden" }}>
+      <div style={{ flex: 1, minHeight: 0, padding: "20px 24px 80px", overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch" as any }}>
 
         {/* ── OVERVIEW TAB ── */}
         {activeTab === "overview" && (
