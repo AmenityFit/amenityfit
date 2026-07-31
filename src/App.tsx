@@ -3406,6 +3406,7 @@ const PlaylistCard = () => (
       // Universal Links system already knows how to route correctly -
       // straight to the Spotify app if it's installed, or Safari if not -
       // without needing to reimplement that detection ourselves.
+      alert("isNativeApp: " + (window as any).isNativeApp + " | userAgent: " + navigator.userAgent.slice(0, 80));
       if ((window as any).isNativeApp) {
         window.location.href = spotifyWebUrl;
         return;
