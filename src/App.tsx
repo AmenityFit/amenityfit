@@ -3397,6 +3397,19 @@ const PlaylistCard = () => (
   <div
     onClick={() => {
       const spotifyWebUrl = "https://open.spotify.com/playlist/1vZ4MOciV3rtd3a67JWKv2";
+      // Inside the native iOS wrapper, skip the custom-scheme-then-timeout
+      // trick entirely. A raw spotify:// URL set via window.location.href can
+      // get silently blocked by the WebView before it ever reaches the native
+      // navigation handler - this was found to be the actual reason the
+      // button did nothing on iOS, even after the earlier window.open() fix.
+      // A plain https:// link, on the other hand, is something iOS's own
+      // Universal Links system already knows how to route correctly -
+      // straight to the Spotify app if it's installed, or Safari if not -
+      // without needing to reimplement that detection ourselves.
+      if ((window as any).isNativeApp) {
+        window.location.href = spotifyWebUrl;
+        return;
+      }
       window.location.href = "spotify://playlist/1vZ4MOciV3rtd3a67JWKv2";
       setTimeout(() => {
         if (!document.hidden) {
