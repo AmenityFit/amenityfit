@@ -1414,6 +1414,7 @@ const Step2Name = ({ data, onChange, onNext, onBack }) => (
 
 const Step2bCreateAccount = ({ data, onChange, onNext, onBack }) => {
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
 
@@ -1454,19 +1455,24 @@ const Step2bCreateAccount = ({ data, onChange, onNext, onBack }) => {
           value={data.password || ""}
           onChange={(e) => { onChange({ password: e.target.value }); setError(""); }}
           placeholder="Create a password (6+ characters)"
-          style={{ ...inputStyle(!!data.password), marginBottom: 0, paddingRight: 60 }}
+          style={{ ...inputStyle(!!data.password), marginBottom: 0, paddingRight: 48 }}
         />
-        <button onClick={() => setShowPassword(s => !s)} style={{ position: "absolute", right: 16, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-          {showPassword ? "Hide" : "Show"}
+        <button onClick={() => setShowPassword(s => !s)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+          {showPassword ? <EyeOff size={18} color={COLORS.textSecondary} /> : <Eye size={18} color={COLORS.textSecondary} />}
         </button>
       </div>
-      <input
-        type="password"
-        value={confirmPassword}
-        onChange={(e) => { setConfirmPassword(e.target.value); setError(""); }}
-        placeholder="Confirm password"
-        style={inputStyle(!!confirmPassword)}
-      />
+      <div style={{ position: "relative", marginBottom: 16 }}>
+        <input
+          type={showConfirmPassword ? "text" : "password"}
+          value={confirmPassword}
+          onChange={(e) => { setConfirmPassword(e.target.value); setError(""); }}
+          placeholder="Confirm password"
+          style={{ ...inputStyle(!!confirmPassword), marginBottom: 0, paddingRight: 48 }}
+        />
+        <button onClick={() => setShowConfirmPassword(s => !s)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+          {showConfirmPassword ? <EyeOff size={18} color={COLORS.textSecondary} /> : <Eye size={18} color={COLORS.textSecondary} />}
+        </button>
+      </div>
       <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "-8px 0 16px", lineHeight: 1.5 }}>
         Minimum 6 characters.
       </p>
@@ -12672,6 +12678,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
   const [managerAccessEmail, setManagerAccessEmail] = useState("");
   const [managerAccessPassword, setManagerAccessPassword] = useState("");
   const [managerAccessError, setManagerAccessError] = useState("");
+  const [showManagerPassword, setShowManagerPassword] = useState(false);
   const [wearableConnecting, setWearableConnecting] = useState<string | null>(null);
   const [buildingToast, setBuildingToast] = useState<string | null>(null);
   const [showChangeBldg, setShowChangeBldg] = useState(false);
@@ -13565,20 +13572,25 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
                 onChange={e => { setManagerAccessEmail(e.target.value); setManagerAccessError(""); }}
                 style={{ width: "100%", padding: "18px 20px", borderRadius: 16, border: "1.5px solid " + (managerAccessEmail ? COLORS.accent : COLORS.border), background: COLORS.background, color: COLORS.white, fontSize: 16, outline: "none", fontFamily: "'Inter', sans-serif", boxSizing: "border-box", marginBottom: 12 }}
               />
-              <input
-                type="password"
-                placeholder="Manager password"
-                value={managerAccessPassword}
-                onChange={e => { setManagerAccessPassword(e.target.value); setManagerAccessError(""); }}
-                onKeyDown={e => e.key === "Enter" && handleManagerAccess()}
-                style={{
-                  width: "100%", padding: "18px 20px", borderRadius: 16,
-                  border: `1.5px solid ${managerAccessPassword ? COLORS.accent : COLORS.border}`,
-                  background: COLORS.background, color: COLORS.white, fontSize: 16,
-                  outline: "none", fontFamily: "'Inter', sans-serif",
-                  boxSizing: "border-box" as const, marginBottom: 12,
-                }}
-              />
+              <div style={{ position: "relative", marginBottom: 12 }}>
+                <input
+                  type={showManagerPassword ? "text" : "password"}
+                  placeholder="Manager password"
+                  value={managerAccessPassword}
+                  onChange={e => { setManagerAccessPassword(e.target.value); setManagerAccessError(""); }}
+                  onKeyDown={e => e.key === "Enter" && handleManagerAccess()}
+                  style={{
+                    width: "100%", padding: "18px 20px", borderRadius: 16,
+                    border: `1.5px solid ${managerAccessPassword ? COLORS.accent : COLORS.border}`,
+                    background: COLORS.background, color: COLORS.white, fontSize: 16,
+                    outline: "none", fontFamily: "'Inter', sans-serif",
+                    boxSizing: "border-box" as const, marginBottom: 0, paddingRight: 48,
+                  }}
+                />
+                <button type="button" onClick={() => setShowManagerPassword(s => !s)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+                  {showManagerPassword ? <EyeOff size={18} color={COLORS.textSecondary} /> : <Eye size={18} color={COLORS.textSecondary} />}
+                </button>
+              </div>
               {managerAccessError && (
                 <p style={{ color: "#FF6B6B", fontSize: 13, margin: "0 0 12px" }}>⚠️ {managerAccessError}</p>
               )}
@@ -13900,6 +13912,7 @@ const SuperAdminLogin = ({ onLogin, onBack }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = () => {
     if (email === SUPER_ADMIN_CREDENTIALS.email && password === SUPER_ADMIN_CREDENTIALS.password) {
@@ -13929,7 +13942,19 @@ const SuperAdminLogin = ({ onLogin, onBack }) => {
       </div>
 
       <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle(!!email)} />
-      <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle(!!password)} onKeyDown={e => e.key === "Enter" && handleLogin()} />
+      <div style={{ position: "relative", marginBottom: 14 }}>
+        <input
+          type={showPassword ? "text" : "password"}
+          placeholder="Password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          style={{ ...inputStyle(!!password), marginBottom: 0, paddingRight: 48 }}
+          onKeyDown={e => e.key === "Enter" && handleLogin()}
+        />
+        <button type="button" onClick={() => setShowPassword(s => !s)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+          {showPassword ? <EyeOff size={18} color={COLORS.textSecondary} /> : <Eye size={18} color={COLORS.textSecondary} />}
+        </button>
+      </div>
 
       {error && (
         <div style={{ background: "#FF4D4D15", border: "1px solid #FF4D4D40", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
