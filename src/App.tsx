@@ -761,7 +761,7 @@ const SplashScreen = ({ onFinish, onSecretAdmin }) => {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100dvh", paddingBottom: 80, boxSizing: "border-box", background: `linear-gradient(145deg, ${COLORS.background} 0%, ${COLORS.card} 100%)`, fontFamily: "'Inter', sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100dvh", paddingBottom: 150, boxSizing: "border-box", background: `linear-gradient(145deg, ${COLORS.background} 0%, ${COLORS.card} 100%)`, fontFamily: "'Inter', sans-serif" }}>
       <div onClick={handleLogoTap} style={{ marginBottom: 24, boxShadow: `0 20px 60px ${COLORS.primary}40`, width: 100, height: 100, borderRadius: 22, overflow: "hidden", cursor: "pointer", userSelect: "none" as const }}>
         <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/Logo_rkq0cv" alt="AmenityFit" style={{ width: "120%", height: "120%", display: "block", objectFit: "cover", marginLeft: "-10%", marginTop: "-10%" }} />
       </div>
@@ -13730,7 +13730,7 @@ const SuperAdminLogin = ({ onLogin, onBack }) => {
   });
 
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px" }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px", paddingBottom: 80 }}>
       <div style={{ marginBottom: 40 }}>
         <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, #1a1a2e, ${COLORS.primary})`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24, border: `1px solid ${COLORS.border}` }}>
           <Shield size={20} color={COLORS.accent} />
