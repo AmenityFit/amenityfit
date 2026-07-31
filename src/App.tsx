@@ -3407,14 +3407,10 @@ const PlaylistCard = () => (
       // straight to the Spotify app if it's installed, or Safari if not -
       // without needing to reimplement that detection ourselves.
       const hasRNWebView = !!(window as any).ReactNativeWebView;
-      alert("Step 1 - hasReactNativeWebView: " + hasRNWebView + " | isNativeApp: " + (window as any).isNativeApp);
       if (hasRNWebView) {
-        alert("Step 2 - about to set location.href to: " + spotifyWebUrl);
         window.location.href = spotifyWebUrl;
-        alert("Step 3 - location.href was just set, current href now: " + window.location.href);
         return;
       }
-      alert("Step 2b - hasRNWebView was false, falling through to old deep-link logic");
       window.location.href = "spotify://playlist/1vZ4MOciV3rtd3a67JWKv2";
       setTimeout(() => {
         if (!document.hidden) {
