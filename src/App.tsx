@@ -3235,7 +3235,7 @@ const WelcomeBackScreen = ({ profile, onContinue }) => {
     : 0;
   const reEntryTarget = Math.round((profile.frequency || 3) * 2);
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "calc(52px + env(safe-area-inset-top, 0px)) 28px 36px", overflow: "hidden", textAlign: "center" }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "calc(72px + env(safe-area-inset-top, 0px)) 28px 36px", overflow: "hidden", textAlign: "center" }}>
       <div style={{ width: 80, height: 80, borderRadius: 99, marginBottom: 20, background: `${COLORS.primary}20`, border: `2px solid ${COLORS.primary}50`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 40px ${COLORS.primary}25` }}>
         <Flame size={36} color={COLORS.primary} strokeWidth={1.5} />
       </div>
@@ -4099,7 +4099,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
       {/* Header */}
-      <div style={{ padding: "52px 24px 8px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
+      <div style={{ padding: "calc(52px + env(safe-area-inset-top, 0px)) 24px 8px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
           <div>
           <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 4px", fontWeight: 500 }}>{getGreeting()}</p>
@@ -11790,7 +11790,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
       flexDirection: "column", overflow: "hidden",
     }}>
       {/* Header */}
-      <div style={{ flexShrink: 0, padding: "52px 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
+      <div style={{ flexShrink: 0, padding: "calc(52px + env(safe-area-inset-top, 0px)) 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <h1 style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.8 }}>Progress</h1>
           <button
@@ -12984,7 +12984,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
       )}
       {/* Header */}
       <div style={{
-        padding: "52px 24px 24px",
+        padding: "calc(52px + env(safe-area-inset-top, 0px)) 24px 24px",
         background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)`,
       }}>
         {/* Avatar — tap to change photo */}
