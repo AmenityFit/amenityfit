@@ -10894,7 +10894,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     <div style={{
       height: "100vh", background: COLORS.background,
       fontFamily: "'Inter', sans-serif", display: "flex",
-      flexDirection: "column",
+      flexDirection: "column", overflow: "hidden",
     }}>
       {/* Header */}
       <div style={{
