@@ -389,12 +389,57 @@ const fetchCompanyBuildings = async (companyId: string) => {
   }
 };
 
-const updateBuildingBranding = async (buildingId: string, programName: string): Promise<boolean> => {
+// A manager's requested program name is never applied live - it's held as a
+// pending request until Senz reviews and approves it (same spirit as new
+// building submissions), since this is real contractual/brand naming, not a
+// cosmetic setting a manager should be able to change unilaterally and
+// instantly for every resident.
+const submitPendingProgramName = async (buildingId: string, pendingProgramName: string): Promise<boolean> => {
   try {
-    await setDoc(doc(db, "buildings", buildingId), { programName }, { merge: true });
+    await setDoc(doc(db, "buildings", buildingId), {
+      pendingProgramName,
+      pendingProgramNameSubmittedAt: new Date().toISOString(),
+    }, { merge: true });
     return true;
   } catch (e) {
-    console.error("updateBuildingBranding error:", e);
+    console.error("submitPendingProgramName error:", e);
+    return false;
+  }
+};
+
+const approvePendingProgramName = async (buildingId: string, name: string): Promise<boolean> => {
+  try {
+    await setDoc(doc(db, "buildings", buildingId), {
+      programName: name,
+      pendingProgramName: null,
+      pendingProgramNameSubmittedAt: null,
+    }, { merge: true });
+    return true;
+  } catch (e) {
+    console.error("approvePendingProgramName error:", e);
+    return false;
+  }
+};
+
+const declinePendingProgramName = async (buildingId: string): Promise<boolean> => {
+  try {
+    await setDoc(doc(db, "buildings", buildingId), {
+      pendingProgramName: null,
+      pendingProgramNameSubmittedAt: null,
+    }, { merge: true });
+    return true;
+  } catch (e) {
+    console.error("declinePendingProgramName error:", e);
+    return false;
+  }
+};
+
+const updateBuildingLogo = async (buildingId: string, logoUrl: string | null): Promise<boolean> => {
+  try {
+    await setDoc(doc(db, "buildings", buildingId), { logoUrl }, { merge: true });
+    return true;
+  } catch (e) {
+    console.error("updateBuildingLogo error:", e);
     return false;
   }
 };
@@ -12628,6 +12673,25 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
   const [bldgValidating, setBldgValidating] = useState(false);
   const [bldgError, setBldgError] = useState("");
   const [bldgSuccess, setBldgSuccess] = useState(false);
+  const [buildingBranding, setBuildingBranding] = useState<{ logoUrl?: string | null; programName?: string | null }>({});
+
+  // Live so a name change actually approved by AmenityFit, or a photo the
+  // manager uploads, shows up here without the resident needing to do
+  // anything - same proven pattern used for building equipment.
+  useEffect(() => {
+    if (!profile?.buildingId) { setBuildingBranding({}); return; }
+    const unsub = onSnapshot(
+      doc(db, "buildings", profile.buildingId),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data();
+          setBuildingBranding({ logoUrl: d.logoUrl || null, programName: d.programName || null });
+        }
+      },
+      (err) => console.error("Building branding listener error:", err)
+    );
+    return () => unsub();
+  }, [profile?.buildingId]);
 
   const handleConnectWhoop = () => {
     if (!WHOOP_CLIENT_ID) return;
@@ -13177,13 +13241,21 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
         <div style={{ background: COLORS.card, borderRadius: 20, padding: "4px 20px 16px", marginBottom: 16, border: `1px solid ${COLORS.border}` }}>
           <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "16px 0 12px" }}>Your Building</p>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showChangeBldg ? 16 : 0 }}>
-            <div style={{ flex: 1 }}>
-              <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{profile?.buildingName || "—"}</p>
-              <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>
-                {profile?.unitNumber ? (/^unit\b/i.test(profile.unitNumber.trim()) ? profile.unitNumber : `Unit ${profile.unitNumber}`) : ""}
-                {profile?.unitNumber && profile?.inviteCode ? " · " : ""}
-                {profile?.inviteCode || ""}
-              </p>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12 }}>
+              {buildingBranding.logoUrl ? (
+                <img src={buildingBranding.logoUrl} alt="" style={{ width: 40, height: 40, borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
+              ) : null}
+              <div>
+                <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{buildingBranding.programName || profile?.buildingName || "—"}</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>
+                  {profile?.unitNumber ? (/^unit\b/i.test(profile.unitNumber.trim()) ? profile.unitNumber : `Unit ${profile.unitNumber}`) : ""}
+                  {profile?.unitNumber && profile?.inviteCode ? " · " : ""}
+                  {profile?.inviteCode || ""}
+                </p>
+                {buildingBranding.programName && (
+                  <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "2px 0 0", letterSpacing: 0.5, textTransform: "uppercase" }}>Powered by AmenityFit</p>
+                )}
+              </div>
             </div>
             <button
               onClick={() => { setShowChangeBldg(s => !s); setBldgError(""); setNewBldgCode(""); setBldgSuccess(false); }}
@@ -15574,6 +15646,19 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
   const gradient = getBuildingGradient(building.name || building.id);
   const rc = building.retentionCohorts || [];
 
+  // Fetched fresh directly rather than trusting whatever fields the parent
+  // buildings list happens to include - that list was never written with
+  // this field in mind, so relying on it could silently miss a real pending
+  // request.
+  const [pendingName, setPendingName] = useState<string | null>(null);
+  const [pendingActionLoading, setPendingActionLoading] = useState(false);
+  useEffect(() => {
+    if (!building?.id) return;
+    getDoc(doc(db, "buildings", building.id)).then(snap => {
+      if (snap.exists()) setPendingName(snap.data().pendingProgramName || null);
+    }).catch(e => console.error("Pending program name fetch error:", e));
+  }, [building?.id]);
+
   const StatRow = ({ label, value }: { label: string; value: string }) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: `1px solid ${COLORS.border}` }}>
       <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>{label}</span>
@@ -15597,6 +15682,35 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
         </div>
       </div>
       <div style={{ padding: "24px 24px 48px" }}>
+        {pendingName && (
+          <div style={{ background: "#f59e0b15", border: "1px solid #f59e0b40", borderRadius: 14, padding: "16px 18px", marginBottom: 20 }}>
+            <p style={{ color: "#f59e0b", fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Program Name Change Requested</p>
+            <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 600, margin: "0 0 4px" }}>"{pendingName}"</p>
+            <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 14px" }}>Currently showing to residents: "{building.programName || building.name || building.id}"</p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                disabled={pendingActionLoading}
+                onClick={async () => {
+                  setPendingActionLoading(true);
+                  const ok = await approvePendingProgramName(building.id, pendingName);
+                  if (ok) { building.programName = pendingName; setPendingName(null); }
+                  setPendingActionLoading(false);
+                }}
+                style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: "#22c55e", color: "#fff", fontSize: 13, fontWeight: 700, cursor: pendingActionLoading ? "not-allowed" : "pointer" }}
+              >Approve</button>
+              <button
+                disabled={pendingActionLoading}
+                onClick={async () => {
+                  setPendingActionLoading(true);
+                  const ok = await declinePendingProgramName(building.id);
+                  if (ok) setPendingName(null);
+                  setPendingActionLoading(false);
+                }}
+                style={{ flex: 1, padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: pendingActionLoading ? "not-allowed" : "pointer" }}
+              >Decline</button>
+            </div>
+          </div>
+        )}
         <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 4px" }}>Engagement</p>
         <StatRow label="Active Residents" value={String(building.activeUsersThisMonth ?? building.active ?? "—")} />
         <StatRow label="Workouts This Month" value={String(building.totalWorkoutsThisMonth ?? building.workouts ?? "—")} />
@@ -16054,6 +16168,11 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
   const [buildingName, setBuildingName] = useState("");
   const [editingBranding, setEditingBranding] = useState(false);
   const [tempName, setTempName] = useState("");
+  const [buildingLogoUrl, setBuildingLogoUrl] = useState<string | null>(null);
+  const [pendingProgramName, setPendingProgramName] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [nameSubmitted, setNameSubmitted] = useState(false);
+  const logoFileInputRef = React.useRef<HTMLInputElement>(null);
   // Codes state — must be at top level
   const [buildingCodes, setBuildingCodes] = useState<any[]>([]);
   const [codesLoading, setCodesLoading] = useState(false);
@@ -16069,6 +16188,8 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
         setBuildingData(data);
         setBuildingName(data.programName || data.name || "");
         setTempName(data.programName || data.name || "");
+        setBuildingLogoUrl(data.logoUrl || null);
+        setPendingProgramName(data.pendingProgramName || null);
       }
       setBuildingLoading(false);
     });
@@ -16491,7 +16612,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
             <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}30`, borderRadius: 14, padding: "14px 16px", marginBottom: 24 }}>
               <p style={{ color: COLORS.accent, fontSize: 13, fontWeight: 600, margin: "0 0 4px" }}>Custom Building Branding</p>
               <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
-                Give your fitness program its own identity. The name you set here will replace "AmenityFit" across your residents' experience once connected to the backend.
+                Give your fitness program its own identity. Your photo and program name appear together on each resident's Profile screen, on their building card. Name changes are reviewed by AmenityFit before they go live.
               </p>
             </div>
 
@@ -16504,54 +16625,117 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                   value={tempName}
                   onChange={e => setTempName(e.target.value)}
                   placeholder="e.g. The Maverick Fitness Club"
-                  style={{ width: "100%", padding: "16px 18px", borderRadius: 14, border: `1.5px solid ${COLORS.accent}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box", marginBottom: 12 }}
+                  style={{ width: "100%", padding: "16px 18px", borderRadius: 14, border: `1.5px solid ${COLORS.accent}`, background: COLORS.card, color: COLORS.white, fontSize: 16, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box", marginBottom: 12 }}
                 />
                 <div style={{ display: "flex", gap: 10 }}>
                   <button onClick={async () => {
                     const resolvedId = buildingId || userProfile?.buildingId;
-                    if (resolvedId) await updateBuildingBranding(resolvedId, tempName);
-                    setBuildingName(tempName);
+                    if (resolvedId && tempName.trim()) {
+                      await submitPendingProgramName(resolvedId, tempName.trim());
+                      setPendingProgramName(tempName.trim());
+                      setNameSubmitted(true);
+                      setTimeout(() => setNameSubmitted(false), 4000);
+                    }
                     setEditingBranding(false);
-                  }} style={{ flex: 1, padding: "14px", borderRadius: 14, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Save Name</button>
+                  }} style={{ flex: 1, padding: "14px", borderRadius: 14, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Submit for Review</button>
                   <button onClick={() => { setTempName(buildingName); setEditingBranding(false); }} style={{ flex: 1, padding: "14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
                 </div>
               </div>
             ) : (
-              <div style={{ background: COLORS.card, borderRadius: 16, padding: "18px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <p style={{ color: COLORS.white, fontSize: 16, fontWeight: 700, margin: "0 0 4px" }}>{buildingName}</p>
-                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>Powered by AmenityFit</p>
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ background: COLORS.card, borderRadius: 16, padding: "18px 20px", border: `1px solid ${COLORS.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <p style={{ color: COLORS.white, fontSize: 16, fontWeight: 700, margin: "0 0 4px" }}>{buildingName}</p>
+                    <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>Powered by AmenityFit</p>
+                  </div>
+                  <button onClick={() => { setTempName(buildingName); setEditingBranding(true); }} style={{ background: `${COLORS.primary}20`, border: `1px solid ${COLORS.primary}40`, borderRadius: 10, padding: "8px 16px", color: COLORS.accent, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Edit</button>
                 </div>
-                <button onClick={() => setEditingBranding(true)} style={{ background: `${COLORS.primary}20`, border: `1px solid ${COLORS.primary}40`, borderRadius: 10, padding: "8px 16px", color: COLORS.accent, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+                {nameSubmitted && (
+                  <p style={{ color: COLORS.success, fontSize: 12, margin: "10px 0 0" }}>Submitted. AmenityFit will review before this goes live.</p>
+                )}
+                {!nameSubmitted && pendingProgramName && pendingProgramName !== buildingName && (
+                  <p style={{ color: "#f59e0b", fontSize: 12, margin: "10px 0 0" }}>Pending review: "{pendingProgramName}" — residents still see "{buildingName}" until approved.</p>
+                )}
               </div>
             )}
 
-            {/* Preview */}
+            <input
+              ref={logoFileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const resolvedId = buildingId || userProfile?.buildingId;
+                if (!resolvedId) return;
+                setLogoUploading(true);
+                const reader = new FileReader();
+                reader.onload = async () => {
+                  const dataUrl = reader.result as string;
+                  const ok = await updateBuildingLogo(resolvedId, dataUrl);
+                  if (ok) setBuildingLogoUrl(dataUrl);
+                  setLogoUploading(false);
+                };
+                reader.onerror = () => setLogoUploading(false);
+                reader.readAsDataURL(file);
+                e.target.value = "";
+              }}
+            />
+
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Logo / Building Photo</p>
             <div style={{ background: COLORS.card, borderRadius: 18, padding: "20px", border: `1px solid ${COLORS.border}`, marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
-                <div style={{ width: 64, height: 64, borderRadius: 16, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: `0 6px 20px ${COLORS.primary}40` }}>
-                  <span style={{ color: COLORS.white, fontSize: 26, fontWeight: 900 }}>{(b.name || "A")[0]}</span>
-                </div>
+                {buildingLogoUrl ? (
+                  <img src={buildingLogoUrl} alt="Building" style={{ width: 64, height: 64, borderRadius: 16, objectFit: "cover", flexShrink: 0, boxShadow: `0 6px 20px ${COLORS.primary}40` }} />
+                ) : (
+                  <div style={{ width: 64, height: 64, borderRadius: 16, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: `0 6px 20px ${COLORS.primary}40` }}>
+                    <span style={{ color: COLORS.white, fontSize: 26, fontWeight: 900 }}>{(b.name || "A")[0]}</span>
+                  </div>
+                )}
                 <div style={{ flex: 1 }}>
                   <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>Building logo or photo</p>
-                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0, lineHeight: 1.5 }}>Upload your building's logo or a photo from your camera roll. This will appear across the resident experience.</p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0, lineHeight: 1.5 }}>Shown next to your building name on each resident's Profile screen.</p>
                 </div>
               </div>
-              <button style={{ width: "100%", padding: "13px", borderRadius: 12, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                Upload Photo
+              <button
+                onClick={() => logoFileInputRef.current?.click()}
+                disabled={logoUploading}
+                style={{ width: "100%", padding: "13px", borderRadius: 12, border: `1.5px dashed ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: logoUploading ? "not-allowed" : "pointer", marginBottom: buildingLogoUrl ? 10 : 0 }}
+              >
+                {logoUploading ? "Uploading..." : buildingLogoUrl ? "Replace Photo" : "Upload Photo"}
               </button>
+              {buildingLogoUrl && (
+                <button
+                  onClick={async () => {
+                    const resolvedId = buildingId || userProfile?.buildingId;
+                    if (!resolvedId) return;
+                    setLogoUploading(true);
+                    const ok = await updateBuildingLogo(resolvedId, null);
+                    if (ok) setBuildingLogoUrl(null);
+                    setLogoUploading(false);
+                  }}
+                  disabled={logoUploading}
+                  style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: "transparent", color: "#ef4444", fontSize: 13, fontWeight: 600, cursor: logoUploading ? "not-allowed" : "pointer" }}
+                >
+                  Remove Photo
+                </button>
+              )}
             </div>
 
-            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Preview</p>
-            <div style={{ background: COLORS.card, borderRadius: 18, padding: "60px 20px", border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
-              <div style={{ width: 52, height: 52, borderRadius: 14, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", boxShadow: `0 6px 20px ${COLORS.primary}40` }}>
-                <span style={{ color: COLORS.white, fontSize: 22, fontWeight: 900 }}>{b.name[0]}</span>
-              </div>
+            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Preview — what residents see</p>
+            <div style={{ background: COLORS.card, borderRadius: 18, padding: "40px 20px", border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
+              {buildingLogoUrl ? (
+                <img src={buildingLogoUrl} alt="Building" style={{ width: 52, height: 52, borderRadius: 14, objectFit: "cover", margin: "0 auto 14px", boxShadow: `0 6px 20px ${COLORS.primary}40` }} />
+              ) : (
+                <div style={{ width: 52, height: 52, borderRadius: 14, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", boxShadow: `0 6px 20px ${COLORS.primary}40` }}>
+                  <span style={{ color: COLORS.white, fontSize: 22, fontWeight: 900 }}>{(b.name || "A")[0]}</span>
+                </div>
+              )}
               <p style={{ color: COLORS.white, fontSize: 18, fontWeight: 800, margin: "0 0 4px" }}>{buildingName}</p>
               <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0, letterSpacing: 1.5, textTransform: "uppercase" }}>Powered by AmenityFit</p>
             </div>
-            
+
           </>
         )}
 
