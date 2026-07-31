@@ -3894,7 +3894,7 @@ const BottomNav = ({ active, onNavigate = (s) => {} }) => {
     <div style={{
       position: "fixed", bottom: 0, left: 0, right: 0,
       background: COLORS.card, borderTop: `1px solid ${COLORS.border}`,
-      display: "flex", padding: "10px 0 20px",
+      display: "flex", padding: "10px 0 calc(20px + env(safe-area-inset-bottom, 0px))",
       transform: "translateZ(0)", WebkitTransform: "translateZ(0)",
       willChange: "transform",
     }}>
@@ -11209,7 +11209,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
 
       {/* Input */}
       <div style={{
-        padding: "12px 16px 120px",
+        padding: "12px 16px 16px",
         background: COLORS.card,
         borderTop: `1px solid ${COLORS.border}`,
         display: "flex", alignItems: "flex-end", gap: 10, flexShrink: 0,
@@ -11244,6 +11244,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
           <ChevronRight size={20} color={COLORS.white} strokeWidth={2.5} />
         </button>
         </div>
+      <div style={{ height: "calc(76px + env(safe-area-inset-bottom, 0px))", background: COLORS.card, flexShrink: 0 }} />
 
 <BottomNav active="assistant" onNavigate={onNavigate} />
 </div>
