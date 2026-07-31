@@ -13730,7 +13730,7 @@ const SuperAdminLogin = ({ onLogin, onBack }) => {
   });
 
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px", paddingBottom: 80 }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px", paddingBottom: 120 }}>
       <div style={{ marginBottom: 40 }}>
         <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, #1a1a2e, ${COLORS.primary})`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24, border: `1px solid ${COLORS.border}` }}>
           <Shield size={20} color={COLORS.accent} />
