@@ -3897,7 +3897,7 @@ const BottomNav = ({ active, onNavigate = (s) => {} }) => {
   return (
     <div style={{
       background: COLORS.card, borderTop: `1px solid ${COLORS.border}`,
-      display: "flex", flexShrink: 0, padding: "10px 0 calc(20px + env(safe-area-inset-bottom, 0px))",
+      display: "flex", flexShrink: 0, padding: "10px 0 20px",
     }}>
       {tabs.map((t) => {
         const isActive = t.id === active;
