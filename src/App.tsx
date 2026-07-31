@@ -10587,6 +10587,7 @@ ${injuries ? `- Injury flags: ${injuries} — factor this into everything. Don't
 - Building equipment available: ${profile?.buildingEquipment?.length ? profile.buildingEquipment.join(", ") : "standard gym equipment"}
 - Current streak: ${streak} days
 - Program cycle: ${cycleNumber}
+- Mastery badge (shown on Home): ${(() => { const b = getMasteryBadge(cycleNumber); return b ? `${b.label} (earned by completing ${b.label === "Bronze" ? 3 : b.label === "Silver" ? 6 : b.label === "Gold" ? 10 : 15} full program cycles - tracks consistency, not skill)` : "none yet - earned at 3 full program cycles"; })()}
 - Current weight: ${(() => { const logs = profile?.statsLogs; if (!logs || logs.length === 0) return "not logged"; const weightLogs = logs.filter((l: any) => l.weight != null).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()); return weightLogs.length > 0 ? `${weightLogs[0].weight} lbs` : "not logged"; })()}
 - Starting weight: ${(() => { const logs = profile?.statsLogs; if (!logs || logs.length === 0) return "not logged"; const baseline = logs.find((l: any) => l.label === "Baseline"); return baseline?.weight ? `${baseline.weight} lbs` : "not logged"; })()}
 - Weight change since baseline: ${(() => { const logs = profile?.statsLogs; if (!logs || logs.length < 2) return "insufficient data"; const baseline = logs.find((l: any) => l.label === "Baseline"); const weightLogs = logs.filter((l: any) => l.weight != null && l.label !== "Baseline").sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()); if (!baseline?.weight || weightLogs.length === 0) return "insufficient data"; const delta = weightLogs[0].weight - baseline.weight; return `${delta > 0 ? "+" : ""}${delta} lbs since baseline`; })()}
@@ -10727,13 +10728,55 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     return dayData?.focus || dayData?.title || null;
   })();
 
+  // Detects a real level-up exactly once, then permanently records it so it
+  // never re-triggers for the same milestone. Two separate signals are
+  // tracked: the mastery badge tier (Bronze/Silver/Gold/Platinum - the same
+  // one shown as a badge on Home) and experience/programming level. Computed
+  // once via lazy useState init so it can never re-fire mid-conversation if
+  // the profile object happens to update after the sync write below lands.
+  // Undefined stored values (existing users from before this feature existed)
+  // are treated exactly like a brand-new profile: silently synced, never a
+  // false "congrats" for progress that happened before this could track it.
+  const [levelUpInfo] = useState(() => {
+    const currentBadge = getMasteryBadge(profile?.cycleNumber || 1)?.label || null;
+    const currentLevel = profile?.effectiveLevel || profile?.experience || "beginner";
+    const storedBadge = profile?.assistantLastKnownBadge;
+    const storedLevel = profile?.assistantLastKnownLevel;
+    const isFirstEverCheck = storedBadge === undefined && storedLevel === undefined;
+    const badgeLeveledUp = !isFirstEverCheck && currentBadge !== null && storedBadge !== currentBadge;
+    const levelLeveledUp = !isFirstEverCheck && storedLevel !== undefined && storedLevel !== currentLevel;
+    return { currentBadge, currentLevel, badgeLeveledUp, levelLeveledUp };
+  });
+
+  // Fire-and-forget: keep the stored markers in sync with current values so
+  // this can never repeat itself. Silent fail - this is a nice-to-have
+  // recognition, never something that should block or disrupt the chat.
+  useEffect(() => {
+    if (!profile?.uid) return;
+    if (profile?.assistantLastKnownBadge === levelUpInfo.currentBadge && profile?.assistantLastKnownLevel === levelUpInfo.currentLevel) return;
+    setDoc(doc(db, "users", profile.uid), {
+      assistantLastKnownBadge: levelUpInfo.currentBadge,
+      assistantLastKnownLevel: levelUpInfo.currentLevel,
+    }, { merge: true }).catch(() => {});
+  }, []);
+
   const openingMessage = (() => {
     const rawName = profile?.name ? profile.name.split(" ")[0] : "";
     const firstName = rawName ? ` ${rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase()}` : "";
-    if (isRestDay) return `Hey${firstName}. Today's a rest day. Your body is doing the work right now. Recovery is when you grow. What's on your mind?`;
-    if (workoutDoneToday && todayFocus) return `Hey${firstName}. You got it done. ${todayFocus} is in the books. How are you feeling? Anything you want to talk through on the recovery side, or what's coming next?`;
-    if (todayFocus) return `Hey${firstName}. Day ${programDay} • ${todayFocus} on deck. What do you need?`;
-    return `Hey${firstName}. I know your program and where you are in it, so ask me anything about your training, nutrition, recovery, or how the app works. What's going on?`;
+
+    let levelUpPrefix = "";
+    if (levelUpInfo.badgeLeveledUp && levelUpInfo.levelLeveledUp) {
+      levelUpPrefix = `Before anything else, two things: you just crossed into ${levelUpInfo.currentBadge} status, and your programming just stepped up too. Real consistency, showing up as real progress. `;
+    } else if (levelUpInfo.badgeLeveledUp) {
+      levelUpPrefix = `Before anything else, you just crossed into ${levelUpInfo.currentBadge} status. That badge only comes from real consistency, not luck. `;
+    } else if (levelUpInfo.levelLeveledUp) {
+      levelUpPrefix = `Before anything else, your programming just leveled up. This is more advanced work than where you started, and you've earned it. `;
+    }
+
+    if (isRestDay) return `Hey${firstName}. ${levelUpPrefix}Today's a rest day. Your body is doing the work right now. Recovery is when you grow. What's on your mind?`;
+    if (workoutDoneToday && todayFocus) return `Hey${firstName}. ${levelUpPrefix}You got it done. ${todayFocus} is in the books. How are you feeling? Anything you want to talk through on the recovery side, or what's coming next?`;
+    if (todayFocus) return `Hey${firstName}. ${levelUpPrefix}Day ${programDay} • ${todayFocus} on deck. What do you need?`;
+    return `Hey${firstName}. ${levelUpPrefix}I know your program and where you are in it, so ask me anything about your training, nutrition, recovery, or how the app works. What's going on?`;
   })();
 
   const [messages, setMessages] = useState<any[]>([
@@ -17342,6 +17385,13 @@ const isInitialLoad = React.useRef(true);
       role: 'resident',
       bmi: Math.round(bmi * 10) / 10,
       accessibilityTrack, // silent — never displayed in UI
+      // Lets the Fitness Assistant reliably detect and acknowledge a real
+      // level-up (mastery badge tier or experience level) exactly once,
+      // without ever guessing or repeating itself. Initialized here so
+      // every profile has a defined baseline from day one - no ambiguity
+      // later about whether this is someone's "first ever" check.
+      assistantLastKnownBadge: null as string | null,
+      assistantLastKnownLevel: data.experience || "beginner",
     };
     // If email+password were collected, create Firebase account
     if (data.email && data.password) {
