@@ -3406,14 +3406,15 @@ const PlaylistCard = () => (
       // Universal Links system already knows how to route correctly -
       // straight to the Spotify app if it's installed, or Safari if not -
       // without needing to reimplement that detection ourselves.
-      // ReactNativeWebView is automatically provided by the react-native-webview
-      // library itself on every page it loads, guaranteed by the library - not
-      // dependent on our own injected JS timing, which was confirmed tonight to
-      // not be working (window.isNativeApp came back undefined in a real test).
-      if ((window as any).ReactNativeWebView) {
+      const hasRNWebView = !!(window as any).ReactNativeWebView;
+      alert("Step 1 - hasReactNativeWebView: " + hasRNWebView + " | isNativeApp: " + (window as any).isNativeApp);
+      if (hasRNWebView) {
+        alert("Step 2 - about to set location.href to: " + spotifyWebUrl);
         window.location.href = spotifyWebUrl;
+        alert("Step 3 - location.href was just set, current href now: " + window.location.href);
         return;
       }
+      alert("Step 2b - hasRNWebView was false, falling through to old deep-link logic");
       window.location.href = "spotify://playlist/1vZ4MOciV3rtd3a67JWKv2";
       setTimeout(() => {
         if (!document.hidden) {
@@ -16718,11 +16719,18 @@ export default function App() {
   // any actual scrollable element rather than assuming one fixed selector,
   // since different screens each build their own wrapper independently.
   React.useEffect(() => {
-    window.scrollTo(0, 0);
+    // Chat and the Weekly view intentionally land partway down rather than
+    // at true zero - Senz confirmed this specific offset is the right
+    // starting point for these two screens, skipping past a redundant title
+    // area straight to the actually useful content (day tabs / hero card,
+    // or the chat's own header). This value may need fine-tuning after
+    // testing - it's a reasonable estimate, not something pixel-verified.
+    const targetOffset = (screen === "weekly" || screen === "assistant") ? 170 : 0;
+    window.scrollTo(0, targetOffset);
     document.querySelectorAll("div").forEach((el) => {
       const style = window.getComputedStyle(el);
-      if ((style.overflowY === "auto" || style.overflowY === "scroll") && el.scrollTop > 0) {
-        el.scrollTop = 0;
+      if (style.overflowY === "auto" || style.overflowY === "scroll") {
+        el.scrollTop = targetOffset;
       }
     });
   }, [screen]);
