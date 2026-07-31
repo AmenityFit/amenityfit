@@ -3406,8 +3406,11 @@ const PlaylistCard = () => (
       // Universal Links system already knows how to route correctly -
       // straight to the Spotify app if it's installed, or Safari if not -
       // without needing to reimplement that detection ourselves.
-      alert("isNativeApp: " + (window as any).isNativeApp + " | userAgent: " + navigator.userAgent.slice(0, 80));
-      if ((window as any).isNativeApp) {
+      // ReactNativeWebView is automatically provided by the react-native-webview
+      // library itself on every page it loads, guaranteed by the library - not
+      // dependent on our own injected JS timing, which was confirmed tonight to
+      // not be working (window.isNativeApp came back undefined in a real test).
+      if ((window as any).ReactNativeWebView) {
         window.location.href = spotifyWebUrl;
         return;
       }
