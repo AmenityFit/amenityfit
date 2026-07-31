@@ -68,7 +68,18 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  overflow-y: auto;
+  /* Removed overflow-y: auto here - this was already present before tonight's
+     changes and creates a genuine, real problem: nearly every individual
+     screen in this app already has its own internal wrapper with its own
+     height: 100vh + overflow-y: auto (confirmed directly in ProfileScreen).
+     That means #root scrolling too creates two independent, nested scroll
+     containers fighting each other - a well-documented cause of position:
+     fixed elements (like the bottom nav) glitching, clipping, or shifting
+     during scroll on iOS specifically. This was very likely always a latent
+     issue, but removing SafeAreaView tonight (which was accidentally acting
+     as a kind of safety margin) is very likely what made it surface visibly.
+     Each screen already owns its own scrolling correctly - #root doesn't
+     need to and shouldn't scroll too. */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 }
