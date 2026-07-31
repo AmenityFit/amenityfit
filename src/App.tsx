@@ -787,7 +787,7 @@ const FeatureCard = ({ icon: Icon, title, desc }) => (
 
 const WelcomeScreen = ({ onGetStarted, onLogin, onManagerLogin }) => (
   <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-    <div style={{ background: `linear-gradient(180deg, ${COLORS.primary}25 0%, ${COLORS.background} 65%)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "72px 0 24px" }}>
+    <div style={{ background: `linear-gradient(180deg, ${COLORS.primary}25 0%, ${COLORS.background} 65%)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "calc(72px + env(safe-area-inset-top, 0px)) 0 24px" }}>
       <div style={{ marginBottom: 18, boxShadow: `0 12px 40px ${COLORS.primary}50`, width: 82, height: 82, borderRadius: 18, overflow: "hidden" }}>
         <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/Logo_rkq0cv" alt="AmenityFit" style={{ width: "120%", height: "120%", display: "block", objectFit: "cover", marginLeft: "-10%", marginTop: "-10%" }} />
       </div>
@@ -3235,7 +3235,7 @@ const WelcomeBackScreen = ({ profile, onContinue }) => {
     : 0;
   const reEntryTarget = Math.round((profile.frequency || 3) * 2);
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "52px 28px 36px", overflow: "hidden", textAlign: "center" }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "calc(52px + env(safe-area-inset-top, 0px)) 28px 36px", overflow: "hidden", textAlign: "center" }}>
       <div style={{ width: 80, height: 80, borderRadius: 99, marginBottom: 20, background: `${COLORS.primary}20`, border: `2px solid ${COLORS.primary}50`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 40px ${COLORS.primary}25` }}>
         <Flame size={36} color={COLORS.primary} strokeWidth={1.5} />
       </div>
