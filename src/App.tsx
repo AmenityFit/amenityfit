@@ -4099,7 +4099,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
       {/* Header */}
-      <div style={{ padding: "calc(36px + env(safe-area-inset-top, 0px)) 24px 8px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
+      <div style={{ padding: "calc(16px + env(safe-area-inset-top, 0px)) 24px 8px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
           <div>
           <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 4px", fontWeight: 500 }}>{getGreeting()}</p>
@@ -7758,7 +7758,7 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", WebkitOverflowScrolling: "touch" as any, position: "relative", paddingBottom: "20px" }}>
       {/* Header */}
-      <div style={{ padding: "calc(36px + env(safe-area-inset-top, 0px)) 24px 24px", position: "relative" }}>
+      <div style={{ padding: "calc(16px + env(safe-area-inset-top, 0px)) 24px 24px", position: "relative" }}>
         {/* Hero image — covers full header height dynamically */}
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundImage: `url(${workoutImage})`, backgroundSize: "cover", backgroundPosition: bgPosition, zIndex: 0 }}>
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(10,20,50,0.7) 0%, rgba(13,13,13,0.98) 100%)" }} />
@@ -8771,7 +8771,7 @@ if (showRest) {
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Top bar — fixed */}
-      <div style={{ padding: "calc(36px + env(safe-area-inset-top, 0px)) 24px 16px", display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+      <div style={{ padding: "calc(16px + env(safe-area-inset-top, 0px)) 24px 16px", display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
         <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
           <ArrowLeft size={18} color={COLORS.white} />
         </button>
@@ -9623,7 +9623,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
 
       {/* Header */}
-      <div style={{ padding: "calc(36px + env(safe-area-inset-top, 0px)) 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}20 0%, transparent 100%)` }}>
+      <div style={{ padding: "calc(16px + env(safe-area-inset-top, 0px)) 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}20 0%, transparent 100%)` }}>
         <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", marginBottom: 20 }}>
           <ArrowLeft size={18} color={COLORS.white} />
         </button>
@@ -10898,7 +10898,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     }}>
       {/* Header */}
       <div style={{
-        padding: "calc(36px + env(safe-area-inset-top, 0px)) 24px 16px",
+        padding: "calc(16px + env(safe-area-inset-top, 0px)) 24px 16px",
         background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)`,
         display: "flex", alignItems: "center", gap: 14, flexShrink: 0,
       }}>
@@ -11790,7 +11790,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
       flexDirection: "column", overflow: "hidden",
     }}>
       {/* Header */}
-      <div style={{ flexShrink: 0, padding: "calc(36px + env(safe-area-inset-top, 0px)) 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
+      <div style={{ flexShrink: 0, padding: "calc(16px + env(safe-area-inset-top, 0px)) 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <h1 style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.8 }}>Progress</h1>
           <button
@@ -12984,7 +12984,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
       )}
       {/* Header */}
       <div style={{
-        padding: "calc(36px + env(safe-area-inset-top, 0px)) 24px 24px",
+        padding: "calc(16px + env(safe-area-inset-top, 0px)) 24px 24px",
         background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)`,
       }}>
         {/* Avatar — tap to change photo */}
@@ -13060,7 +13060,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
             <div style={{ flex: 1 }}>
               <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{profile?.buildingName || "—"}</p>
               <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>
-                {profile?.unitNumber ? `Unit ${profile.unitNumber}` : ""}
+                {profile?.unitNumber ? (/^unit\b/i.test(profile.unitNumber.trim()) ? profile.unitNumber : `Unit ${profile.unitNumber}`) : ""}
                 {profile?.unitNumber && profile?.inviteCode ? " · " : ""}
                 {profile?.inviteCode || ""}
               </p>
