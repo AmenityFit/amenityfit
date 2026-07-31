@@ -9623,7 +9623,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
 
       {/* Header */}
-      <div style={{ padding: "calc(16px + env(safe-area-inset-top, 0px)) 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}20 0%, transparent 100%)` }}>
+      <div style={{ padding: "calc(48px + env(safe-area-inset-top, 0px)) 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}20 0%, transparent 100%)` }}>
         <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", marginBottom: 20 }}>
           <ArrowLeft size={18} color={COLORS.white} />
         </button>

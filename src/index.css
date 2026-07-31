@@ -143,3 +143,12 @@ code {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Hide the scrollbar on the exercise cue/detail view on iOS. scrollbarWidth
+   only works in Firefox - Safari/WebKit (the actual iOS app) needs this
+   pseudo-element rule instead, which can only be set via a real stylesheet,
+   not inline styles. */
+.ae-scroll::-webkit-scrollbar {
+  display: none;
+}
+
