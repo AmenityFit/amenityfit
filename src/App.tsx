@@ -13293,7 +13293,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
           <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "16px 0 4px" }}>App</p>
           <div style={{ padding: "14px 0", borderBottom: `1px solid ${COLORS.border}`, display: "flex", justifyContent: "space-between" }}>
             <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>Version</span>
-            <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 600 }}>1.0.0 Beta</span>
+            <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 600 }}>1.4.2</span>
           </div>
           <div style={{ padding: "14px 0", borderBottom: `1px solid ${COLORS.border}`, display: "flex", justifyContent: "space-between" }}>
             <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>Program</span>
