@@ -62,6 +62,8 @@ import {
   Activity,
   Watch,
   Music,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 const firebaseConfig = {
@@ -15865,6 +15867,26 @@ const ManagerLoginScreen = ({ onLogin, onBack }: { onLogin: (profile: any) => vo
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetMessage, setResetMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) { setResetMessage({ text: "Enter your email above first.", isError: true }); return; }
+    setResetLoading(true);
+    setResetMessage(null);
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      setResetMessage({ text: "Password reset email sent. Check your inbox.", isError: false });
+    } catch (e: any) {
+      if (e.code === "auth/user-not-found") {
+        setResetMessage({ text: "No account found with that email.", isError: true });
+      } else {
+        setResetMessage({ text: "Couldn't send reset email. Please try again.", isError: true });
+      }
+    }
+    setResetLoading(false);
+  };
 
   const handleLogin = async () => {
     if (!email || !password) { setError("Please enter your email and password."); return; }
@@ -15920,8 +15942,8 @@ const ManagerLoginScreen = ({ onLogin, onBack }: { onLogin: (profile: any) => vo
   });
 
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", justifyContent: "center", overflow: "hidden" }}>
-      <div style={{ padding: "24px 24px 32px", background: `linear-gradient(180deg, ${COLORS.primary}20 0%, transparent 100%)` }}>
+    <div style={{ height: "100vh", background: `linear-gradient(180deg, ${COLORS.primary}20 0%, ${COLORS.background} 60%)`, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", justifyContent: "center", overflow: "hidden" }}>
+      <div style={{ padding: "24px 24px 32px" }}>
         <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", marginBottom: 28 }}>
           <ArrowLeft size={18} color={COLORS.white} />
         </button>
@@ -15935,7 +15957,39 @@ const ManagerLoginScreen = ({ onLogin, onBack }: { onLogin: (profile: any) => vo
 
       <div style={{ padding: "24px 24px 40px" }}>
         <input type="email" placeholder="Manager email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle(!!email)} />
-        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle(!!password)} />
+        <div style={{ position: "relative" }}>
+          <input
+            type={showPassword ? "text" : "password"}
+            placeholder="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            style={{ ...inputStyle(!!password), paddingRight: 48 }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(s => !s)}
+            style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}
+          >
+            {showPassword ? <EyeOff size={18} color={COLORS.textSecondary} /> : <Eye size={18} color={COLORS.textSecondary} />}
+          </button>
+        </div>
+
+        <div style={{ textAlign: "right", marginBottom: 14, marginTop: -6 }}>
+          <button
+            type="button"
+            onClick={handleForgotPassword}
+            disabled={resetLoading}
+            style={{ background: "none", border: "none", color: COLORS.accent, fontSize: 13, fontWeight: 600, cursor: resetLoading ? "not-allowed" : "pointer", padding: 0 }}
+          >
+            {resetLoading ? "Sending..." : "Forgot password?"}
+          </button>
+        </div>
+
+        {resetMessage && (
+          <div style={{ background: resetMessage.isError ? "#FF4D4D15" : `${COLORS.success}15`, border: `1px solid ${resetMessage.isError ? "#FF4D4D40" : `${COLORS.success}40`}`, borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+            <p style={{ color: resetMessage.isError ? "#FF6B6B" : COLORS.success, fontSize: 13, margin: 0 }}>{resetMessage.text}</p>
+          </div>
+        )}
 
         {error && (
           <div style={{ background: "#FF4D4D15", border: "1px solid #FF4D4D40", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
