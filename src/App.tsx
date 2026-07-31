@@ -12,6 +12,8 @@ import {
   signInWithPopup,
   sendEmailVerification,
   sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
 } from "firebase/auth";
 import {
   initializeFirestore,
@@ -13788,7 +13790,7 @@ const LoginScreen = ({ onLogin, onBack }) => {
                 return;
               }
               try {
-                await sendPasswordResetEmail(auth, email.trim());
+                await sendPasswordResetEmail(auth, email.trim(), { url: "https://app.amenityfit.app" });
                 setError("");
                 alert("Password reset email sent. Check your inbox.");
               } catch (e: any) {
@@ -15887,6 +15889,138 @@ const PropertyManagerDashboard = ({ onSignOut, companyId, companyName }: { onSig
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Custom-branded landing page for the link inside a Firebase password reset
+// email. Firebase's own default hosted page can't be styled to match the
+// app, so this one lives at our own domain instead (wired via
+// actionCodeSettings wherever sendPasswordResetEmail is called) and is
+// rendered directly by App() whenever the URL carries Firebase's
+// mode=resetPassword + oobCode params, before anything else in the app.
+const CustomPasswordResetScreen = ({ oobCode }: { oobCode: string }) => {
+  const [status, setStatus] = useState<"verifying" | "valid" | "invalid" | "success">("verifying");
+  const [email, setEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    verifyPasswordResetCode(auth, oobCode)
+      .then(userEmail => { setEmail(userEmail); setStatus("valid"); })
+      .catch(() => setStatus("invalid"));
+  }, [oobCode]);
+
+  const inputStyle = (hasVal: boolean) => ({
+    width: "100%", padding: "16px 18px", borderRadius: 14,
+    border: `1.5px solid ${hasVal ? COLORS.accent : COLORS.border}`,
+    background: COLORS.card, color: COLORS.white, fontSize: 16,
+    fontFamily: "'Inter', sans-serif", outline: "none",
+    boxSizing: "border-box" as const, marginBottom: 0, paddingRight: 48,
+  });
+
+  const handleSubmit = async () => {
+    if (newPassword.length < 6) { setError("Password must be at least 6 characters."); return; }
+    if (newPassword !== confirmPassword) { setError("Passwords don't match."); return; }
+    setError("");
+    setSubmitting(true);
+    try {
+      await confirmPasswordReset(auth, oobCode, newPassword);
+      setStatus("success");
+    } catch (e: any) {
+      if (e.code === "auth/expired-action-code") {
+        setError("This reset link has expired. Request a new one.");
+      } else if (e.code === "auth/weak-password") {
+        setError("Please choose a stronger password.");
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
+    }
+    setSubmitting(false);
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: `linear-gradient(180deg, ${COLORS.primary}20 0%, ${COLORS.background} 60%)`, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", justifyContent: "center", padding: "24px" }}>
+      <div style={{ maxWidth: 420, width: "100%", margin: "0 auto" }}>
+        <div style={{ width: 64, height: 64, borderRadius: 16, overflow: "hidden", margin: "0 auto 24px", boxShadow: `0 12px 40px ${COLORS.primary}50` }}>
+          <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/Logo_rkq0cv" alt="AmenityFit" style={{ width: "120%", height: "120%", display: "block", objectFit: "cover", marginLeft: "-10%", marginTop: "-10%" }} />
+        </div>
+
+        {status === "verifying" && (
+          <p style={{ color: COLORS.textSecondary, fontSize: 15, textAlign: "center" }}>Verifying your link...</p>
+        )}
+
+        {status === "invalid" && (
+          <div style={{ textAlign: "center" }}>
+            <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "0 0 10px" }}>Link expired</h1>
+            <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>
+              This password reset link is no longer valid. Head back and request a new one.
+            </p>
+            <a href="/" style={{ color: COLORS.accent, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>Back to AmenityFit</a>
+          </div>
+        )}
+
+        {status === "valid" && (
+          <>
+            <h1 style={{ color: COLORS.white, fontSize: 26, fontWeight: 900, margin: "0 0 6px", textAlign: "center", letterSpacing: -0.5 }}>Reset your password</h1>
+            <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 28px", textAlign: "center" }}>for {email}</p>
+
+            <div style={{ position: "relative", marginBottom: 14 }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="New password (6+ characters)"
+                value={newPassword}
+                onChange={e => { setNewPassword(e.target.value); setError(""); }}
+                style={inputStyle(!!newPassword)}
+              />
+              <button type="button" onClick={() => setShowPassword(s => !s)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+                {showPassword ? <EyeOff size={18} color={COLORS.textSecondary} /> : <Eye size={18} color={COLORS.textSecondary} />}
+              </button>
+            </div>
+
+            <div style={{ position: "relative", marginBottom: 20 }}>
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                placeholder="Confirm new password"
+                value={confirmPassword}
+                onChange={e => { setConfirmPassword(e.target.value); setError(""); }}
+                onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                style={inputStyle(!!confirmPassword)}
+              />
+              <button type="button" onClick={() => setShowConfirmPassword(s => !s)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+                {showConfirmPassword ? <EyeOff size={18} color={COLORS.textSecondary} /> : <Eye size={18} color={COLORS.textSecondary} />}
+              </button>
+            </div>
+
+            {error && (
+              <div style={{ background: "#FF4D4D15", border: "1px solid #FF4D4D40", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+                <p style={{ color: "#FF6B6B", fontSize: 13, margin: 0 }}>{error}</p>
+              </div>
+            )}
+
+            <button onClick={handleSubmit} disabled={submitting} style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: submitting ? COLORS.border : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: submitting ? COLORS.textSecondary : COLORS.white, fontSize: 16, fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", boxShadow: submitting ? "none" : `0 8px 30px ${COLORS.primary}40` }}>
+              {submitting ? "Updating..." : "Update Password"}
+            </button>
+          </>
+        )}
+
+        {status === "success" && (
+          <div style={{ textAlign: "center" }}>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: `${COLORS.success}20`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+              <span style={{ color: COLORS.success, fontSize: 26 }}>✓</span>
+            </div>
+            <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "0 0 10px" }}>Password updated</h1>
+            <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>
+              You can now sign in with your new password.
+            </p>
+            <a href="/" style={{ display: "inline-block", padding: "14px 28px", borderRadius: 14, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 14, fontWeight: 700, textDecoration: "none" }}>Back to AmenityFit</a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const ManagerLoginScreen = ({ onLogin, onBack }: { onLogin: (profile: any) => void; onBack: () => void }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15901,7 +16035,7 @@ const ManagerLoginScreen = ({ onLogin, onBack }: { onLogin: (profile: any) => vo
     setResetLoading(true);
     setResetMessage(null);
     try {
-      await sendPasswordResetEmail(auth, email.trim());
+      await sendPasswordResetEmail(auth, email.trim(), { url: "https://app.amenityfit.app" });
       setResetMessage({ text: "Password reset email sent. Check your inbox.", isError: false });
     } catch (e: any) {
       if (e.code === "auth/user-not-found") {
@@ -17086,6 +17220,14 @@ class ErrorBoundary extends React.Component {
   }
 }
 export default function App() {
+  // Takes over the entire screen, before anything else, whenever a Firebase
+  // password reset link is opened - completely independent of login state,
+  // since the person clicking it isn't signed in yet.
+  const resetParams = new URLSearchParams(window.location.search);
+  if (resetParams.get("mode") === "resetPassword" && resetParams.get("oobCode")) {
+    return <CustomPasswordResetScreen oobCode={resetParams.get("oobCode")!} />;
+  }
+
   const [screen, setScreen] = useState("splash");
 
   // Reset scroll position to the very top on every screen change. Individual
