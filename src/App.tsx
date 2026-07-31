@@ -8226,8 +8226,41 @@ const [showWeightLogger, setShowWeightLogger] = useState(false);
 const [pendingWeightGroup, setPendingWeightGroup] = useState<any>(null);
 const [sessionWeights, setSessionWeights] = useState<Record<string, number>>({});
 const [wheelValues, setWheelValues] = useState<Record<string, number>>({});
+const [lastWeights, setLastWeights] = useState<Record<string, number>>({});
 
   const isMetric = !!(profile?.heightCm || profile?.weightKg);
+
+  // Read-only: fetch each exercise's most recently logged weight to show as a
+  // reference and pre-fill the picker. This never writes anything and never
+  // touches saveWeightsToFirestore/logWeightHistoryInBackground - those stay
+  // exactly as they were.
+  useEffect(() => {
+    if (!showWeightLogger || !profile?.uid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocs(collection(db, "users", profile.uid, "weightLog"));
+        const mostRecentByExercise: Record<string, { weight: number; date: string }> = {};
+        snap.docs.forEach(d => {
+          const data = d.data();
+          const exId = data.exerciseId;
+          const date = data.date;
+          const weight = data.weight;
+          if (!exId || typeof weight !== "number" || weight <= 0) return;
+          if (!mostRecentByExercise[exId] || date > mostRecentByExercise[exId].date) {
+            mostRecentByExercise[exId] = { weight, date };
+          }
+        });
+        if (cancelled) return;
+        const result: Record<string, number> = {};
+        Object.entries(mostRecentByExercise).forEach(([exId, v]) => { result[exId] = v.weight; });
+        setLastWeights(result);
+      } catch (e) {
+        // Silent fail - this is a nice-to-have reference, never blocks logging
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showWeightLogger, profile?.uid]);
 
   const getWeightOptions = (category: string): (string | number)[] => {
     if (category === "bodyweight") return [];
@@ -8649,7 +8682,8 @@ if (showWeightLogger && pendingWeightGroup) {
             ? (category === "dumbbell" ? 10 : category === "barbell" ? 60 : category === "ezbar" ? 20 : category === "cable" ? 17.5 : category === "legpress" ? 45 : category === "kettlebell" ? 16 : category === "medicineball" ? 6 : options[0])
             : (category === "dumbbell" ? 25 : category === "barbell" ? 135 : category === "ezbar" ? 45 : category === "cable" ? 40 : category === "legpress" ? 100 : category === "kettlebell" ? 16 : category === "medicineball" ? 15 : options[0]);
           const isAssistedReverse = ASSISTED_REVERSE_IDS.has(ex.id);
-          const currentVal = wheelValues[ex.id] ?? defaultVal;
+          const lastWeight = lastWeights[ex.id];
+          const currentVal = wheelValues[ex.id] ?? lastWeight ?? defaultVal;
           const currentIdx = Math.max(0, options.indexOf(currentVal));
 
           if (category === "bodyweight") {
@@ -8669,7 +8703,14 @@ if (showWeightLogger && pendingWeightGroup) {
 
           return (
             <div key={ex.id} style={{ marginBottom: 28 }}>
-              <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{exData?.name || ex.id}</p>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+                <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: 0 }}>{exData?.name || ex.id}</p>
+                {typeof lastWeight === "number" && (
+                  <span style={{ color: COLORS.accent, fontSize: 12, fontWeight: 700, background: `${COLORS.accent}15`, borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap" }}>
+                    Last: {formatWeightLabel(lastWeight, category)}
+                  </span>
+                )}
+              </div>
               <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 10px" }}>{exData?.muscle} · {exData?.equipment}</p>
               <div style={{ position: "relative", height: itemHeight * 5, borderRadius: 16, overflow: "hidden", background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
                 <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: itemHeight, transform: "translateY(-50%)", background: `${COLORS.accent}18`, borderTop: `1px solid ${COLORS.accent}40`, borderBottom: `1px solid ${COLORS.accent}40`, pointerEvents: "none", zIndex: 2 }} />
@@ -8677,7 +8718,7 @@ if (showWeightLogger && pendingWeightGroup) {
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: itemHeight * 2, background: `linear-gradient(to top, ${COLORS.card}, transparent)`, pointerEvents: "none", zIndex: 1 }} />
                 <WheelPickerScroll
                   options={options}
-                  selected={wheelValues[ex.id] ?? options[0]}
+                  selected={currentVal}
                   itemHeight={itemHeight}
                   category={category}
                   exId={ex.id}
