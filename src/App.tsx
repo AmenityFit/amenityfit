@@ -16710,6 +16710,22 @@ class ErrorBoundary extends React.Component {
 }
 export default function App() {
   const [screen, setScreen] = useState("splash");
+
+  // Reset scroll position to the very top on every screen change. Individual
+  // screens each own their own internal scrollable wrapper (not window/body),
+  // and without this, a screen can render already scrolled down from wherever
+  // a previous screen left off, cutting off its own header content. Scans for
+  // any actual scrollable element rather than assuming one fixed selector,
+  // since different screens each build their own wrapper independently.
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+    document.querySelectorAll("div").forEach((el) => {
+      const style = window.getComputedStyle(el);
+      if ((style.overflowY === "auto" || style.overflowY === "scroll") && el.scrollTop > 0) {
+        el.scrollTop = 0;
+      }
+    });
+  }, [screen]);
   const [userProfile, setUserProfile] = useState<any>({});
   const [currentUid, setCurrentUid] = useState<string>("");
   const [authUid, setAuthUid] = useState<string>("");
