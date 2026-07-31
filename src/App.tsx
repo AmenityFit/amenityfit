@@ -3575,7 +3575,7 @@ const NutritionScreen = ({ onBack, onNavigate = (s) => {} }) => {
     const nextRecipe = POWER24_RECIPES[currentIndex + 1] || null;
     const prevRecipe = POWER24_RECIPES[currentIndex - 1] || null;
     return (
-      <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+      <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
         {/* Hero header with smoothie image */}
         <div style={{ position: "relative", minHeight: "auto", overflow: "visible" }}>
           {selectedRecipe.image && (
@@ -3688,7 +3688,7 @@ const NutritionScreen = ({ onBack, onNavigate = (s) => {} }) => {
   const filtered = filterCategory === "all" ? POWER24_RECIPES : POWER24_RECIPES.filter(r => r.category === filterCategory);
 
   return (
-    <div ref={listScrollRef} style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+    <div ref={listScrollRef} style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
       {/* Hero header */}
       <div style={{ position: "relative", minHeight: 260, overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, backgroundImage: `url(https://res.cloudinary.com/dk5g9itw8/image/upload/p24Header_hkelnv)`, backgroundSize: "cover", backgroundPosition: "80% 92%" }} />
@@ -9620,7 +9620,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
   })();
 
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
 
       {/* Header */}
       <div style={{ padding: "52px 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}20 0%, transparent 100%)` }}>
@@ -10101,7 +10101,7 @@ const workoutGroups = injuryFiltered.map(group => ({
 
   if (phase === "overview") {
     return (
-      <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+      <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
         <div style={{ padding: "52px 24px 20px", display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
           <button onClick={() => setPhase("active")} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
             <ArrowLeft size={18} color={COLORS.white} />
@@ -11724,7 +11724,8 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
     <div style={{
       height: "100vh", background: COLORS.background,
       fontFamily: "'Inter', sans-serif", display: "flex",
-      flexDirection: "column", overflow: "hidden", overflowY: "auto",
+      flexDirection: "column", overflowX: "hidden", overflowY: "auto",
+      WebkitOverflowScrolling: "touch" as any,
     }}>
       {/* Header */}
       <div style={{ padding: "52px 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
