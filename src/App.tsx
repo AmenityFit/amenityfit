@@ -10750,11 +10750,6 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
   }, [messages]);
 
   const prevLoading = React.useRef(false);
-  useEffect(() => {
-    // Scroll to bottom on mount if no Firestore history loads
-    const t = setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "auto" }), 100);
-    return () => clearTimeout(t);
-  }, []);
 
   useEffect(() => {
     if (prevLoading.current === true && loading === false) {
