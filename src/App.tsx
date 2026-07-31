@@ -883,7 +883,7 @@ const PrivacyPolicyScreen = ({ onBack }) => {
           <ArrowLeft size={18} color={COLORS.white} />
         </button>
         <h1 style={{ color: COLORS.white, fontSize: 26, fontWeight: 900, margin: "0 0 6px", letterSpacing: -0.6 }}>Privacy Policy</h1>
-        <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Fitmakesenz LLC · AmenityFit · Last updated July 2026</p>
+        <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Fitmakesenz LLC · AmenityFit · Last updated September 2026</p>
       </div>
       <div style={{ padding: "28px 24px 0px" }}>
 
@@ -973,7 +973,7 @@ const TermsOfServiceScreen = ({ onBack }) => {
           <ArrowLeft size={18} color={COLORS.white} />
         </button>
         <h1 style={{ color: COLORS.white, fontSize: 26, fontWeight: 900, margin: "0 0 6px", letterSpacing: -0.6 }}>Terms of Service</h1>
-        <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Fitmakesenz LLC · AmenityFit · Last updated July 2026</p>
+        <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Fitmakesenz LLC · AmenityFit · Last updated September 2026</p>
       </div>
       <div style={{ padding: "28px 24px 8px" }}>
 
@@ -8278,6 +8278,11 @@ const [wheelValues, setWheelValues] = useState<Record<string, number>>({});
       for (let w = 5; w <= 300; w += 5) opts.push(w);
       return opts;
     }
+    if (category === "plate") {
+      const opts: number[] = [];
+      for (let w = 5; w <= 90; w += 5) opts.push(w);
+      return opts;
+    }
     return [];
   };
 
@@ -8293,7 +8298,7 @@ const [wheelValues, setWheelValues] = useState<Record<string, number>>({});
   // a brand-new options array was built on every render for every exercise,
   // defeating memo and causing the whole list to flicker on every scroll commit.
   const weightOptionsByCategory = React.useMemo(() => {
-    const categories = ["bodyweight", "medicineball", "band", "kettlebell", "dumbbell", "ezbar", "barbell", "legpress", "cable"];
+    const categories = ["bodyweight", "medicineball", "band", "kettlebell", "dumbbell", "ezbar", "barbell", "legpress", "cable", "plate"];
     const map: Record<string, (string | number)[]> = {};
     categories.forEach(cat => { map[cat] = getWeightOptions(cat); });
     return map;
@@ -8623,6 +8628,7 @@ if (showWeightLogger && pendingWeightGroup) {
     if (["dumbbell","dumbbells"].some(x => e.includes(x))) return "dumbbell";
     if (["kettlebell","kettlebells"].some(x => e.includes(x))) return "kettlebell";
     if (["band","resistanceband"].some(x => e.includes(x))) return "band";
+    if (["weightplate","plate"].some(x => e.includes(x))) return "plate";
     return "bodyweight";
   };
 
@@ -12377,7 +12383,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "How do I contact support?",
-    a: "Visit amenityfit.app or reach out from there. For building-specific questions like invite codes, contact your building manager or front desk.",
+    a: "Email support@fitmakesenz.com and a real person will follow up with you. For building-specific questions like invite codes, contact your building manager or front desk.",
   },
 ];
 
