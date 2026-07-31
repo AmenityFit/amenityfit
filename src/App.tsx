@@ -761,7 +761,7 @@ const SplashScreen = ({ onFinish, onSecretAdmin }) => {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100dvh", paddingBottom: 150, boxSizing: "border-box", background: `linear-gradient(145deg, ${COLORS.background} 0%, ${COLORS.card} 100%)`, fontFamily: "'Inter', sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100dvh", paddingBottom: 150, boxSizing: "border-box", background: `linear-gradient(145deg, ${COLORS.background} 0%, ${COLORS.card} 100%)`, fontFamily: "'Inter', sans-serif", overflow: "hidden" }}>
       <div onClick={handleLogoTap} style={{ marginBottom: 24, boxShadow: `0 20px 60px ${COLORS.primary}40`, width: 100, height: 100, borderRadius: 22, overflow: "hidden", cursor: "pointer", userSelect: "none" as const }}>
         <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/Logo_rkq0cv" alt="AmenityFit" style={{ width: "120%", height: "120%", display: "block", objectFit: "cover", marginLeft: "-10%", marginTop: "-10%" }} />
       </div>
@@ -786,7 +786,7 @@ const FeatureCard = ({ icon: Icon, title, desc }) => (
 );
 
 const WelcomeScreen = ({ onGetStarted, onLogin, onManagerLogin }) => (
-  <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+  <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
     <div style={{ background: `linear-gradient(180deg, ${COLORS.primary}25 0%, ${COLORS.background} 65%)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "72px 0 24px" }}>
       <div style={{ marginBottom: 18, boxShadow: `0 12px 40px ${COLORS.primary}50`, width: 82, height: 82, borderRadius: 18, overflow: "hidden" }}>
         <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/Logo_rkq0cv" alt="AmenityFit" style={{ width: "120%", height: "120%", display: "block", objectFit: "cover", marginLeft: "-10%", marginTop: "-10%" }} />
@@ -3235,7 +3235,7 @@ const WelcomeBackScreen = ({ profile, onContinue }) => {
     : 0;
   const reEntryTarget = Math.round((profile.frequency || 3) * 2);
   return (
-    <div style={{ minHeight: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "52px 28px 36px", overflowY: "auto", textAlign: "center" }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "52px 28px 36px", overflow: "hidden", textAlign: "center" }}>
       <div style={{ width: 80, height: 80, borderRadius: 99, marginBottom: 20, background: `${COLORS.primary}20`, border: `2px solid ${COLORS.primary}50`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 40px ${COLORS.primary}25` }}>
         <Flame size={36} color={COLORS.primary} strokeWidth={1.5} />
       </div>
@@ -13729,7 +13729,7 @@ const SuperAdminLogin = ({ onLogin, onBack }) => {
   });
 
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px", paddingBottom: 200 }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px", paddingBottom: 200, overflow: "hidden" }}>
       <div style={{ marginBottom: 40 }}>
         <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, #1a1a2e, ${COLORS.primary})`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24, border: `1px solid ${COLORS.border}` }}>
           <Shield size={20} color={COLORS.accent} />
