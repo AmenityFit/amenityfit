@@ -3575,7 +3575,8 @@ const NutritionScreen = ({ onBack, onNavigate = (s) => {} }) => {
     const nextRecipe = POWER24_RECIPES[currentIndex + 1] || null;
     const prevRecipe = POWER24_RECIPES[currentIndex - 1] || null;
     return (
-      <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
+      <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch" as any, display: "flex", flexDirection: "column" }}>
         {/* Hero header with smoothie image */}
         <div style={{ position: "relative", minHeight: "auto", overflow: "visible" }}>
           {selectedRecipe.image && (
@@ -3670,6 +3671,7 @@ const NutritionScreen = ({ onBack, onNavigate = (s) => {} }) => {
             </div>
           )}
         </div>
+      </div>
         <BottomNav active="home" onNavigate={onNavigate} />
       </div>
     );
@@ -3688,7 +3690,8 @@ const NutritionScreen = ({ onBack, onNavigate = (s) => {} }) => {
   const filtered = filterCategory === "all" ? POWER24_RECIPES : POWER24_RECIPES.filter(r => r.category === filterCategory);
 
   return (
-    <div ref={listScrollRef} style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div ref={listScrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch" as any, display: "flex", flexDirection: "column" }}>
       {/* Hero header */}
       <div style={{ position: "relative", minHeight: 260, overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, backgroundImage: `url(https://res.cloudinary.com/dk5g9itw8/image/upload/p24Header_hkelnv)`, backgroundSize: "cover", backgroundPosition: "80% 92%" }} />
@@ -3813,6 +3816,7 @@ const NutritionScreen = ({ onBack, onNavigate = (s) => {} }) => {
           );
         })}
       </div>
+    </div>
       <BottomNav active="home" onNavigate={onNavigate} />
     </div>
   );
@@ -3892,11 +3896,8 @@ const BottomNav = ({ active, onNavigate = (s) => {} }) => {
   ];
   return (
     <div style={{
-      position: "fixed", bottom: 0, left: 0, right: 0,
       background: COLORS.card, borderTop: `1px solid ${COLORS.border}`,
-      display: "flex", padding: "10px 0 calc(20px + env(safe-area-inset-bottom, 0px))",
-      transform: "translateZ(0)", WebkitTransform: "translateZ(0)",
-      willChange: "transform",
+      display: "flex", flexShrink: 0, padding: "10px 0 calc(20px + env(safe-area-inset-bottom, 0px))",
     }}>
       {tabs.map((t) => {
         const isActive = t.id === active;
@@ -4206,7 +4207,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
       )}
 
       {/* Scrollable content */}
-      <div style={{ flex: 1, padding: "16px 24px 80px", overflowY: "auto" }}>
+      <div style={{ flex: 1, minHeight: 0, padding: "16px 24px 24px", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
 
         {/* Today's Workout */}
         <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={currentDay?.focus} groups={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); return dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); })()} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
@@ -4237,7 +4238,6 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
         {/* Fitness Assistant */}
         <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Need Help?</p>
         <AssistantCard onPress={() => onNavigate("assistant")} />
-        <div style={{ height: 60 }} />
       </div>
 
       <BottomNav active="home" onNavigate={onNavigate} />
@@ -11244,7 +11244,6 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
           <ChevronRight size={20} color={COLORS.white} strokeWidth={2.5} />
         </button>
         </div>
-      <div style={{ height: "calc(76px + env(safe-area-inset-bottom, 0px))", background: COLORS.card, flexShrink: 0 }} />
 
 <BottomNav active="assistant" onNavigate={onNavigate} />
 </div>
@@ -11725,11 +11724,10 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
     <div style={{
       height: "100vh", background: COLORS.background,
       fontFamily: "'Inter', sans-serif", display: "flex",
-      flexDirection: "column", overflowX: "hidden", overflowY: "auto",
-      WebkitOverflowScrolling: "touch" as any,
+      flexDirection: "column", overflow: "hidden",
     }}>
       {/* Header */}
-      <div style={{ padding: "52px 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
+      <div style={{ flexShrink: 0, padding: "52px 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <h1 style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.8 }}>Progress</h1>
           <button
@@ -11771,7 +11769,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
         </p>
       </div>
 
-      <div style={{ padding: "0 24px 80px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch" as any, padding: "0 24px 24px" }}>
 
         {/* Wellness mode banner */}
         {wellnessMode && (
@@ -12142,8 +12140,6 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
             </div>
           );
         })()}
-        <div style={{ height: 60 }} />
-
       </div>
 
       {/* Log Stats Modal */}
@@ -12976,8 +12972,9 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
     <div style={{
       height: "100vh", background: COLORS.background,
       fontFamily: "'Inter', sans-serif", display: "flex",
-      flexDirection: "column", overflowY: "auto",
+      flexDirection: "column", overflow: "hidden",
     }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch" as any, display: "flex", flexDirection: "column" }}>
       {/* Building change toast */}
       {buildingToast && (
         <div style={{
@@ -13422,6 +13419,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
           </div>
         )}
       </div>
+    </div>
 
       {editingField && <EditModal />}
       {showExperienceConfirm && <ExperienceConfirmDialog />}
