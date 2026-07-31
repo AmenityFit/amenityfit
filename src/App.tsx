@@ -7401,11 +7401,15 @@ const dedupeExercisesInDay = (groups: any[], equipmentPreference: string = "gym-
   });
 };
 
-const filterGroupsForReEntry = (groups: any[], effectiveLevel: string, progressionPhase: string): any[] => {
+const filterGroupsForReEntry = (groups: any[], effectiveLevel: string, programKey: string): any[] => {
   const cardioGroups = groups.filter(g => g.type === "cardio");
   const nonCardioGroups = groups.filter(g => g.type !== "cardio");
 
-  const isEvolved = progressionPhase === "month6+";
+  // Uses the same reliable signal as everywhere else in the app - the
+  // progression engine never actually writes progressionPhase to the
+  // literal "month6+", it only ever produces a "month6-" prefixed
+  // programKey, so that prefix is the real, always-accurate source of truth.
+  const isEvolved = !!programKey?.startsWith("month6-");
   const isAdvanced = effectiveLevel === "advanced" || isEvolved;
   const isIntermediate = effectiveLevel === "intermediate" || effectiveLevel === "senior-intermediate";
   const isBeginner = effectiveLevel === "beginner" || effectiveLevel === "senior-beginner";
@@ -10075,7 +10079,7 @@ const savedCompletedCellsRef = React.useRef<string[]>(savedProgress?.completedCe
       });
     };
     const agilitySubstituted = substituteAgilityLadder(rawGroups);
-    const reEntryAdjusted = profile?.reEntryMode ? filterGroupsForReEntry(agilitySubstituted, profile?.effectiveLevel || profile?.experience || "intermediate", profile?.progressionPhase || "pool-rotation") : agilitySubstituted;
+    const reEntryAdjusted = profile?.reEntryMode ? filterGroupsForReEntry(agilitySubstituted, profile?.effectiveLevel || profile?.experience || "intermediate", profile?.programKey || "") : agilitySubstituted;
     // Filter exercises based on user injury flags — hard filter, runs every workout
     const equipmentFiltered = filterExercisesByEquipment(reEntryAdjusted, reviewEquipmentPreference, profile?.buildingEquipment || []);
 const videoFiltered = filterExercisesByVideo(equipmentFiltered);
@@ -12728,7 +12732,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
       // For non-experience recalibration fields — just save directly, no AI needed
       // Equipment, frequency, session length are handled by filters at render time
       if (field !== "experience") {
-        const isMonth6 = profile?.progressionPhase === "month6+" || profile?.progressionPhase === "Month6+";
+        const isMonth6 = !!profile?.programKey?.startsWith("month6-");
         const updatedProfileForRegen = { ...profile, [field]: value, programDay: 1, programWeek: 1, completedProgramDays: [], programRestartedAt: new Date().toISOString() };
 
         // Equipment change always needs a new program assignment
@@ -12793,7 +12797,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
       onUpdate({ ...profileForRegen, programKey: newProgramKey });
     } else {
       // For frequency or sessionLength changes on Month6+ — clear generatedDays to force regeneration
-      const isMonth6 = profile?.progressionPhase === "month6+";
+      const isMonth6 = !!profile?.programKey?.startsWith("month6-");
       const triggerRegen = isMonth6 && (field === "frequency" || field === "sessionLength");
       const profileToUpdate = triggerRegen
         ? { ...updatedProfile, generatedDays: null, generatedDaysEquipment: null }
@@ -17232,7 +17236,7 @@ const isInitialLoad = React.useRef(true);
     const progressionUpdates = aiResult.profileUpdates || {};
 
     // Never let progressionUpdates overwrite progressionPhase for Month6+ users
-    const isMonth6User = (userProfile?.progressionPhase === "month6+" || profileForNextCycle?.progressionPhase === "month6+");
+    const isMonth6User = !!(userProfile?.programKey?.startsWith("month6-") || profileForNextCycle?.programKey?.startsWith("month6-"));
     const safeProgressionUpdates = isMonth6User
       ? Object.fromEntries(Object.entries(progressionUpdates).filter(([k]) => k !== "progressionPhase" && k !== "effectiveLevel" && k !== "exposureCyclesCompleted"))
       : progressionUpdates;
@@ -17293,7 +17297,7 @@ const isInitialLoad = React.useRef(true);
 
   React.useEffect(() => {
     if (
-      userProfile?.progressionPhase === "month6+" &&
+      userProfile?.programKey?.startsWith("month6-") &&
       userProfile?.programKey &&
       userProfile?.uid &&
       (!userProfile?.generatedDays ||
@@ -17474,7 +17478,7 @@ const isInitialLoad = React.useRef(true);
     const previewSessionLength = userProfile?.sessionLength || 60;
     const previewFiltered = (() => {
       const sessionFiltered = filterGroupsForSessionLength(previewDay.groups || [], previewSessionLength, userProfile?.effectiveLevel || userProfile?.experience || "intermediate");
-      const reEntryFiltered = userProfile?.reEntryMode ? filterGroupsForReEntry(sessionFiltered, userProfile?.effectiveLevel || userProfile?.experience || "intermediate", userProfile?.progressionPhase || "pool-rotation") : sessionFiltered;
+      const reEntryFiltered = userProfile?.reEntryMode ? filterGroupsForReEntry(sessionFiltered, userProfile?.effectiveLevel || userProfile?.experience || "intermediate", userProfile?.programKey || "") : sessionFiltered;
       const equipFiltered = filterExercisesByEquipment(reEntryFiltered, userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || []);
       const videoFiltered = filterExercisesByVideo(equipFiltered);
       const injuryFiltered = dedupeExercisesInDay(filterExercisesByInjury(videoFiltered, userProfile?.injuries || "none", userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || [], (parseInt(String(userProfile?.age)) || 30) >= 65), userProfile?.equipmentPreference || "gym-and-bands", userProfile?.buildingEquipment || []);
