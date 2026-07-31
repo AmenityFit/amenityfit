@@ -10929,7 +10929,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
         ref={scrollContainerRef}
         onScroll={handleScroll}
         style={{
-          flex: 1, overflowY: "auto", padding: "8px 20px 16px",
+          flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 20px 16px",
           display: "flex", flexDirection: "column", gap: 12,
           paddingBottom: "20px",
           WebkitOverflowScrolling: "touch" as any,
