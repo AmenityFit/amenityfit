@@ -79,7 +79,12 @@
      this was happening on static screens (Splash, Welcome, Operator Login)
      whose padding pushed their total height just past one screen. */
   padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
+  /* No padding-bottom here anymore - reserving it generically at the root
+     level left a blank, uncolored strip that showed the raw page background
+     underneath whatever sits at the bottom of each screen (nav bar or a
+     static screen's own background). Instead, whatever actually sits at the
+     true bottom of each screen extends its own real color into this safe
+     area itself, so there's never a gap for anything else to show through. */
 }
 
 html, body {
