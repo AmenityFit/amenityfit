@@ -16924,6 +16924,33 @@ export default function App() {
     return () => unsub();
   }, [userProfile?.buildingId]);
 
+  // ── Live own-profile sync ──────────────────────────────────────────────
+  // Same pattern as the building equipment listener above. The profile is
+  // only ever loaded once at login otherwise - after that, it only updates
+  // through the app's own local actions (which already keep local state and
+  // Firestore in sync together). This closes the one remaining gap: any
+  // change made outside the app itself (editing a field directly in the
+  // Firestore console during testing, for example) previously required a
+  // full app restart to ever show up. Firestore reflects this client's own
+  // local writes almost instantly regardless, so this never fights with or
+  // delays anything the app already does on its own.
+  useEffect(() => {
+    const uid = userProfile?.uid || currentUid || auth.currentUser?.uid;
+    if (!uid) return;
+    const unsub = onSnapshot(
+      doc(db, "users", uid),
+      (snap) => {
+        if (snap.exists()) {
+          setUserProfile(prev => ({ ...prev, ...snap.data(), uid }));
+        }
+      },
+      (err) => {
+        console.error("Live profile listener error:", err);
+      }
+    );
+    return () => unsub();
+  }, [userProfile?.uid, currentUid]);
+
   // Every screen should read equipment from here, not from userProfile directly —
   // this is what makes equipment changes reach existing residents automatically,
   // not just brand-new signups. Falls back to whatever was last saved on the
