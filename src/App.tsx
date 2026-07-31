@@ -17848,9 +17848,50 @@ const isInitialLoad = React.useRef(true);
     };
     // If email+password were collected, create Firebase account
     if (data.email && data.password) {
+      let uid: string | null = null;
+      let authUser: any = null;
       try {
         const credential = await createUserWithEmailAndPassword(auth, data.email.trim(), data.password);
-        const uid = credential.user.uid;
+        uid = credential.user.uid;
+        authUser = credential.user;
+      } catch (e: any) {
+        if (e.code === 'auth/email-already-in-use') {
+          // The Firebase Auth account and the Firestore profile document are
+          // two separate systems - deleting one (e.g. a profile removed
+          // directly in Firestore during testing) does not delete the
+          // other. Before blocking as "already taken", try signing in with
+          // exactly what was just typed. If that succeeds and there's no
+          // real profile behind it, this is a harmless orphaned Auth
+          // account and it's safe to continue building a fresh profile on
+          // top of it. Only a real existing profile, or a password that
+          // doesn't match, means this is genuinely someone else's account.
+          try {
+            const signInCred = await signInWithEmailAndPassword(auth, data.email.trim(), data.password);
+            const existingProfile = await loadUserProfile(signInCred.user.uid);
+            if (existingProfile) {
+              await signOut(auth);
+              alert("An account with this email already exists. Please use the \"I already have an account\" option on the welcome screen to sign in.");
+              return;
+            }
+            uid = signInCred.user.uid;
+            authUser = signInCred.user;
+          } catch (signInErr) {
+            alert("An account with this email already exists. Please use the \"I already have an account\" option on the welcome screen to sign in.");
+            return;
+          }
+        } else if (e.code === 'auth/network-request-failed') {
+          alert("Connection error. Please check your internet and try again.");
+          return;
+        } else {
+          console.error('Account creation error:', e);
+          setUserProfile({ ...baseProfile });
+          setScreen("dashboard");
+          return;
+        }
+      }
+
+      if (uid) {
+        try {
         const { password: _pw, ...safeProfile } = baseProfile;
         // Strip empty string fields so Firestore stays clean
         const cleanProfile = Object.fromEntries(Object.entries(safeProfile).filter(([_, v]) => v !== ""));
@@ -17872,7 +17913,7 @@ const isInitialLoad = React.useRef(true);
         }
         // Send email verification
         try {
-          await sendEmailVerification(credential.user);
+          if (authUser) await sendEmailVerification(authUser);
         } catch (verifyErr) {
           console.error('Email verification send failed:', verifyErr);
           // Non-fatal — account is created, verification just won't send
@@ -17895,18 +17936,12 @@ const isInitialLoad = React.useRef(true);
         }
         setUserProfile(profileWithUid);
         setCurrentUid(profileWithUid.uid);
-      } catch (e: any) {
-        console.error('Account creation error:', e);
-        if (e.code === 'auth/email-already-in-use') {
-          // Email already registered — do not overwrite existing account
-          // Direct user to sign in instead
-          alert("An account with this email already exists. Please use the \"I already have an account\" option on the welcome screen to sign in.");
-          return;
-        } else if (e.code === 'auth/network-request-failed') {
-          // Network failure — don't set broken profile, show retry message
-          alert("Connection error. Please check your internet and try again.");
-          return;
-        } else {
+        } catch (e: any) {
+          console.error('Account creation error:', e);
+          if (e.code === 'auth/network-request-failed') {
+            alert("Connection error. Please check your internet and try again.");
+            return;
+          }
           setUserProfile({ ...baseProfile });
         }
       }
