@@ -2511,7 +2511,14 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
     : experience;
   const equipKey = equipment === "gym" ? "gym" : equipment === "bands" ? "bands" : "gym-and-bands";
   const poolKey = `${levelKey}-${equipKey}`;
-  const currentPool = (pools as any)[poolKey] || [];
+  // Falls back to that level's gym-and-bands pool if a specific equipment
+  // combo has no dedicated pool of its own (e.g. senior-advanced-bands and
+  // senior-intermediate-bands currently don't). This never changes WHICH
+  // senior-tier programs get considered, only ensures a bands-only senior
+  // user still has a real pool to draw from instead of silently getting an
+  // empty one - the live per-exercise equipment substitution still swaps
+  // every exercise down to bands-only regardless of which program is picked.
+  const currentPool = (pools as any)[poolKey] || (pools as any)[`${levelKey}-gym-and-bands`] || [];
 
   // Gender-compatible pool filtering — pools mix mens-/womens-/gender-neutral named programs
   // together. A "mens-" program should never go to someone who selected female, nonbinary,
