@@ -3870,10 +3870,8 @@ const AssistantCard = ({ onPress = () => {} }) => (
 );
 
 // Program progress bar
-const ProgramProgress = ({ goal = "General Fitness", experience = "Intermediate", frequency = 4 }) => {
-  const day = 1;
-  const total = 30;
-  const pct = (day / total) * 100;
+const ProgramProgress = ({ goal = "General Fitness", experience = "Intermediate", frequency = 4, day = 1, total = 30 }) => {
+  const pct = Math.min(100, (day / total) * 100);
   return (
     <div style={{ background: COLORS.card, borderRadius: 20, padding: "18px 20px", marginBottom: 20, border: `1px solid ${COLORS.border}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -4228,7 +4226,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
         </div>
 
         {/* Program Progress */}
-        <ProgramProgress goal={goal} experience={experience} frequency={frequency} />
+        <ProgramProgress goal={goal} experience={experience} frequency={frequency} day={programDay} total={30} />
 
         {/* Nutrition */}
         <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Nutrition</p>
