@@ -4095,7 +4095,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
   const hasLower = dayFocuses.some((f: string) => f.includes("lower"));
   const workoutType = isRestDay ? "rest" : isCardioDay ? "cardio" : hasUpper && hasLower ? "full-body" : hasLower ? "lower-body" : "upper-body";
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
       {/* Header */}
       <div style={{ padding: "52px 24px 8px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
