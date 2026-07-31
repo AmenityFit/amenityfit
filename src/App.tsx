@@ -12751,14 +12751,22 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
           return;
         }
 
-        // Frequency, session length, injuries — save directly, equipment filter handles the rest
-        if (isMonth6 && (field === "frequency" || field === "sessionLength")) {
+        // Frequency and primary goal both directly affect which program
+        // template selectProgram/generateMonth6Program routes to (frequency
+        // picks the Nx/week variant, goal picks the advanced-tier path) - so
+        // both always need a real regeneration, in or out of Month 6+.
+        // Session length only affects live exercise-count filtering at
+        // render time, so it never needs a program reselection.
+        if (isMonth6 && (field === "frequency" || field === "sessionLength" || field === "primaryGoal")) {
           const result = generateMonth6Program(updatedProfileForRegen);
           onUpdate({
             ...updatedProfileForRegen,
             programKey: result.programKey,
             generatedDays: result.generatedDays ?? null,
           });
+        } else if (!isMonth6 && (field === "frequency" || field === "primaryGoal")) {
+          const newProgramKey = selectProgram(updatedProfileForRegen);
+          onUpdate({ ...updatedProfileForRegen, programKey: newProgramKey, generatedDays: null });
         } else {
           onUpdate({ ...profile, [field]: value });
         }
