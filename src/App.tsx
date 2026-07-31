@@ -11720,6 +11720,69 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
       .reverse(); // newest first
   };
 
+  // ── Session Detail View — uses WorkoutListScreen in review mode ──
+  // Rendered as a genuine full-screen return here (not nested inside the
+  // scrollable content below) so it gets its own clean, single scroll
+  // container instead of being double-nested inside Progress's own
+  // scrolling area, which was causing this specific view to scroll
+  // sluggishly even though Progress itself scrolled fine.
+  if (selectedSession) {
+    const groups = selectedSession.groups || [];
+    const realMuscles: string[] = [];
+    groups.forEach((g: any) => {
+      if (g.type === "cardio") return;
+      (g.exercises || []).forEach((ex: any) => {
+        const m = (EXERCISES_DATA as any)[ex.id]?.muscle || "";
+        if (m && !realMuscles.includes(m)) realMuscles.push(m);
+      });
+    });
+    const focusLower = realMuscles.join(", ").toLowerCase();
+    const wType = focusLower.includes("leg") || focusLower.includes("lower") || focusLower.includes("glute") || focusLower.includes("hamstring") || focusLower.includes("quad") || focusLower.includes("calf") || focusLower.includes("calve")
+      ? "lower-body"
+      : focusLower.includes("chest") || focusLower.includes("push") || focusLower.includes("tricep") || focusLower.includes("shoulder")
+      ? "push"
+      : focusLower.includes("back") || focusLower.includes("pull") || focusLower.includes("bicep") || focusLower.includes("lat")
+      ? "upper-body"
+      : focusLower.includes("core") || focusLower.includes("ab")
+      ? "core"
+      : focusLower.includes("cardio")
+      ? "cardio"
+      : "full-body";
+    const heroImage = getWorkoutImage(wType, selectedSession.programDay || 1);
+    const bgPos = wType === "lower-body" ? "center 60%" : "center top";
+
+    const fakeDay = {
+      dayNum: selectedSession.programDay || 1,
+      title: expandDayTitle(selectedSession.dayTitle || selectedSession.dayFocus || "Workout"),
+      focus: selectedSession.dayFocus || "Workout",
+      isRest: false,
+      groups,
+      notes: [],
+    };
+
+    return (
+      <WorkoutListScreen
+        day={fakeDay}
+        filteredGroups={groups}
+        onStart={() => {}}
+        onBack={() => setSelectedSession(null)}
+        workoutImage={heroImage}
+        programDay={selectedSession.programDay || 1}
+        programWeek={Math.ceil((selectedSession.programDay || 1) / 7)}
+        isReview={true}
+        bgPosition={bgPos}
+        equipmentPreference={selectedSession.equipmentPreference || profile?.equipmentPreference || "gym-and-bands"}
+        buildingEquipment={profile?.buildingEquipment || []}
+        historyMeta={{
+          completedDateStr: selectedSession.completedDateStr,
+          programLabel: selectedSession.programLabel,
+          cycleNumber: selectedSession.cycleNumber,
+          weightsLogged: selectedSession.weightsLogged || null,
+        }}
+      />
+    );
+  }
+
   return (
     <div style={{
       height: "100vh", background: COLORS.background,
@@ -11987,78 +12050,6 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
           const sessionsCompleted = profile?.sessionsCompleted || 0;
 
           if (sessionsCompleted === 0) return null;
-
-          // ── Session Detail View — uses WorkoutListScreen in review mode ──
-          if (selectedSession) {
-            const groups = selectedSession.groups || [];
-            // Determine hero image from workout type (same logic as active workout)
-            // dayFocus turns out to be a broken, generic fallback field that
-            // just says "Workout" in real data - confirmed directly in
-            // Firestore. It cannot be trusted at all. Deriving fresh from the
-            // session's actual exercises (the same real data the muscle-list
-            // subtitle itself is built from) is the only reliable source.
-            const realMuscles: string[] = [];
-            groups.forEach((g: any) => {
-              if (g.type === "cardio") return;
-              (g.exercises || []).forEach((ex: any) => {
-                const m = (EXERCISES_DATA as any)[ex.id]?.muscle || "";
-                if (m && !realMuscles.includes(m)) realMuscles.push(m);
-              });
-            });
-            const focusLower = realMuscles.join(", ").toLowerCase();
-            const wType = focusLower.includes("leg") || focusLower.includes("lower") || focusLower.includes("glute") || focusLower.includes("hamstring") || focusLower.includes("quad") || focusLower.includes("calf") || focusLower.includes("calve")
-              ? "lower-body"
-              : focusLower.includes("chest") || focusLower.includes("push") || focusLower.includes("tricep") || focusLower.includes("shoulder")
-              ? "push"
-              : focusLower.includes("back") || focusLower.includes("pull") || focusLower.includes("bicep") || focusLower.includes("lat")
-              ? "upper-body"
-              : focusLower.includes("core") || focusLower.includes("ab")
-              ? "core"
-              : focusLower.includes("cardio")
-              ? "cardio"
-              : "full-body";
-              // Never trust a stored heroImage - always compute fresh from the
-              // validated, text-derived wType above. A real polluted session
-              // document was found tonight with a group-level value sitting
-              // where a day-level type should be, which had gotten permanently
-              // baked into a stored heroImage. Recomputing fresh here means
-              // this screen can never show a stale or contaminated image,
-              // regardless of what any past write may have gotten wrong.
-              const heroImage = getWorkoutImage(wType, selectedSession.programDay || 1);
-            const bgPos = wType === "lower-body" ? "center 60%" : "center top";
-
-            // Build a fake day object for WorkoutListScreen
-            const fakeDay = {
-              dayNum: selectedSession.programDay || 1,
-              title: expandDayTitle(selectedSession.dayTitle || selectedSession.dayFocus || "Workout"),
-              focus: selectedSession.dayFocus || "Workout",
-              isRest: false,
-              groups,
-              notes: [],
-            };
-
-            return (
-              <WorkoutListScreen
-                day={fakeDay}
-                filteredGroups={groups}
-                onStart={() => {}}
-                onBack={() => setSelectedSession(null)}
-                workoutImage={heroImage}
-                programDay={selectedSession.programDay || 1}
-                programWeek={Math.ceil((selectedSession.programDay || 1) / 7)}
-                isReview={true}
-                bgPosition={bgPos}
-                equipmentPreference={selectedSession.equipmentPreference || profile?.equipmentPreference || "gym-and-bands"}
-                buildingEquipment={profile?.buildingEquipment || []}
-                historyMeta={{
-                  completedDateStr: selectedSession.completedDateStr,
-                  programLabel: selectedSession.programLabel,
-                  cycleNumber: selectedSession.cycleNumber,
-                  weightsLogged: selectedSession.weightsLogged || null,
-                }}
-              />
-            );
-          }
 
          // ── History List View ──
           const PREVIEW_COUNT = 3;
