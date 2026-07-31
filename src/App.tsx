@@ -12731,6 +12731,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
         programDay: 1,
         programWeek: 1,
         completedProgramDays: [],
+        cycleSessionsCompleted: 0,
         programRestartedAt: new Date().toISOString(),
       } : {}),
     };
@@ -12740,7 +12741,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
       // Equipment, frequency, session length are handled by filters at render time
       if (field !== "experience") {
         const isMonth6 = !!profile?.programKey?.startsWith("month6-");
-        const updatedProfileForRegen = { ...profile, [field]: value, programDay: 1, programWeek: 1, completedProgramDays: [], programRestartedAt: new Date().toISOString() };
+        const updatedProfileForRegen = { ...profile, [field]: value, programDay: 1, programWeek: 1, completedProgramDays: [], cycleSessionsCompleted: 0, programRestartedAt: new Date().toISOString() };
 
         // Equipment change always needs a new program assignment
         if (field === "equipmentPreference") {
