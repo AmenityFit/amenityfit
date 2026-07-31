@@ -12586,6 +12586,12 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
     reader.readAsDataURL(file);
   };
 
+  const handlePhotoDelete = () => {
+    setPhotoPreview(null);
+    onUpdate({ ...profile, profilePhoto: null });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const goalLabels = {
     fat_loss: "Fat Loss", muscle_gain: "Muscle Gain", general_fitness: "General Fitness", athletic_performance: "Athletic Performance"
   };
@@ -13052,9 +13058,19 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
             </div>
           </div>
         </div>
-        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 0 80px" }}>
-          Tap photo to update
-        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 0 80px" }}>
+          <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>
+            Tap photo to update
+          </p>
+          {photoPreview && (
+            <button onClick={handlePhotoDelete} style={{
+              background: "none", border: "none", padding: 0,
+              color: COLORS.accent, fontSize: 12, fontWeight: 600, cursor: "pointer",
+            }}>
+              Remove photo
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ padding: "0 24px 40px" }}>
