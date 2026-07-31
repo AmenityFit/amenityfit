@@ -16725,7 +16725,12 @@ export default function App() {
     // area straight to the actually useful content (day tabs / hero card,
     // or the chat's own header). This value may need fine-tuning after
     // testing - it's a reasonable estimate, not something pixel-verified.
-    const targetOffset = (screen === "weekly" || screen === "assistant") ? 170 : 0;
+    // Chat needs true zero - it was getting cut off at the top with any
+    // offset. Weekly view needs a small offset, not the earlier 170px, which
+    // was too much and hid the "This Week" title entirely - Senz confirmed
+    // that title needs to stay visible, just with a little breathing room
+    // trimmed above it, not scrolled past.
+    const targetOffset = screen === "weekly" ? 40 : 0;
     window.scrollTo(0, targetOffset);
     document.querySelectorAll("div").forEach((el) => {
       const style = window.getComputedStyle(el);
