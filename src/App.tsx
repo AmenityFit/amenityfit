@@ -31,6 +31,7 @@ import {
   orderBy,
   where,
   onSnapshot,
+  arrayUnion,
 } from "firebase/firestore";
 
 import {
@@ -413,6 +414,9 @@ const approvePendingProgramName = async (buildingId: string, name: string): Prom
       programName: name,
       pendingProgramName: null,
       pendingProgramNameSubmittedAt: null,
+      // Permanent, append-only record of every name this building has ever
+      // gone live with, in order, so nothing is ever lost even as it changes.
+      programNameHistory: arrayUnion({ name, approvedAt: new Date().toISOString() }),
     }, { merge: true });
     return true;
   } catch (e) {
@@ -16625,8 +16629,11 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                   value={tempName}
                   onChange={e => setTempName(e.target.value)}
                   placeholder="e.g. The Maverick Fitness Club"
-                  style={{ width: "100%", padding: "16px 18px", borderRadius: 14, border: `1.5px solid ${COLORS.accent}`, background: COLORS.card, color: COLORS.white, fontSize: 16, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box", marginBottom: 12 }}
+                  style={{ width: "100%", padding: "16px 18px", borderRadius: 14, border: `1.5px solid ${COLORS.accent}`, background: COLORS.card, color: COLORS.white, fontSize: 16, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box", marginBottom: 10 }}
                 />
+                <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 12px", lineHeight: 1.5 }}>
+                  This won't go live right away. AmenityFit reviews name changes before residents see them, so it may take a bit.
+                </p>
                 <div style={{ display: "flex", gap: 10 }}>
                   <button onClick={async () => {
                     const resolvedId = buildingId || userProfile?.buildingId;
