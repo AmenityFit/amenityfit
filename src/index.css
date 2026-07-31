@@ -64,31 +64,30 @@
   width: 100%;
   max-width: 100%;
   text-align: center;
-  min-height: 100svh;
+  height: 100svh;
+  max-height: 100svh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  /* Removed overflow-y: auto here - this was already present before tonight's
-     changes and creates a genuine, real problem: nearly every individual
-     screen in this app already has its own internal wrapper with its own
-     height: 100vh + overflow-y: auto (confirmed directly in ProfileScreen).
-     That means #root scrolling too creates two independent, nested scroll
-     containers fighting each other - a well-documented cause of position:
-     fixed elements (like the bottom nav) glitching, clipping, or shifting
-     during scroll on iOS specifically. This was very likely always a latent
-     issue, but removing SafeAreaView tonight (which was accidentally acting
-     as a kind of safety margin) is very likely what made it surface visibly.
-     Each screen already owns its own scrolling correctly - #root doesn't
-     need to and shouldn't scroll too. */
+  overflow: hidden;
+  /* #root itself must never scroll and must never grow taller than one
+     screen. Every individual screen owns its own internal scrolling via its
+     own height: 100vh wrapper + inner flex:1 overflowY:auto content div.
+     If #root were allowed to grow past the viewport (e.g. via min-height
+     with no cap), the browser/WebView would silently scroll the whole page
+     natively, completely bypassing each screen's own overflow setting -
+     this was happening on static screens (Splash, Welcome, Operator Login)
+     whose padding pushed their total height just past one screen. */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
 html, body {
   margin: 0;
-  overflow-x: hidden;
+  overflow: hidden;
   width: 100%;
   max-width: 100vw;
+  height: 100%;
   background-color: #0D0D0D;
 }
 
