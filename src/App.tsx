@@ -11209,7 +11209,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
 
       {/* Input */}
       <div style={{
-        padding: "12px 16px 90px",
+        padding: "12px 16px 120px",
         background: COLORS.card,
         borderTop: `1px solid ${COLORS.border}`,
         display: "flex", alignItems: "flex-end", gap: 10, flexShrink: 0,
