@@ -13394,16 +13394,19 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
                 {(profile?.name || "?")[0].toUpperCase()}
               </span>
             )}
-            {/* Camera overlay on hover/tap */}
+            {/* Small, always-visible camera badge instead of a
+                hover-reveal overlay - hover states rely on mouse enter/leave
+                events that don't clear reliably on touch devices, which was
+                leaving this stuck visible until tapping elsewhere. A fixed
+                badge (the same pattern most apps use for this) has no
+                state to get stuck in at all. */}
             <div style={{
-              position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)",
+              position: "absolute", bottom: 2, right: 2,
+              width: 22, height: 22, borderRadius: "50%",
+              background: "rgba(0,0,0,0.65)", border: "1.5px solid rgba(255,255,255,0.3)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              opacity: 0, transition: "opacity 0.2s",
-            }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
-              onMouseLeave={e => (e.currentTarget.style.opacity = "0")}
-            >
-              <Camera size={18} color="#fff" />
+            }}>
+              <Camera size={12} color="#fff" />
             </div>
           </div>
           {/* Hidden file input */}
