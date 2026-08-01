@@ -17042,16 +17042,22 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
             </div>
 
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Preview — what residents see</p>
-            <div style={{ background: COLORS.card, borderRadius: 18, padding: "40px 20px", border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
-              {buildingLogoUrl ? (
-                <img src={buildingLogoUrl} alt="Building" style={{ width: 52, height: 52, borderRadius: 14, objectFit: "cover", margin: "0 auto 14px", boxShadow: `0 6px 20px ${COLORS.primary}40` }} />
-              ) : (
-                <div style={{ width: 52, height: 52, borderRadius: 14, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", boxShadow: `0 6px 20px ${COLORS.primary}40` }}>
-                  <span style={{ color: COLORS.white, fontSize: 22, fontWeight: 900 }}>{(b.name || "A")[0]}</span>
+            {/* Exact same markup/styling as the resident's own Profile > Your
+                Building card, with a placeholder unit/code, so this is a
+                true representation and can never silently drift out of
+                sync with what residents actually see. */}
+            <div style={{ background: COLORS.card, borderRadius: 20, padding: "4px 20px 16px", border: `1px solid ${COLORS.border}` }}>
+              <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "16px 0 12px" }}>Your Building</p>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                {buildingLogoUrl ? (
+                  <img src={buildingLogoUrl} alt="" style={{ width: 40, height: 40, borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
+                ) : null}
+                <div>
+                  <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{buildingName}</p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Unit 1 · AF-XXXXXX</p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "2px 0 0" }}>Powered by AmenityFit</p>
                 </div>
-              )}
-              <p style={{ color: COLORS.white, fontSize: 18, fontWeight: 800, margin: "0 0 4px" }}>{buildingName}</p>
-              <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0, letterSpacing: 1.5, textTransform: "uppercase" }}>Powered by AmenityFit</p>
+              </div>
             </div>
 
           </>
