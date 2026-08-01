@@ -12774,6 +12774,10 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
       onUpdate({ ...profile, profilePhoto: dataUrl });
     };
     reader.readAsDataURL(file);
+    // Without resetting this, some WebKit contexts won't reliably fire a
+    // fresh change event for a second capture - most noticeable when
+    // replacing a library photo with a freshly taken camera photo.
+    e.target.value = "";
   };
 
   const handlePhotoDelete = () => {
