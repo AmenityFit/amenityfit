@@ -13268,7 +13268,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
                   {profile?.inviteCode || ""}
                 </p>
                 {buildingBranding.programName && (
-                  <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "2px 0 0", letterSpacing: 0.5, textTransform: "uppercase" }}>Powered by AmenityFit</p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "2px 0 0" }}>Powered by AmenityFit</p>
                 )}
               </div>
             </div>
