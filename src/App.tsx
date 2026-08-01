@@ -783,30 +783,52 @@ const COLORS = {
 };
 
 // ─── Splash ───────────────────────────────────────────────────────────────────
-const SplashScreen = ({ onFinish, onSecretAdmin }) => {
+const SplashScreen = ({ onFinish, onSecretAdmin, authReady }) => {
   const [tapCount, setTapCount] = useState(0);
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
   const tapTimer = React.useRef<any>(null);
-  const finishTimer = React.useRef<any>(null);
+  const hasFinished = React.useRef(false);
 
+  // Previously a flat 2.5s timer regardless of whether the persisted-login
+  // check (Firebase Auth + the Firestore profile fetch that follows it) had
+  // actually finished. On real devices with real network latency, that
+  // check routinely takes longer than 2.5s, so Splash would move on to
+  // Welcome before the answer was ready, silently discarding an
+  // already-valid session - the person then had to log in again every
+  // single time, even though nothing was ever actually wrong with their
+  // login. Now Splash waits for both a short minimum display time (so it
+  // never feels like a flash) AND authReady - whichever finishes last -
+  // before deciding where to go, so it can never race and lose a real
+  // session again. A 6s hard cap is a pure safety net for the rare case
+  // something upstream never resolves, so nobody gets stuck on Splash
+  // forever.
   useEffect(() => {
-    finishTimer.current = setTimeout(onFinish, 2500);
-    return () => {
-      clearTimeout(finishTimer.current);
-      clearTimeout(tapTimer.current);
-    };
+    const t = setTimeout(() => setMinTimeElapsed(true), 1200);
+    return () => clearTimeout(t);
   }, []);
 
-  const handleLogoTap = () => {
-    // Reset the auto-advance timer on each tap to give time to complete sequence
-    clearTimeout(finishTimer.current);
-    finishTimer.current = setTimeout(onFinish, 4000);
+  useEffect(() => {
+    const maxWait = setTimeout(() => {
+      if (!hasFinished.current) { hasFinished.current = true; onFinish(); }
+    }, 6000);
+    return () => clearTimeout(maxWait);
+  }, []);
 
+  useEffect(() => {
+    if (minTimeElapsed && authReady && !hasFinished.current) {
+      hasFinished.current = true;
+      onFinish();
+    }
+    return () => clearTimeout(tapTimer.current);
+  }, [minTimeElapsed, authReady]);
+
+  const handleLogoTap = () => {
     const newCount = tapCount + 1;
     setTapCount(newCount);
     if (tapTimer.current) clearTimeout(tapTimer.current);
     if (newCount >= 5) {
       setTapCount(0);
-      clearTimeout(finishTimer.current);
+      hasFinished.current = true;
       onSecretAdmin();
       return;
     }
@@ -17367,6 +17389,7 @@ export default function App() {
           } else if (profile.role === 'manager' && profile.buildingId) {
             setUserProfile({ ...profile, uid: firebaseUser.uid });
             setCurrentUid(firebaseUser.uid);
+            setManagerLoggedIn(true);
             pingPresence(firebaseUser.uid, profile.buildingId, 'manager');
           } else if (profile.role === 'resident') {
             setUserProfile({ ...profile, uid: firebaseUser.uid });
@@ -17763,6 +17786,7 @@ const isInitialLoad = React.useRef(true);
   };
 
   if (screen === "splash") return <SplashScreen
+    authReady={authReady}
     onFinish={() => {
       if (pendingNavigation) { setScreen(pendingNavigation); setPendingNavigation(null); }
       else setScreen("welcome");
