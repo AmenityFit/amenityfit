@@ -35,6 +35,13 @@ import {
   onSnapshot,
   arrayUnion,
 } from "firebase/firestore";
+import {
+  getStorage,
+  ref as storageRef,
+  uploadString,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
 
 import {
   Building2,
@@ -326,6 +333,15 @@ const auth = getAuth(firebaseApp);
 const db = initializeFirestore(firebaseApp, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
+// Separate service from Firestore/Auth above - a dedicated file host built
+// for exactly this (images), instead of embedding photo data directly inside
+// Firestore documents. Firestore documents get read constantly by every live
+// listener watching them, so an embedded photo would get re-downloaded on
+// every unrelated field change to that same document, and Firestore also has
+// a hard 1MB per-document size limit a full camera photo can exceed outright.
+// Storage keeps the actual file separate and cheap, with just a short URL
+// referencing it inside Firestore.
+const storage = getStorage(firebaseApp);
 const googleProvider = new GoogleAuthProvider();
 
 // ─── Firestore helpers ────────────────────────────────────────────────────────
@@ -442,13 +458,45 @@ const declinePendingProgramName = async (buildingId: string): Promise<boolean> =
   }
 };
 
-const updateBuildingLogo = async (buildingId: string, logoUrl: string | null): Promise<boolean> => {
+// Uploads to Firebase Storage at a fixed, predictable path per building, so a
+// replacement upload naturally overwrites the previous file instead of
+// leaving old orphaned photos accumulating storage cost forever. Only the
+// short resulting URL is ever stored in Firestore, never the raw image data.
+// Returns the real Storage download URL on a successful upload (the caller
+// should display/save THIS, never the raw base64 that was passed in), an
+// empty string on a successful delete, or null if anything failed.
+// Same pattern as updateBuildingLogo above, for resident profile photos.
+const updateUserProfilePhoto = async (uid: string, dataUrl: string | null): Promise<string | null> => {
   try {
-    await setDoc(doc(db, "buildings", buildingId), { logoUrl }, { merge: true });
-    return true;
+    const fileRef = storageRef(storage, `profile-photos/${uid}.jpg`);
+    if (dataUrl === null) {
+      try { await deleteObject(fileRef); } catch (e) { /* fine if already gone */ }
+      return "";
+    }
+    await uploadString(fileRef, dataUrl, 'data_url');
+    const downloadUrl = await getDownloadURL(fileRef);
+    return downloadUrl;
+  } catch (e) {
+    console.error("updateUserProfilePhoto error:", e);
+    return null;
+  }
+};
+
+const updateBuildingLogo = async (buildingId: string, dataUrl: string | null): Promise<string | null> => {
+  try {
+    const fileRef = storageRef(storage, `building-logos/${buildingId}.jpg`);
+    if (dataUrl === null) {
+      try { await deleteObject(fileRef); } catch (e) { /* fine if already gone */ }
+      await setDoc(doc(db, "buildings", buildingId), { logoUrl: null }, { merge: true });
+      return "";
+    }
+    await uploadString(fileRef, dataUrl, 'data_url');
+    const downloadUrl = await getDownloadURL(fileRef);
+    await setDoc(doc(db, "buildings", buildingId), { logoUrl: downloadUrl }, { merge: true });
+    return downloadUrl;
   } catch (e) {
     console.error("updateBuildingLogo error:", e);
-    return false;
+    return null;
   }
 };
 
@@ -12698,6 +12746,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
   const [tempValue, setTempValue] = useState<any>(null);
   const [showExperienceConfirm, setShowExperienceConfirm] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(profile?.profilePhoto || null);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [showManagerAccess, setShowManagerAccess] = useState(false);
   const [managerAccessEmail, setManagerAccessEmail] = useState("");
   const [managerAccessPassword, setManagerAccessPassword] = useState("");
@@ -12767,11 +12816,18 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const uid = profile?.uid;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string;
-      setPhotoPreview(dataUrl);
-      onUpdate({ ...profile, profilePhoto: dataUrl });
+      if (!uid) { setPhotoPreview(dataUrl); onUpdate({ ...profile, profilePhoto: dataUrl }); return; }
+      setPhotoUploading(true);
+      const resultUrl = await updateUserProfilePhoto(uid, dataUrl);
+      if (resultUrl !== null) {
+        setPhotoPreview(resultUrl);
+        onUpdate({ ...profile, profilePhoto: resultUrl });
+      }
+      setPhotoUploading(false);
     };
     reader.readAsDataURL(file);
     // Without resetting this, some WebKit contexts won't reliably fire a
@@ -12780,10 +12836,17 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
     e.target.value = "";
   };
 
-  const handlePhotoDelete = () => {
-    setPhotoPreview(null);
-    onUpdate({ ...profile, profilePhoto: null });
+  const handlePhotoDelete = async () => {
+    const uid = profile?.uid;
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (!uid) { setPhotoPreview(null); onUpdate({ ...profile, profilePhoto: null }); return; }
+    setPhotoUploading(true);
+    const resultUrl = await updateUserProfilePhoto(uid, null);
+    if (resultUrl !== null) {
+      setPhotoPreview(null);
+      onUpdate({ ...profile, profilePhoto: null });
+    }
+    setPhotoUploading(false);
   };
 
   const goalLabels = {
@@ -16919,8 +16982,8 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                 const reader = new FileReader();
                 reader.onload = async () => {
                   const dataUrl = reader.result as string;
-                  const ok = await updateBuildingLogo(resolvedId, dataUrl);
-                  if (ok) setBuildingLogoUrl(dataUrl);
+                  const resultUrl = await updateBuildingLogo(resolvedId, dataUrl);
+                  if (resultUrl !== null) setBuildingLogoUrl(resultUrl);
                   setLogoUploading(false);
                 };
                 reader.onerror = () => setLogoUploading(false);
@@ -16957,8 +17020,8 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                     const resolvedId = buildingId || userProfile?.buildingId;
                     if (!resolvedId) return;
                     setLogoUploading(true);
-                    const ok = await updateBuildingLogo(resolvedId, null);
-                    if (ok) setBuildingLogoUrl(null);
+                    const resultUrl = await updateBuildingLogo(resolvedId, null);
+                    if (resultUrl !== null) setBuildingLogoUrl(null);
                     setLogoUploading(false);
                   }}
                   disabled={logoUploading}
