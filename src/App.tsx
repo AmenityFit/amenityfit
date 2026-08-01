@@ -11091,7 +11091,16 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
           uid: profile?.uid || null,
           model: "claude-sonnet-4-6",
           max_tokens: 1000,
-          system: buildSystemPrompt(profile),
+          // Marked cacheable since this same, fairly large system prompt
+          // gets resent on every single message in a conversation
+          // (each API call is stateless) but doesn't actually change
+          // mid-conversation - caching it means every message after the
+          // first in a session reuses the cached version at a fraction of
+          // the input cost, instead of paying full price to resend the
+          // exact same context over and over.
+          system: [
+            { type: "text", text: buildSystemPrompt(profile), cache_control: { type: "ephemeral" } },
+          ],
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
         }),
       });
