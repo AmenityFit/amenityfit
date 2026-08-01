@@ -11135,7 +11135,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
         }),
       });
-      const data = await response.json();
+
       if (response.status === 429) {
         setMessages(prev => [...prev, {
           role: "assistant",
@@ -11145,13 +11145,66 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
         setLoading(false);
         return;
       }
-      const reply = (data.content?.[0]?.text || "Having trouble connecting right now. Give it a second and try again.").replace(/—/g, "").replace(/–/g, "").replace(/\s{2,}/g, " ").trim();
-      setMessages(prev => [...prev, { role: "assistant", content: reply }]);
+
+      if (!response.ok || !response.body) {
+        setMessages(prev => [...prev, { role: "assistant", content: "Having trouble connecting right now. Give it a second and try again." }]);
+        setLoading(false);
+        return;
+      }
+
+      // Streamed rather than waiting for the entire response to finish
+      // generating first - text now appears progressively as Claude
+      // generates it, the same way it does on claude.ai, instead of a
+      // blank wait followed by the whole answer appearing all at once.
+      setMessages(prev => [...prev, { role: "assistant", content: "" }]);
+      setLoading(false);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+          try {
+            const evt = JSON.parse(jsonStr);
+            if (evt.type === "content_block_delta" && evt.delta?.text) {
+              fullText += evt.delta.text;
+              const cleaned = fullText.replace(/—/g, "").replace(/–/g, "").replace(/\s{2,}/g, " ");
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = { role: "assistant", content: cleaned };
+                return updated;
+              });
+              messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+            }
+          } catch (parseErr) {
+            // Incomplete chunk split mid-line - the leftover in buffer
+            // above already carries it forward to join with the next read
+          }
+        }
+      }
+
+      if (!fullText.trim()) {
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { role: "assistant", content: "Having trouble connecting right now. Give it a second and try again." };
+          return updated;
+        });
+      }
     } catch (err) {
       console.error("Assistant error:", err);
       setMessages(prev => [...prev, { role: "assistant", content: "Having trouble connecting right now. Give it a second and try again." }]);
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
