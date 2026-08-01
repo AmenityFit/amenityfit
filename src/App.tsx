@@ -482,6 +482,37 @@ const updateUserProfilePhoto = async (uid: string, dataUrl: string | null): Prom
   }
 };
 
+// Verifies real manager credentials for the resident-side "Building Portal"
+// quick-access shortcut, without ever disturbing the resident's own active
+// Firebase session - Firebase only supports one signed-in session per
+// client, so this calls the Identity Toolkit REST endpoint directly instead
+// of the SDK's normal sign-in, which would replace the current session.
+// Only grants access if the credentials are real AND that manager account
+// is actually tied to this same building, not just any manager anywhere.
+const verifyManagerAccessForBuilding = async (email: string, password: string, residentBuildingId: string | null): Promise<boolean> => {
+  try {
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseConfig.apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, returnSecureToken: true }),
+      }
+    );
+    if (!res.ok) return false;
+    const data = await res.json();
+    const uid = data.localId;
+    if (!uid) return false;
+    const profileSnap = await getDoc(doc(db, "users", uid));
+    if (!profileSnap.exists()) return false;
+    const p = profileSnap.data();
+    return p.role === "manager" && !!residentBuildingId && p.buildingId === residentBuildingId;
+  } catch (e) {
+    console.error("verifyManagerAccessForBuilding error:", e);
+    return false;
+  }
+};
+
 const updateBuildingLogo = async (buildingId: string, dataUrl: string | null): Promise<string | null> => {
   try {
     const fileRef = storageRef(storage, `building-logos/${buildingId}.jpg`);
@@ -12761,6 +12792,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
   const [managerAccessPassword, setManagerAccessPassword] = useState("");
   const [managerAccessError, setManagerAccessError] = useState("");
   const [showManagerPassword, setShowManagerPassword] = useState(false);
+  const [managerAccessVerifying, setManagerAccessVerifying] = useState(false);
   const [wearableConnecting, setWearableConnecting] = useState<string | null>(null);
   const [buildingToast, setBuildingToast] = useState<string | null>(null);
   const [showChangeBldg, setShowChangeBldg] = useState(false);
@@ -12808,17 +12840,26 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
   const whoopRecovery = profile?.wearableData?.whoop?.recovery;
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const handleManagerAccess = () => {
+  const handleManagerAccess = async () => {
     if (!managerAccessEmail.trim()) {
       setManagerAccessError("Please enter your manager email.");
-    } else if (managerAccessPassword === "AF-manager-2025") {
+      return;
+    }
+    if (!managerAccessPassword.trim()) {
+      setManagerAccessError("Please enter your manager password.");
+      return;
+    }
+    setManagerAccessError("");
+    setManagerAccessVerifying(true);
+    const granted = await verifyManagerAccessForBuilding(managerAccessEmail.trim(), managerAccessPassword, profile?.buildingId || null);
+    setManagerAccessVerifying(false);
+    if (granted) {
       setShowManagerAccess(false);
       setManagerAccessEmail("");
       setManagerAccessPassword("");
-      setManagerAccessError("");
       onManagerAccess();
     } else {
-      setManagerAccessError("Incorrect credentials. Contact AmenityFit for access.");
+      setManagerAccessError("Incorrect credentials, or this account isn't the manager on file for this building.");
     }
   };
 
@@ -13696,14 +13737,15 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
               )}
               <button
                 onClick={handleManagerAccess}
+                disabled={managerAccessVerifying}
                 style={{
                   width: "100%", padding: "18px", borderRadius: 16, border: "none",
-                  background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`,
-                  color: COLORS.white, fontSize: 16, fontWeight: 700,
-                  cursor: "pointer", marginBottom: 12,
+                  background: managerAccessVerifying ? COLORS.border : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`,
+                  color: managerAccessVerifying ? COLORS.textSecondary : COLORS.white, fontSize: 16, fontWeight: 700,
+                  cursor: managerAccessVerifying ? "not-allowed" : "pointer", marginBottom: 12,
                 }}
               >
-                Access Portal
+                {managerAccessVerifying ? "Verifying..." : "Access Portal"}
               </button>
               <button
                 onClick={() => { setShowManagerAccess(false); setManagerAccessEmail(""); setManagerAccessPassword(""); setManagerAccessError(""); }}
