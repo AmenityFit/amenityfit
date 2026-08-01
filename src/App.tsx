@@ -11240,6 +11240,11 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
                     cursor: "pointer",
                     userSelect: msg.role === "assistant" ? "text" : "none" as any,
                     WebkitUserSelect: msg.role === "assistant" ? "text" : "none" as any,
+                    // Keeps selection itself (the blue drag handles) working
+                    // for assistant messages, while suppressing iOS's own
+                    // system Copy/Translate bubble so only our own custom
+                    // Save to Notes menu shows, instead of both stacking.
+                    WebkitTouchCallout: "none" as any,
                     transition: "opacity 0.1s ease",
                   }}>
                   <p style={{ color: COLORS.white, fontSize: 14, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
