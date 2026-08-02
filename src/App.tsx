@@ -13318,7 +13318,15 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
   // Experience level confirmation dialog
   const ExperienceConfirmDialog = () => {
     if (!showExperienceConfirm) return null;
-    const levelLabels = { beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced" };
+    // Includes the senior track (senior-beginner/senior-intermediate),
+    // missing from here even though it's a real, valid experience value
+    // used throughout the rest of the app - selecting into it crashed this
+    // whole screen since nothing after this ever guarded against an
+    // unrecognized key coming back undefined.
+    const levelLabels: Record<string, string> = { beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced", "senior-beginner": "Senior Beginner", "senior-intermediate": "Senior Intermediate" };
+    // Falls back to the raw value itself rather than crashing outright if
+    // a still-unrecognized value ever shows up in the future.
+    const levelDisplayName = levelLabels[tempValue] || tempValue || "";
     return (
       <div style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)",
@@ -13337,10 +13345,10 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
             <Zap size={24} color={COLORS.accent} strokeWidth={1.8} />
           </div>
           <h2 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: "0 0 10px", letterSpacing: -0.3 }}>
-            Switch to {levelLabels[tempValue]}?
+            Switch to {levelDisplayName}?
           </h2>
           <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 28px", lineHeight: 1.6 }}>
-            Your program will restart at Day 1 with {levelLabels[tempValue].toLowerCase()}-level exercises and intensity. Your streak and completed sessions stay on your record.
+            Your program will restart at Day 1 with {levelDisplayName.toLowerCase()}-level exercises and intensity. Your streak and completed sessions stay on your record.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <button
