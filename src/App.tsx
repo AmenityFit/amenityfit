@@ -73,6 +73,7 @@ import {
   Music,
   Eye,
   EyeOff,
+  X,
 } from "lucide-react";
 
 const firebaseConfig = {
@@ -12839,12 +12840,49 @@ const MyNotesScreen = ({ profile, onBack }) => {
   );
 };
 
+// Shared full-screen photo viewer - used anywhere a photo thumbnail (profile
+// photo, building logo) should be tappable to see it larger, the same
+// standard pattern most apps use for this. Tapping anywhere, including the
+// image itself, dismisses it.
+const PhotoLightbox = ({ url, onClose }: { url: string | null; onClose: () => void }) => {
+  if (!url) return null;
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: "rgba(0,0,0,0.92)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 24, cursor: "pointer",
+      }}
+    >
+      <button
+        onClick={onClose}
+        style={{
+          position: "absolute", top: "calc(20px + env(safe-area-inset-top, 0px))", right: 20,
+          width: 40, height: 40, borderRadius: "50%",
+          background: "rgba(255,255,255,0.12)", border: "none",
+          display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+        }}
+      >
+        <X size={20} color="#fff" />
+      </button>
+      <img
+        src={url}
+        alt=""
+        style={{ maxWidth: "100%", maxHeight: "80vh", borderRadius: 16, objectFit: "contain" }}
+      />
+    </div>
+  );
+};
+
 const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, onManagerAccess = () => {} }) => {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState<any>(null);
   const [showExperienceConfirm, setShowExperienceConfirm] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(profile?.profilePhoto || null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [showManagerAccess, setShowManagerAccess] = useState(false);
   const [managerAccessEmail, setManagerAccessEmail] = useState("");
   const [managerAccessPassword, setManagerAccessPassword] = useState("");
@@ -13376,7 +13414,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
         {/* Avatar — tap to change photo */}
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8 }}>
           <div
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => { if (photoPreview) setLightboxUrl(photoPreview); else fileInputRef.current?.click(); }}
             style={{
               width: 64, height: 64, borderRadius: 20, flexShrink: 0,
               background: photoPreview
@@ -13399,13 +13437,18 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
                 events that don't clear reliably on touch devices, which was
                 leaving this stuck visible until tapping elsewhere. A fixed
                 badge (the same pattern most apps use for this) has no
-                state to get stuck in at all. */}
-            <div style={{
-              position: "absolute", bottom: 2, right: 2,
-              width: 22, height: 22, borderRadius: "50%",
-              background: "rgba(0,0,0,0.65)", border: "1.5px solid rgba(255,255,255,0.3)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
+                state to get stuck in at all. It has its own tap handler so
+                it always opens the photo picker to change the photo, even
+                when the rest of the avatar is now set up to enlarge it
+                instead. */}
+            <div
+              onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
+              style={{
+                position: "absolute", bottom: 2, right: 2,
+                width: 22, height: 22, borderRadius: "50%",
+                background: "rgba(0,0,0,0.65)", border: "1.5px solid rgba(255,255,255,0.3)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
               <Camera size={12} color="#fff" />
             </div>
           </div>
@@ -13458,7 +13501,12 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showChangeBldg ? 16 : 0 }}>
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12 }}>
               {buildingBranding.logoUrl ? (
-                <img src={buildingBranding.logoUrl} alt="" style={{ width: 40, height: 40, borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
+                <img
+                  src={buildingBranding.logoUrl}
+                  alt=""
+                  onClick={() => setLightboxUrl(buildingBranding.logoUrl!)}
+                  style={{ width: 40, height: 40, borderRadius: 12, objectFit: "cover", flexShrink: 0, cursor: "pointer" }}
+                />
               ) : null}
               <div>
                 <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{buildingBranding.programName || profile?.buildingName || "—"}</p>
@@ -13828,6 +13876,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
       {editingField && <EditModal />}
       {showExperienceConfirm && <ExperienceConfirmDialog />}
       <BottomNav active="profile" onNavigate={onNavigate} />
+      <PhotoLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
     </div>
   );
 };
@@ -16589,6 +16638,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
   const [buildingLogoUrl, setBuildingLogoUrl] = useState<string | null>(null);
   const [pendingProgramName, setPendingProgramName] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [logoLightboxUrl, setLogoLightboxUrl] = useState<string | null>(null);
   const [nameSubmitted, setNameSubmitted] = useState(false);
   const logoFileInputRef = React.useRef<HTMLInputElement>(null);
   // Codes state — must be at top level
@@ -17108,7 +17158,12 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
             <div style={{ background: COLORS.card, borderRadius: 18, padding: "20px", border: `1px solid ${COLORS.border}`, marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
                 {buildingLogoUrl ? (
-                  <img src={buildingLogoUrl} alt="Building" style={{ width: 64, height: 64, borderRadius: 16, objectFit: "cover", flexShrink: 0, boxShadow: `0 6px 20px ${COLORS.primary}40` }} />
+                  <img
+                    src={buildingLogoUrl}
+                    alt="Building"
+                    onClick={() => setLogoLightboxUrl(buildingLogoUrl)}
+                    style={{ width: 64, height: 64, borderRadius: 16, objectFit: "cover", flexShrink: 0, boxShadow: `0 6px 20px ${COLORS.primary}40`, cursor: "pointer" }}
+                  />
                 ) : (
                   <div style={{ width: 64, height: 64, borderRadius: 16, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: `0 6px 20px ${COLORS.primary}40` }}>
                     <span style={{ color: COLORS.white, fontSize: 26, fontWeight: 900 }}>{(b.name || "A")[0]}</span>
@@ -17369,6 +17424,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
           </>
         )}
       </div>
+      <PhotoLightbox url={logoLightboxUrl} onClose={() => setLogoLightboxUrl(null)} />
     </div>
   );
 };
