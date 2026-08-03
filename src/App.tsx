@@ -12930,6 +12930,14 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
   // anything - same proven pattern used for building equipment.
   useEffect(() => {
     if (!profile?.buildingId) { setBuildingBranding({}); return; }
+    // Also check the cache here, not just at initial state setup - if
+    // profile.buildingId arrives a moment after this component first mounts
+    // (a normal re-render, not a remount), the lazy state init above already
+    // missed the cache using an empty key. This catches that race so the
+    // cached photo still shows instantly instead of waiting on a fresh
+    // network round trip, which is what caused the intermittent flicker.
+    const cached = buildingBrandingCache[profile.buildingId];
+    if (cached) setBuildingBranding(cached);
     const unsub = onSnapshot(
       doc(db, "buildings", profile.buildingId),
       (snap) => {
