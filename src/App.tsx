@@ -10960,6 +10960,16 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
   const [dotFrame, setDotFrame] = useState(0);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  // Smooths out choppy network delivery. Anthropic's stream delivers text
+  // in variable-sized bursts (sometimes a few characters, sometimes several
+  // words at once) - without this, the UI just shows whatever burst size
+  // arrives, which looks chunky. Instead, the network loop only updates
+  // fullTextRef, and a separate steady timer reveals it a few characters
+  // at a time, decoupling what's displayed from how the network delivers it.
+  const fullTextRef = React.useRef("");
+  const revealedLenRef = React.useRef(0);
+  const revealTimerRef = React.useRef<any>(null);
+  const streamDoneRef = React.useRef(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [longPressIdx, setLongPressIdx] = useState<number | null>(null);
@@ -11175,6 +11185,32 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
       setMessages(prev => [...prev, { role: "assistant", content: "", createdAt: Date.now() }]);
       setLoading(false);
 
+      // Reset the reveal queue for this new message
+      if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
+      fullTextRef.current = "";
+      revealedLenRef.current = 0;
+      streamDoneRef.current = false;
+
+      const startRevealTimer = () => {
+        if (revealTimerRef.current) return;
+        revealTimerRef.current = setInterval(() => {
+          const target = fullTextRef.current;
+          if (revealedLenRef.current < target.length) {
+            revealedLenRef.current = Math.min(revealedLenRef.current + 3, target.length);
+            const shown = target.slice(0, revealedLenRef.current);
+            setMessages(prev => {
+              const updated = [...prev];
+              updated[updated.length - 1] = { ...updated[updated.length - 1], content: shown };
+              return updated;
+            });
+            messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+          } else if (streamDoneRef.current) {
+            clearInterval(revealTimerRef.current);
+            revealTimerRef.current = null;
+          }
+        }, 20);
+      };
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -11195,12 +11231,8 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
             if (evt.type === "content_block_delta" && evt.delta?.text) {
               fullText += evt.delta.text;
               const cleaned = fullText.replace(/—/g, "").replace(/–/g, "").replace(/\s{2,}/g, " ");
-              setMessages(prev => {
-                const updated = [...prev];
-                updated[updated.length - 1] = { ...updated[updated.length - 1], content: cleaned };
-                return updated;
-              });
-              messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+              fullTextRef.current = cleaned;
+              startRevealTimer();
             }
           } catch (parseErr) {
             // Incomplete chunk split mid-line - the leftover in buffer
@@ -11209,7 +11241,10 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
         }
       }
 
+      streamDoneRef.current = true;
+
       if (!fullText.trim()) {
+        if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
         setMessages(prev => {
           const updated = [...prev];
           updated[updated.length - 1] = { ...updated[updated.length - 1], content: "Having trouble connecting right now. Give it a second and try again." };
@@ -11218,6 +11253,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
       }
     } catch (err) {
       console.error("Assistant error:", err);
+      if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
       setMessages(prev => [...prev, { role: "assistant", content: "Having trouble connecting right now. Give it a second and try again.", createdAt: Date.now() }]);
       setLoading(false);
     }
