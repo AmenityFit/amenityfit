@@ -12143,12 +12143,16 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
             const cycleLabel = isMonth6 ? " (Evolved)" : "";
             const motivationalName = getProgramMotivationalName(profile?.programKey || "");
             const cleanName = isMonth6 ? getEvolvedProgramName(profile?.programKey || "") : (motivationalName || name || rawLabel.replace(/^(men's|women's|senior\s*)?(beginner|intermediate|advanced)\s*\d*x?\/?week?\s*[-—]?\s*/i, "").trim() || rawLabel);
-            const nameHasLevel = levelLabel && cleanName.toLowerCase().includes(levelLabel.toLowerCase());
-            if (!cleanName) return "Your current program";
+            // Same defensive treatment as the identical Profile pattern -
+            // an unconditional safety net regardless of the exact mechanism.
+            const safeCleanName = String(cleanName ?? "");
+            const safeLevelLabel = String(levelLabel ?? "");
+            const nameHasLevel = safeLevelLabel && safeCleanName.toLowerCase().includes(safeLevelLabel.toLowerCase());
+            if (!safeCleanName) return "Your current program";
             return (
               <span>
-                <span style={{ color: COLORS.white, fontWeight: 600 }}>{cleanName}{cycleLabel}</span>
-                {levelLabel && !nameHasLevel ? <span style={{ color: COLORS.accent, fontSize: 12, marginLeft: 6, fontWeight: 600 }}>· {levelLabel}</span> : null}
+                <span style={{ color: COLORS.white, fontWeight: 600 }}>{safeCleanName}{cycleLabel}</span>
+                {safeLevelLabel && !nameHasLevel ? <span style={{ color: COLORS.accent, fontSize: 12, marginLeft: 6, fontWeight: 600 }}>· {safeLevelLabel}</span> : null}
               </span>
             );
           })()}
@@ -13648,8 +13652,17 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
               const cycleTag = isMonth4 ? " (Evolved)" : "";
               const motivationalName = getProgramMotivationalName(profile?.programKey || "");
               const cleanLabel = isMonth4 ? getEvolvedProgramName(profile?.programKey || "") : (motivationalName || name || label.replace(/^(men's|women's|senior\s*)?(beginner|intermediate|advanced)\s*\d*x?\/?week?\s*[-—]?\s*/i, "").trim() || label);
-              const nameAlreadyHasLevel = levelDisplay && cleanLabel.toLowerCase().includes(levelDisplay.toLowerCase());
-              return `${cleanLabel}${cycleTag}${levelDisplay && !nameAlreadyHasLevel ? ` · ${levelDisplay}` : ""}`;
+              // Confirmed via decoded source map as the exact crash site
+              // behind the Profile black-screen bug - wrapped in String(...)
+              // as an unconditional safety net regardless of the exact
+              // mechanism, since every function feeding into cleanLabel and
+              // levelDisplay is verified to already return a string, so
+              // whatever the real cause turns out to be, this line itself
+              // can never throw on it again.
+              const safeCleanLabel = String(cleanLabel ?? "");
+              const safeLevelDisplay = String(levelDisplay ?? "");
+              const nameAlreadyHasLevel = safeLevelDisplay && safeCleanLabel.toLowerCase().includes(safeLevelDisplay.toLowerCase());
+              return `${safeCleanLabel}${cycleTag}${safeLevelDisplay && !nameAlreadyHasLevel ? ` · ${safeLevelDisplay}` : ""}`;
             })()}</span>
           </div>
 
