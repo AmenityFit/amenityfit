@@ -10949,7 +10949,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
   })();
 
   const [messages, setMessages] = useState<any[]>([
-    { role: "assistant", content: openingMessage }
+    { role: "assistant", content: openingMessage, createdAt: Date.now() }
   ]);
   const [input, setInput] = useState(() => sessionStorage.getItem("assistantDraft") || "");
 
@@ -11109,7 +11109,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     setInput("");
     sessionStorage.removeItem("assistantDraft");    sessionStorage.removeItem("assistantDraft");
 
-    const userMsg = { role: "user", content: userText };
+    const userMsg = { role: "user", content: userText, createdAt: Date.now() };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setLoading(true);
@@ -11144,14 +11144,14 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
         setMessages(prev => [...prev, {
           role: "assistant",
           content: "You've reached your daily limit for the Fitness Assistant. Your limit resets tomorrow — come back then and we'll pick up where we left off. 💪",
-          timestamp: Date.now(),
+          createdAt: Date.now(),
         }]);
         setLoading(false);
         return;
       }
 
       if (!response.ok || !response.body) {
-        setMessages(prev => [...prev, { role: "assistant", content: "Having trouble connecting right now. Give it a second and try again." }]);
+        setMessages(prev => [...prev, { role: "assistant", content: "Having trouble connecting right now. Give it a second and try again.", createdAt: Date.now() }]);
         setLoading(false);
         return;
       }
@@ -11160,7 +11160,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
       // generating first - text now appears progressively as Claude
       // generates it, the same way it does on claude.ai, instead of a
       // blank wait followed by the whole answer appearing all at once.
-      setMessages(prev => [...prev, { role: "assistant", content: "" }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "", createdAt: Date.now() }]);
       setLoading(false);
 
       const reader = response.body.getReader();
@@ -11185,7 +11185,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
               const cleaned = fullText.replace(/—/g, "").replace(/–/g, "").replace(/\s{2,}/g, " ");
               setMessages(prev => {
                 const updated = [...prev];
-                updated[updated.length - 1] = { role: "assistant", content: cleaned };
+                updated[updated.length - 1] = { ...updated[updated.length - 1], content: cleaned };
                 return updated;
               });
               messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
@@ -11200,13 +11200,13 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
       if (!fullText.trim()) {
         setMessages(prev => {
           const updated = [...prev];
-          updated[updated.length - 1] = { role: "assistant", content: "Having trouble connecting right now. Give it a second and try again." };
+          updated[updated.length - 1] = { ...updated[updated.length - 1], content: "Having trouble connecting right now. Give it a second and try again." };
           return updated;
         });
       }
     } catch (err) {
       console.error("Assistant error:", err);
-      setMessages(prev => [...prev, { role: "assistant", content: "Having trouble connecting right now. Give it a second and try again." }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "Having trouble connecting right now. Give it a second and try again.", createdAt: Date.now() }]);
       setLoading(false);
     }
   };
@@ -11328,7 +11328,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
                 fontWeight: 500,
               }}>
                 {msg.role === "user" ? "You · " : "Coach · "}
-                {new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                {new Date(msg.createdAt || Date.now()).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
               </p>
             )}
           </div>
