@@ -14,6 +14,9 @@ import {
   sendPasswordResetEmail,
   verifyPasswordResetCode,
   confirmPasswordReset,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  deleteUser,
 } from "firebase/auth";
 import {
   initializeFirestore,
@@ -12978,6 +12981,10 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
   const [showExperienceConfirm, setShowExperienceConfirm] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(profile?.profilePhoto || null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [showManagerAccess, setShowManagerAccess] = useState(false);
   const [managerAccessEmail, setManagerAccessEmail] = useState("");
@@ -13069,6 +13076,40 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
       onUpdate({ ...profile, profilePhoto: null });
     }
     setPhotoUploading(false);
+  };
+
+  // Deletes the login itself so the email is free for a fresh signup right
+  // away, while keeping the Firestore record flagged rather than erased -
+  // this preserves history for reporting purposes but marks it so it stops
+  // counting anywhere active residents are measured. Firebase requires a
+  // recent login before allowing account deletion, so this reauthenticates
+  // with the person's password first rather than deleting outright.
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) { setDeleteError("Enter your password to confirm."); return; }
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      const user = auth.currentUser;
+      if (!user || !user.email) {
+        setDeleteError("Could not verify your account. Please sign out and back in, then try again.");
+        setDeleting(false);
+        return;
+      }
+      const credential = EmailAuthProvider.credential(user.email, deletePassword);
+      await reauthenticateWithCredential(user, credential);
+      await setDoc(doc(db, "users", user.uid), { deactivated: true, deactivatedAt: serverTimestamp() }, { merge: true });
+      await deleteUser(user);
+      onSignOut();
+    } catch (e: any) {
+      if (e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
+        setDeleteError("That password is not correct. Try again.");
+      } else if (e.code === "auth/too-many-requests") {
+        setDeleteError("Too many attempts. Please wait a moment and try again.");
+      } else {
+        setDeleteError("Something went wrong. Please try again.");
+      }
+      setDeleting(false);
+    }
   };
 
   const goalLabels = {
@@ -13884,6 +13925,58 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
         >
           Sign Out
           </button>
+
+        {/* Danger Zone */}
+        <div style={{ marginTop: 24, paddingTop: 24, borderTop: `1px solid ${COLORS.border}` }}>
+          <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px", textAlign: "center" }}>Danger Zone</p>
+          <button
+            onClick={() => { setShowDeleteConfirm(true); setDeletePassword(""); setDeleteError(""); }}
+            style={{
+              width: "100%", padding: "14px", borderRadius: 14,
+              border: "none", background: "none",
+              color: COLORS.textSecondary, fontSize: 14, fontWeight: 600,
+              cursor: "pointer", fontFamily: "'Inter', sans-serif", textAlign: "center", display: "block",
+            }}
+          >
+            Delete Account
+          </button>
+        </div>
+
+        {showDeleteConfirm && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <div style={{ background: COLORS.card, borderRadius: 20, padding: 24, maxWidth: 340, width: "100%", border: `1px solid ${COLORS.border}` }}>
+              <h2 style={{ color: COLORS.white, fontSize: 18, fontWeight: 800, margin: "0 0 12px" }}>Delete your account?</h2>
+              <p style={{ color: COLORS.textSecondary, fontSize: 14, lineHeight: 1.6, margin: "0 0 16px" }}>
+                This will permanently delete your account. If you come back later, you will need to sign up again with a new invite code. Your workout history, streaks, and saved notes will not carry over. This cannot be undone.
+              </p>
+              <input
+                type="password"
+                placeholder="Enter your password to confirm"
+                value={deletePassword}
+                onChange={e => setDeletePassword(e.target.value)}
+                style={{ width: "100%", padding: "14px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.background, color: COLORS.white, fontSize: 15, marginBottom: 12, boxSizing: "border-box", fontFamily: "'Inter', sans-serif" }}
+              />
+              {deleteError && (
+                <p style={{ color: "#FF6B6B", fontSize: 13, margin: "0 0 12px" }}>{deleteError}</p>
+              )}
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                style={{ width: "100%", padding: "14px", borderRadius: 14, border: "none", background: "#FF4D4D", color: "#fff", fontSize: 15, fontWeight: 700, cursor: deleting ? "default" : "pointer", marginBottom: 10, fontFamily: "'Inter', sans-serif" }}
+              >
+                {deleting ? "Deleting..." : "Permanently Delete Account"}
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                style={{ width: "100%", padding: "14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: "none", color: COLORS.textSecondary, fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         <p style={{ color: COLORS.textSecondary, fontSize: 12, textAlign: "center", margin: "16px 0 0" }}>
           AmenityFit · Powered by Fitmakesenz LLC
           </p>
