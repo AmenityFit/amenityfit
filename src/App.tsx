@@ -743,6 +743,18 @@ const generateBuildingCodes = async (buildingId: string, buildingName: string, u
   return generated;
 };
 
+// Some unit values are stored with "Unit" already baked into the text
+// (e.g. "Unit 1" instead of just "1"), depending on how a building's units
+// were originally entered. This avoids ever showing "Unit Unit 1" by only
+// adding the "Unit " prefix when the value doesn't already start with it -
+// used everywhere a unit number gets displayed, so there's one place to fix
+// this instead of the same check duplicated at every call site.
+const formatUnitLabel = (unitValue: string): string => {
+  if (!unitValue) return "";
+  const trimmed = String(unitValue).trim();
+  return /^unit\b/i.test(trimmed) ? trimmed : `Unit ${trimmed}`;
+};
+
 // Validate an invite code at onboarding — returns code data or null
 const validateInviteCode = async (code: string): Promise<any | null> => {
   if (!code || !code.startsWith("AF-") || code.length !== 9) return null;
@@ -13560,7 +13572,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
               <div>
                 <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{profile?.buildingProgramName || profile?.buildingName || "—"}</p>
                 <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>
-                  {profile?.unitNumber ? (/^unit\b/i.test(profile.unitNumber.trim()) ? profile.unitNumber : `Unit ${profile.unitNumber}`) : ""}
+                  {profile?.unitNumber ? formatUnitLabel(profile.unitNumber) : ""}
                   {profile?.unitNumber && profile?.inviteCode ? " · " : ""}
                   {profile?.inviteCode || ""}
                 </p>
@@ -15248,7 +15260,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
 
                               // 8c. Send activation email via Resend Cloud Function
                               const codeListHtml = generatedCodes.map(c =>
-                                `<tr><td style="padding:8px 16px;font-size:13px;color:#555;border-bottom:1px solid #f0f0f0;">Unit ${c.unit}</td><td style="padding:8px 16px;font-size:14px;font-weight:700;color:#111;letter-spacing:2px;border-bottom:1px solid #f0f0f0;">${c.code}</td></tr>`
+                                `<tr><td style="padding:8px 16px;font-size:13px;color:#555;border-bottom:1px solid #f0f0f0;">${formatUnitLabel(c.unit)}</td><td style="padding:8px 16px;font-size:14px;font-weight:700;color:#111;letter-spacing:2px;border-bottom:1px solid #f0f0f0;">${c.code}</td></tr>`
                               ).join("");
 
                               const activationEmailHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
@@ -15390,7 +15402,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                               onClick={async () => {
                                 const codes = await fetchBuildingCodes(sub.activatedBuildingId);
                                 if (!codes.length) { alert("No codes found."); return; }
-                                const list = codes.map(c => `Unit ${c.unitNumber}: ${c.id}`).join("\n");
+                                const list = codes.map(c => `${formatUnitLabel(c.unitNumber)}: ${c.id}`).join("\n");
                                 const full = `AMENITYFIT INVITE CODES\n${sub.buildingName}\n${sub.location}\n\n${list}\n\nEach code is used once at signup. Share one code per unit.\n\nQuestions? Contact support@fitmakesenz.com`;
                                 navigator.clipboard.writeText(full).catch(() => {});
                                 alert(`${codes.length} codes copied to clipboard!`);
@@ -17080,7 +17092,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                                 </div>
                               </div>
                               <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>
-                                Unit {c.unitNumber} · {redemptionCount === 0 ? "Not yet redeemed" : `${redemptionCount} profile${redemptionCount !== 1 ? "s" : ""} created`}
+                                {formatUnitLabel(c.unitNumber)} · {redemptionCount === 0 ? "Not yet redeemed" : `${redemptionCount} profile${redemptionCount !== 1 ? "s" : ""} created`}
                               </p>
                             </div>
                             {isActive ? (
