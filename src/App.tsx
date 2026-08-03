@@ -14967,6 +14967,22 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                       Reactivate Building
                     </button>
                   )}
+
+                  {/* Mark as test building - excludes it from revenue and
+                      platform totals without deleting it, for buildings
+                      created to try out a flow rather than real customers */}
+                  <button
+                    onClick={async () => {
+                      const newValue = !selectedBuilding.isTest;
+                      if (newValue && !window.confirm(`Mark ${selectedBuilding.name} as a test building? This excludes it from revenue and platform totals.`)) return;
+                      await setDoc(doc(db, "buildings", String(selectedBuilding.id)), { isTest: newValue }, { merge: true });
+                      setSelectedBuilding((prev: any) => ({ ...prev, isTest: newValue }));
+                      setAllBuildings(prev => prev.map(b => b.id === selectedBuilding.id ? { ...b, isTest: newValue } : b));
+                    }}
+                    style={{ width: "100%", padding: "12px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 10 }}
+                  >
+                    {selectedBuilding.isTest ? "Unmark as Test Building" : "Mark as Test Building"}
+                  </button>
                 </div>
               </>
             ) : (
