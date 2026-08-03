@@ -13444,25 +13444,22 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
                 {(profile?.name || "?")[0].toUpperCase()}
               </span>
             )}
-            {/* Small, always-visible camera badge instead of a
-                hover-reveal overlay - hover states rely on mouse enter/leave
-                events that don't clear reliably on touch devices, which was
-                leaving this stuck visible until tapping elsewhere. A fixed
-                badge (the same pattern most apps use for this) has no
-                state to get stuck in at all. It has its own tap handler so
-                it always opens the photo picker to change the photo, even
-                when the rest of the avatar is now set up to enlarge it
-                instead. */}
-            <div
-              onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
-              style={{
-                position: "absolute", bottom: 2, right: 2,
-                width: 22, height: 22, borderRadius: "50%",
-                background: "rgba(0,0,0,0.65)", border: "1.5px solid rgba(255,255,255,0.3)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-              <Camera size={12} color="#fff" />
-            </div>
+            {/* Only shown before a first photo is set, guiding that
+                initial upload - once a real photo exists, "Change photo"
+                below takes over that job, matching how most apps handle
+                this (no permanent badge sitting on top of a real photo). */}
+            {!photoPreview && (
+              <div
+                onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                style={{
+                  position: "absolute", bottom: 2, right: 2,
+                  width: 22, height: 22, borderRadius: "50%",
+                  background: "rgba(0,0,0,0.65)", border: "1.5px solid rgba(255,255,255,0.3)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                <Camera size={12} color="#fff" />
+              </div>
+            )}
           </div>
           {/* Hidden file input */}
           <input
@@ -13491,16 +13488,25 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 0 80px" }}>
-          <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>
-            Tap photo to update
-          </p>
-          {photoPreview && (
-            <button onClick={handlePhotoDelete} style={{
-              background: "none", border: "none", padding: 0,
-              color: COLORS.accent, fontSize: 12, fontWeight: 600, cursor: "pointer",
-            }}>
-              Remove photo
-            </button>
+          {photoPreview ? (
+            <>
+              <button onClick={() => fileInputRef.current?.click()} style={{
+                background: "none", border: "none", padding: 0,
+                color: COLORS.accent, fontSize: 12, fontWeight: 600, cursor: "pointer",
+              }}>
+                Change photo
+              </button>
+              <button onClick={handlePhotoDelete} style={{
+                background: "none", border: "none", padding: 0,
+                color: COLORS.accent, fontSize: 12, fontWeight: 600, cursor: "pointer",
+              }}>
+                Remove photo
+              </button>
+            </>
+          ) : (
+            <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>
+              Tap photo to add one
+            </p>
           )}
         </div>
       </div>
