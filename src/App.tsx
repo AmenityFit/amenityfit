@@ -10659,7 +10659,9 @@ const buildSystemPrompt = (profile: any) => {
   if (programKey && PROGRAMS[programKey]) {
     const prog = PROGRAMS[programKey];
     const { name: progName, levelTag } = getProgramParts(prog.label || "");
-    programName = progName && levelTag ? `${progName} · ${levelTag}` : (progName || prog.label || programKey);
+    const motivationalName = getProgramMotivationalName(programKey);
+    const safeLabel = (prog.label || programKey).replace(/^(men's|women's|senior\s*)?(beginner|intermediate|advanced)\s*\d*x?\/?week?\s*[-—]?\s*/i, "").trim();
+    programName = motivationalName || (progName && levelTag ? `${progName} · ${levelTag}` : (progName || safeLabel || programKey));
     const days = prog.days || [];
     if (days.length > 0) {
       // If workout done today, programDay already incremented — step back to get actual today
@@ -18266,7 +18268,7 @@ const isInitialLoad = React.useRef(true);
         saveWorkoutSession(uid, {
           uid,
           programKey: userProfile.programKey,
-          programLabel: isMonth4 ? `${PROGRAMS[baseProgramKey]?.label || baseProgramKey} (Evolved)` : PROGRAMS[baseProgramKey]?.label || userProfile.programKey,
+          programLabel: isMonth4 ? `${getEvolvedProgramName(userProfile.programKey) || PROGRAMS[baseProgramKey]?.label || baseProgramKey} (Evolved)` : (getProgramMotivationalName(baseProgramKey) || PROGRAMS[baseProgramKey]?.label || userProfile.programKey),
           programDay: userProfile.programDay,
           dayTitle: expandDayTitle(progDay?.title || `Day ${userProfile.programDay}`),
           dayFocus: (() => {
