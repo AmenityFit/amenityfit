@@ -16086,6 +16086,21 @@ const ChurnedBuildingScreen = ({ onSignOut }) => (
   </div>
 );
 
+const DeactivatedAccountScreen = ({ onSignOut }) => (
+  <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px" }}>
+    <div style={{ textAlign: "center", maxWidth: 320 }}>
+      <div style={{ fontSize: 48, marginBottom: 24 }}>🔒</div>
+      <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "0 0 12px", letterSpacing: -0.5 }}>Account Deactivated</h1>
+      <p style={{ color: COLORS.textSecondary, fontSize: 15, lineHeight: 1.6, margin: "0 0 32px" }}>
+        Your account has been deactivated by your building manager. Please contact them if you believe this is a mistake.
+      </p>
+      <button onClick={onSignOut} style={{ width: "100%", padding: "16px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.textSecondary, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+        Sign Out
+      </button>
+    </div>
+  </div>
+);
+
 
 // ─── PROPERTY MANAGER PORTAL ─────────────────────────────────────────────────
 
@@ -17996,6 +18011,18 @@ export default function App() {
           } else if (profile.role === 'resident') {
             setUserProfile({ ...profile, uid: firebaseUser.uid });
             setCurrentUid(firebaseUser.uid);
+            // A resident manually deactivated by their building manager
+            // (moved out, etc.) still has a fully working Firebase Auth
+            // login, since deleting someone else's login requires the
+            // Admin SDK, which only self-service account deletion in
+            // Profile can use. This blocks them out at the profile level
+            // instead, the same way a churned building's residents get
+            // routed away from the normal dashboard below.
+            if (profile.deactivated) {
+              setPendingNavigation('deactivated');
+              setAuthReady(true);
+              return;
+            }
             // Check if building is still active before routing to dashboard
             if (profile.buildingId) {
               try {
@@ -18406,6 +18433,7 @@ const isInitialLoad = React.useRef(true);
   // entirely, since Welcome is always a safe, explicit landing point.
   if (screen === "super-admin-login") return <SuperAdminLogin onLogin={() => setSuperAdminLoggedIn(true)} onBack={() => setScreen("welcome")} />;
   if (pendingNavigation === 'churned') return <ChurnedBuildingScreen onSignOut={resetToWelcome} />;
+  if (pendingNavigation === 'deactivated') return <DeactivatedAccountScreen onSignOut={resetToWelcome} />;
   if (pendingNavigation === 'pm-dashboard' && userProfile?.companyId) return <PropertyManagerDashboard companyId={userProfile.companyId} companyName={userProfile.companyName || userProfile.companyId} onSignOut={resetToWelcome} />;
   if (managerLoggedIn && userProfile?.passwordChangeRequired) return <ForcePasswordChangeScreen
     userProfile={userProfile}
