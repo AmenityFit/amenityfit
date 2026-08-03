@@ -14623,7 +14623,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden" }}>
       {/* Header */}
-      <div style={{ padding: "52px 24px 20px", background: `linear-gradient(180deg, rgba(30,95,190,0.15) 0%, transparent 100%)`, borderBottom: `1px solid ${COLORS.border}` }}>
+      <div style={{ padding: "calc(48px + env(safe-area-inset-top, 0px)) 24px 20px", background: `linear-gradient(180deg, rgba(30,95,190,0.15) 0%, transparent 100%)`, borderBottom: `1px solid ${COLORS.border}` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
