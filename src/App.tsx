@@ -14094,12 +14094,22 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
 
         {/* Manager access modal */}
         {showManagerAccess && (
-          <div style={{
-            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-            background: "rgba(0,0,0,0.85)", display: "flex",
-            alignItems: "flex-end", zIndex: 999,
-          }}>
-            <div style={{
+          <div
+            onClick={() => setShowManagerAccess(false)}
+            style={{
+              // Stops short of the bottom tab bar (which has no z-index or
+              // fixed positioning of its own) instead of covering the full
+              // viewport - previously this sat on top of the tab bar
+              // entirely, so tapping a tab while this was open silently hit
+              // this dead backdrop instead of the real tab button
+              // underneath, closing the sheet without ever navigating.
+              position: "fixed", top: 0, left: 0, right: 0, bottom: "calc(68px + env(safe-area-inset-bottom, 0px))",
+              background: "rgba(0,0,0,0.85)", display: "flex",
+              alignItems: "flex-end", zIndex: 999,
+            }}>
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
               width: "100%", background: COLORS.card, borderRadius: "24px 24px 0 0",
               padding: "32px 24px 48px", fontFamily: "'Inter', sans-serif",
             }}>
