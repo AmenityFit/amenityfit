@@ -926,13 +926,22 @@ const SplashScreen = ({ onFinish, onSecretAdmin, authReady }) => {
     return () => clearTimeout(maxWait);
   }, []);
 
+  // Waits for tapCount to be 0 (no tap sequence in progress) before ever
+  // auto-navigating away. Without this, a fast auth check (e.g. no cached
+  // session) can resolve mid-way through someone's 5-tap attempt at the
+  // secret operator entry, firing onFinish() and locking in hasFinished
+  // before the 5th tap lands - meaning the 5th tap's onSecretAdmin() call
+  // fires right after, and whichever navigation wins is a coin flip. Now
+  // this only fires once a tap attempt has either completed (handled
+  // directly by handleLogoTap) or timed out back to 0, so the two paths
+  // can never race each other.
   useEffect(() => {
-    if (minTimeElapsed && authReady && !hasFinished.current) {
+    if (minTimeElapsed && authReady && !hasFinished.current && tapCount === 0) {
       hasFinished.current = true;
       onFinish();
     }
     return () => clearTimeout(tapTimer.current);
-  }, [minTimeElapsed, authReady]);
+  }, [minTimeElapsed, authReady, tapCount]);
 
   const handleLogoTap = () => {
     const newCount = tapCount + 1;
