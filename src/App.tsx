@@ -38,6 +38,7 @@ import {
   onSnapshot,
   arrayUnion,
   increment,
+  deleteDoc,
 } from "firebase/firestore";
 import {
   getStorage,
@@ -928,6 +929,34 @@ const reactivateResident = async (uid: string): Promise<boolean> => {
   } catch (e) {
     console.error("reactivateResident error:", e);
     return false;
+  }
+};
+
+// Silently cleans up individual deactivated resident records older than a
+// year, run automatically whenever Command Center loads. Detailed history
+// like weight logs and workout-by-workout data isn't needed indefinitely
+// once someone has been gone a full year, but the building's
+// lifetimeResidents counter (incremented at signup, never decremented)
+// preserves the big-picture historical number forever regardless of this
+// cleanup, so nothing important is actually lost.
+const purgeOldDeactivatedAccounts = async (): Promise<number> => {
+  try {
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - 1);
+    const snap = await getDocs(query(collection(db, "users"), where("deactivated", "==", true)));
+    let purged = 0;
+    for (const d of snap.docs) {
+      const deactivatedAt = d.data().deactivatedAt;
+      const deactivatedDate = deactivatedAt?.toDate ? deactivatedAt.toDate() : null;
+      if (deactivatedDate && deactivatedDate < cutoff) {
+        await deleteDoc(doc(db, "users", d.id));
+        purged++;
+      }
+    }
+    return purged;
+  } catch (e) {
+    console.error("purgeOldDeactivatedAccounts error:", e);
+    return 0;
   }
 };
 
@@ -11041,6 +11070,21 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
   const [messages, setMessages] = useState<any[]>([
     { role: "assistant", content: openingMessage, createdAt: Date.now() }
   ]);
+
+  // Forces a real 24-hour reset regardless of whether the browser happens
+  // to keep this screen's state alive in memory across backgrounding/
+  // relocking (iOS can suspend rather than fully destroy a page, so a
+  // simple unmount-based reset isn't reliable on its own). Stores only a
+  // timestamp locally, never conversation content, so this adds no real
+  // storage weight and involves zero Firestore or API cost.
+  useEffect(() => {
+    const lastActive = sessionStorage.getItem("assistantLastActiveAt");
+    const now = Date.now();
+    if (!lastActive || now - parseInt(lastActive, 10) > 24 * 60 * 60 * 1000) {
+      setMessages([{ role: "assistant", content: openingMessage, createdAt: now }]);
+    }
+    sessionStorage.setItem("assistantLastActiveAt", String(now));
+  }, []);
   const [input, setInput] = useState(() => sessionStorage.getItem("assistantDraft") || "");
 
   useEffect(() => {
@@ -11395,6 +11439,15 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
           scrollBehavior: "smooth",
           position: "relative",
         }}>
+        {/* Persistence notice - reinforces Save to Notes for anything
+            important, since this conversation genuinely resets and isn't
+            kept anywhere once it goes stale or the session ends. */}
+        <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}30`, borderRadius: 14, padding: "12px 16px" }}>
+          <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0, lineHeight: 1.5, textAlign: "center" }}>
+            This conversation is not saved once you leave. Long press any message to save it to your Notes.
+          </p>
+        </div>
+
         {messages.map((msg, i) => (
           <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}>
             <div style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", width: "100%" }}>
@@ -14474,11 +14527,23 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const [allBuildings, setAllBuildings] = useState<any[]>([]);
   const [buildingsLoading, setBuildingsLoading] = useState(true);
   const [buildingsRefreshing, setBuildingsRefreshing] = useState(false);
+  const [purgeToast, setPurgeToast] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAllBuildings().then(data => {
       setAllBuildings(data);
       setBuildingsLoading(false);
+    });
+  }, []);
+
+  // Runs once per Command Center visit - no button to remember, just a
+  // quiet background cleanup of accounts deactivated over a year ago.
+  useEffect(() => {
+    purgeOldDeactivatedAccounts().then(count => {
+      if (count > 0) {
+        setPurgeToast(`Cleaned up ${count} old deactivated account${count !== 1 ? "s" : ""}`);
+        setTimeout(() => setPurgeToast(null), 5000);
+      }
     });
   }, []);
 
@@ -18591,6 +18656,15 @@ const isInitialLoad = React.useRef(true);
         // Mark invite code as used by this uid — tracks who is on this code
         if (data.inviteCode) {
           markCodeUsed(data.inviteCode, uid);
+          // Permanent, never-decreasing count of every resident this
+          // building has ever had, separate from inviteCodesRedeemed
+          // (which tracks units, not individual people) and separate from
+          // the deactivated-account purge below, which cleans up detailed
+          // per-resident history after a year but should never erase this
+          // big-picture lifetime number.
+          if (data.buildingId) {
+            setDoc(doc(db, "buildings", data.buildingId), { lifetimeResidents: increment(1) }, { merge: true }).catch(e => console.error("lifetimeResidents increment error:", e));
+          }
         }
         // Send email verification
         try {
