@@ -11282,9 +11282,9 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
                     }
                     if (msg.role === "user") handleCopy(msg.content, i);
                   }}
-                  onMouseDown={() => msg.role === "user" && handleLongPressStart(i, msg.content)}
+                  onMouseDown={() => handleLongPressStart(i, msg.content)}
                   onMouseUp={() => { handleLongPressEnd(); if (msg.role === "assistant") handleTextSelection(); }}
-                  onTouchStart={() => msg.role === "user" && handleLongPressStart(i, msg.content)}
+                  onTouchStart={() => handleLongPressStart(i, msg.content)}
                   onTouchEnd={() => { handleLongPressEnd(); if (msg.role === "assistant") handleTextSelection(); }}
                   style={{
                     padding: "12px 16px",
@@ -11295,8 +11295,8 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
                     border: msg.role === "assistant" ? `1px solid ${COLORS.border}` : "none",
                     boxShadow: msg.role === "user" ? `0 4px 16px ${COLORS.primary}40` : "none",
                     cursor: "pointer",
-                    userSelect: msg.role === "assistant" ? "text" : "none" as any,
-                    WebkitUserSelect: msg.role === "assistant" ? "text" : "none" as any,
+                    userSelect: "none" as any,
+                    WebkitUserSelect: "none" as any,
                     // Keeps selection itself (the blue drag handles) working
                     // for assistant messages, while suppressing iOS's own
                     // system Copy/Translate bubble so only our own custom
