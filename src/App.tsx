@@ -2516,7 +2516,7 @@ const pools: Record<string, string[]> = {
     "beginner-3x-always-on-my-grind", "beginner-3x-by-any-means", "beginner-3x-fitmakesenz",
     "beginner-3x-live-now", "beginner-3x-promising-start", "beginner-3x-sporty",
     "beginner-3x-strive-for-more", "beginner-3x-virtue-and-patience", "beginner-3x-winners-delight",
-    "beginner-3x", "beginner-4x", "beginner-5x",
+    "beginner-3x", "beginner-4x", "beginner-5x", "beginner-6x",
   ],
   // BEGINNER BANDS
   "beginner-bands": [
@@ -2529,7 +2529,7 @@ const pools: Record<string, string[]> = {
     "beginner-3x-earn-your-victory", "beginner-3x-fitmakesenz", "beginner-3x-live-now",
     "beginner-3x-promising-start", "beginner-3x-sporty", "beginner-3x-strive-for-more",
     "beginner-3x-thriving", "beginner-3x-virtue-and-patience", "beginner-3x-winners-delight",
-    "beginner-3x", "beginner-4x", "beginner-5x",
+    "beginner-3x", "beginner-4x", "beginner-5x", "beginner-6x",
   ],
   // INTERMEDIATE GYM
   "intermediate-gym": [
