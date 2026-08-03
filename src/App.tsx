@@ -885,6 +885,52 @@ const reactivateCode = async (code: string): Promise<boolean> => {
   }
 };
 
+// Fetch every resident (and manager) signed up for a building, for the
+// Building Manager Dashboard's Residents tab. Managers are filtered out
+// client side rather than in the query itself, so a resident missing a
+// role field entirely (an older record) still shows up correctly instead
+// of silently vanishing.
+const fetchBuildingResidents = async (buildingId: string): Promise<any[]> => {
+  try {
+    const snap = await getDocs(query(collection(db, "users"), where("buildingId", "==", buildingId)));
+    return snap.docs
+      .map(d => ({ uid: d.id, ...d.data() }))
+      .filter(u => u.role !== "manager");
+  } catch (e) {
+    console.error("fetchBuildingResidents error:", e);
+    return [];
+  }
+};
+
+// Deactivate a resident (tenant moved out). Soft delete only - keeps their
+// data intact for historical reporting but flags it so every "active
+// residents" style stat stops counting them. This cannot also delete their
+// Firebase Auth login the way self-service account deletion in Profile
+// can, since that requires the Admin SDK to remove someone else's account
+// (a manager can only ever act on their own login client side). A
+// deactivated resident who still tries to use the app gets blocked out at
+// the profile-check level instead.
+const deactivateResident = async (uid: string): Promise<boolean> => {
+  try {
+    await setDoc(doc(db, "users", uid), { deactivated: true, deactivatedAt: serverTimestamp() }, { merge: true });
+    return true;
+  } catch (e) {
+    console.error("deactivateResident error:", e);
+    return false;
+  }
+};
+
+// Reactivate a resident (new tenant moved in, or corrected a mistake)
+const reactivateResident = async (uid: string): Promise<boolean> => {
+  try {
+    await setDoc(doc(db, "users", uid), { deactivated: false, deactivatedAt: null }, { merge: true });
+    return true;
+  } catch (e) {
+    console.error("reactivateResident error:", e);
+    return false;
+  }
+};
+
 
 const COLORS = {
   primary: "#1E5FBE",
@@ -16821,7 +16867,7 @@ const ForcePasswordChangeScreen = ({ userProfile, onComplete, onSignOut }) => {
 };
 
 const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingId = null, userProfile = null }) => {
-  const [activeTab, setActiveTab] = useState<"overview" | "codes" | "branding" | "equipment" | "report">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "codes" | "residents" | "branding" | "equipment" | "report">("overview");
   const [buildingData, setBuildingData] = useState<any>(null);
   const [buildingLoading, setBuildingLoading] = useState(true);
   const [buildingName, setBuildingName] = useState("");
@@ -16839,6 +16885,11 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
   const [codesLoaded, setCodesLoaded] = useState(false);
   const [codeSearch, setCodeSearch] = useState("");
   const [codeActionLoading, setCodeActionLoading] = useState<string | null>(null);
+  const [buildingResidents, setBuildingResidents] = useState<any[]>([]);
+  const [residentsLoading, setResidentsLoading] = useState(false);
+  const [residentsLoaded, setResidentsLoaded] = useState(false);
+  const [residentSearch, setResidentSearch] = useState("");
+  const [residentActionLoading, setResidentActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     const resolvedId = buildingId || userProfile?.buildingId;
@@ -16971,6 +17022,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
   const tabs = [
     { id: "overview", label: "Overview" },
     { id: "codes", label: "Codes" },
+    { id: "residents", label: "Residents" },
     { id: "equipment", label: "Equipment" },
     { id: "branding", label: "Branding" },
     { id: "report", label: "Report" },
@@ -16979,6 +17031,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
   const tabLabels: Record<string, string> = {
     overview: "Building Overview",
     codes: "Invite Codes",
+    residents: "Residents",
     equipment: "Gym Equipment",
     branding: "Custom Branding",
     report: "Monthly Report",
@@ -17410,6 +17463,111 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               </div>
             </div>
 
+          </>
+        )}
+
+        {/* RESIDENTS TAB */}
+        {activeTab === "residents" && (
+          <>
+            <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}30`, borderRadius: 14, padding: "12px 16px", marginBottom: 20 }}>
+              <p style={{ color: COLORS.accent, fontSize: 13, fontWeight: 600, margin: "0 0 4px" }}>Residents</p>
+              <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+                Everyone who has signed up using one of your building's invite codes. Deactivate a resident if they move out. This keeps their history for records but stops their account from working.
+              </p>
+            </div>
+
+            {!residentsLoaded && (
+              <button
+                onClick={async () => {
+                  setResidentsLoading(true);
+                  const residents = await fetchBuildingResidents(buildingId || "demo-building");
+                  setBuildingResidents(residents);
+                  setResidentsLoaded(true);
+                  setResidentsLoading(false);
+                }}
+                style={{ width: "100%", padding: "14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif", marginBottom: 16 }}
+              >
+                {residentsLoading ? "Loading residents..." : "Load Residents"}
+              </button>
+            )}
+
+            {residentsLoaded && (
+              <>
+                <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+                  <ManagerMetricCard label="Total" value={String(buildingResidents.length)} accent={COLORS.accent} />
+                  <ManagerMetricCard label="Active" value={String(buildingResidents.filter(r => !r.deactivated).length)} accent={COLORS.success} />
+                  <ManagerMetricCard label="Deactivated" value={String(buildingResidents.filter(r => r.deactivated).length)} accent={COLORS.textSecondary} />
+                </div>
+
+                <input
+                  type="text"
+                  value={residentSearch}
+                  onChange={e => setResidentSearch(e.target.value)}
+                  placeholder="Search by name or unit..."
+                  style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: `1.5px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box" as const, marginBottom: 16 }}
+                />
+
+                {buildingResidents.length === 0 ? (
+                  <div style={{ background: COLORS.card, borderRadius: 16, padding: "32px 24px", border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
+                    <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 8px" }}>No residents yet</p>
+                    <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Residents will show up here once they sign up with an invite code.</p>
+                  </div>
+                ) : (
+                  <div style={{ background: COLORS.card, borderRadius: 18, padding: "4px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 16 }}>
+                    {buildingResidents
+                      .filter(r => !residentSearch || (r.name || "").toLowerCase().includes(residentSearch.toLowerCase()) || (r.unitNumber || "").includes(residentSearch))
+                      .map((r: any, i: number, arr: any[]) => {
+                        const isActive = !r.deactivated;
+                        const isActioning = residentActionLoading === r.uid;
+                        return (
+                          <div key={r.uid || i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: i < arr.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                                <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 800, margin: 0 }}>{r.name || "Resident"}</p>
+                                <div style={{ background: isActive ? `${COLORS.success}20` : `${COLORS.border}`, borderRadius: 99, padding: "2px 8px" }}>
+                                  <span style={{ color: isActive ? COLORS.success : COLORS.textSecondary, fontSize: 10, fontWeight: 700 }}>
+                                    {isActive ? "ACTIVE" : "DEACTIVATED"}
+                                  </span>
+                                </div>
+                              </div>
+                              <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>
+                                {formatUnitLabel(r.unitNumber)}
+                              </p>
+                            </div>
+                            {isActive ? (
+                              <button
+                                onClick={async () => {
+                                  setResidentActionLoading(r.uid);
+                                  const ok = await deactivateResident(r.uid);
+                                  if (ok) setBuildingResidents(prev => prev.map(x => x.uid === r.uid ? { ...x, deactivated: true } : x));
+                                  setResidentActionLoading(null);
+                                }}
+                                disabled={isActioning}
+                                style={{ background: "#FF4D4D10", border: "1px solid #FF4D4D30", borderRadius: 8, padding: "7px 12px", color: isActioning ? COLORS.textSecondary : "#FF6B6B", fontSize: 12, fontWeight: 600, cursor: isActioning ? "not-allowed" : "pointer", flexShrink: 0 }}
+                              >
+                                {isActioning ? "..." : "Deactivate"}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  setResidentActionLoading(r.uid);
+                                  const ok = await reactivateResident(r.uid);
+                                  if (ok) setBuildingResidents(prev => prev.map(x => x.uid === r.uid ? { ...x, deactivated: false } : x));
+                                  setResidentActionLoading(null);
+                                }}
+                                disabled={isActioning}
+                                style={{ background: `${COLORS.success}10`, border: `1px solid ${COLORS.success}30`, borderRadius: 8, padding: "7px 12px", color: isActioning ? COLORS.textSecondary : COLORS.success, fontSize: 12, fontWeight: 600, cursor: isActioning ? "not-allowed" : "pointer", flexShrink: 0 }}
+                              >
+                                {isActioning ? "..." : "Reactivate"}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </>
+            )}
           </>
         )}
 
