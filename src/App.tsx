@@ -15997,18 +15997,56 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     const isPast = b.daysUntilDeadline <= 0;
                     const isUrgent = b.daysUntilDeadline > 0 && b.daysUntilDeadline <= 7;
                     return (
-                      <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: i < noticeDeadlines.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
-                        <div>
-                          <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{b.name}</p>
-                          <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>
-                            {isPast ? "Deadline passed — will auto-renew" : `Last day to notify: ${b.noticeDeadline.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
-                          </p>
+                      <div key={b.id} style={{ padding: "14px 0", borderBottom: i < noticeDeadlines.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isPast ? 0 : 10 }}>
+                          <div>
+                            <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{b.name}</p>
+                            <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>
+                              {isPast ? "Deadline passed — will auto-renew" : `Last day to notify: ${b.noticeDeadline.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+                            </p>
+                          </div>
+                          <div style={{ background: isPast ? "#F59E0B20" : isUrgent ? "#FF4D4D20" : `${COLORS.primary}20`, borderRadius: 99, padding: "4px 12px" }}>
+                            <span style={{ color: isPast ? "#F59E0B" : isUrgent ? "#FF4D4D" : COLORS.accent, fontSize: 12, fontWeight: 700 }}>
+                              {isPast ? "Auto-renewed" : `${b.daysUntilDeadline}d`}
+                            </span>
+                          </div>
                         </div>
-                        <div style={{ background: isPast ? "#F59E0B20" : isUrgent ? "#FF4D4D20" : `${COLORS.primary}20`, borderRadius: 99, padding: "4px 12px" }}>
-                          <span style={{ color: isPast ? "#F59E0B" : isUrgent ? "#FF4D4D" : COLORS.accent, fontSize: 12, fontWeight: 700 }}>
-                            {isPast ? "Auto-renewed" : `${b.daysUntilDeadline}d`}
-                          </span>
-                        </div>
+                        {!isPast && (
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button
+                              onClick={async () => {
+                                // Pushes the renewal date forward a year,
+                                // matching the auto-renewing annual contract
+                                // terms - this is what logging "yes they're
+                                // renewing" actually means in the data, and
+                                // naturally moves them out of this list until
+                                // next year's notice window approaches.
+                                const newRenewal = new Date(b.renewalDate);
+                                newRenewal.setFullYear(newRenewal.getFullYear() + 1);
+                                const newRenewalStr = newRenewal.toISOString().split("T")[0];
+                                await setDoc(doc(db, "buildings", String(b.id)), { renewalDate: newRenewalStr }, { merge: true });
+                                setAllBuildings(prev => prev.map(x => x.id === b.id ? { ...x, renewalDate: newRenewalStr } : x));
+                              }}
+                              style={{ flex: 1, background: `${COLORS.success}15`, border: `1px solid ${COLORS.success}40`, borderRadius: 8, padding: "8px 10px", color: COLORS.success, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                            >
+                              Confirmed Renewing
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!window.confirm(`Mark ${b.name} as not renewing? This cancels their contract.`)) return;
+                                const secondCheck = window.confirm("Are you absolutely sure? This will remove them from active billing.");
+                                if (!secondCheck) return;
+                                const cancellationDate = new Date(); cancellationDate.setDate(cancellationDate.getDate() + 30);
+                                const cancellationDateStr = cancellationDate.toISOString().split("T")[0];
+                                await setDoc(doc(db, "buildings", String(b.id)), { subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr }, { merge: true });
+                                setAllBuildings(prev => prev.map(x => x.id === b.id ? { ...x, subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr } : x));
+                              }}
+                              style={{ flex: 1, background: "#FF4D4D15", border: "1px solid #FF4D4D40", borderRadius: 8, padding: "8px 10px", color: "#FF6B6B", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                            >
+                              Not Renewing
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
