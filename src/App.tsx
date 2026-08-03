@@ -34,6 +34,7 @@ import {
   where,
   onSnapshot,
   arrayUnion,
+  increment,
 } from "firebase/firestore";
 import {
   getStorage,
@@ -815,9 +816,28 @@ const markCodeUsed = async (code: string, uid: string): Promise<void> => {
       snap = await getDoc(ref);
     }
     if (snap.exists()) {
-      const usedBy = snap.data().usedBy || [];
+      const codeData = snap.data();
+      const usedBy = codeData.usedBy || [];
+      const isFirstRedemption = usedBy.length === 0;
       if (!usedBy.includes(uid)) {
         await setDoc(ref, { usedBy: [...usedBy, uid] }, { merge: true });
+      }
+      // Keep the building's own redemption count in sync - this is the
+      // field every admin level (Building Manager, PM Portfolio Dashboard,
+      // Super Admin) actually reads for adoption rate and health status.
+      // Without this, that field stays frozen at whatever it was set to at
+      // building creation (usually 0) forever, regardless of real signups,
+      // since this function only used to update the individual invite
+      // code's own usedBy array, never the building-level count. Only
+      // increments on a code's first-ever use, since this field represents
+      // how many units have at least one resident, not total profile count
+      // (a shared unit code can have multiple residents).
+      if (isFirstRedemption && codeData.buildingId) {
+        try {
+          await setDoc(doc(db, "buildings", codeData.buildingId), { inviteCodesRedeemed: increment(1) }, { merge: true });
+        } catch (buildingErr) {
+          console.error("Building redemption count update error:", buildingErr);
+        }
       }
     }
   } catch (e) {
