@@ -16138,7 +16138,7 @@ const PropertyManagerDashboard = ({ onSignOut, companyId, companyName }: { onSig
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", overflowY: "auto", overflowX: "hidden" }}>
       {/* Header */}
-      <div style={{ padding: "52px 24px 24px", background: `linear-gradient(180deg, ${COLORS.primary}25 0%, transparent 100%)` }}>
+      <div style={{ padding: "calc(48px + env(safe-area-inset-top, 0px)) 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}25 0%, transparent 100%)` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
             <div style={{ display: "inline-flex", alignItems: "center", background: `${COLORS.primary}25`, borderRadius: 99, padding: "4px 12px", marginBottom: 10 }}>
