@@ -12931,14 +12931,6 @@ const PhotoLightbox = ({ url, onClose }: { url: string | null; onClose: () => vo
   );
 };
 
-// Module-level (outside the component) so it survives ProfileScreen unmounting
-// and remounting on every tab visit - without this, buildingBranding always
-// starts empty and Firestore's onSnapshot needs a real round trip before the
-// first result arrives, causing a guaranteed flicker on the building photo
-// every single time, unlike the resident's own avatar which is already
-// available synchronously via the profile prop.
-const buildingBrandingCache: Record<string, { logoUrl?: string | null; programName?: string | null }> = {};
-
 const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, onManagerAccess = () => {} }) => {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState<any>(null);
@@ -12959,36 +12951,6 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
   const [bldgValidating, setBldgValidating] = useState(false);
   const [bldgError, setBldgError] = useState("");
   const [bldgSuccess, setBldgSuccess] = useState(false);
-  const [buildingBranding, setBuildingBranding] = useState<{ logoUrl?: string | null; programName?: string | null }>(() => buildingBrandingCache[profile?.buildingId || ""] || {});
-
-  // Live so a name change actually approved by AmenityFit, or a photo the
-  // manager uploads, shows up here without the resident needing to do
-  // anything - same proven pattern used for building equipment.
-  useEffect(() => {
-    if (!profile?.buildingId) { setBuildingBranding({}); return; }
-    // Also check the cache here, not just at initial state setup - if
-    // profile.buildingId arrives a moment after this component first mounts
-    // (a normal re-render, not a remount), the lazy state init above already
-    // missed the cache using an empty key. This catches that race so the
-    // cached photo still shows instantly instead of waiting on a fresh
-    // network round trip, which is what caused the intermittent flicker.
-    const cached = buildingBrandingCache[profile.buildingId];
-    if (cached) setBuildingBranding(cached);
-    const unsub = onSnapshot(
-      doc(db, "buildings", profile.buildingId),
-      (snap) => {
-        if (snap.exists()) {
-          const d = snap.data();
-          const fresh = { logoUrl: d.logoUrl || null, programName: d.programName || null };
-          buildingBrandingCache[profile.buildingId] = fresh;
-          setBuildingBranding(fresh);
-        }
-      },
-      (err) => console.error("Building branding listener error:", err)
-    );
-    return () => unsub();
-  }, [profile?.buildingId]);
-
   const handleConnectWhoop = () => {
     if (!WHOOP_CLIENT_ID) return;
     const params = new URLSearchParams({
@@ -13587,22 +13549,22 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
           <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "16px 0 12px" }}>Your Building</p>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showChangeBldg ? 16 : 0 }}>
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12 }}>
-              {buildingBranding.logoUrl ? (
+              {profile?.buildingLogoUrl ? (
                 <img
-                  src={buildingBranding.logoUrl}
+                  src={profile.buildingLogoUrl}
                   alt=""
-                  onClick={() => setLightboxUrl(buildingBranding.logoUrl!)}
+                  onClick={() => setLightboxUrl(profile.buildingLogoUrl!)}
                   style={{ width: 40, height: 40, borderRadius: 12, objectFit: "cover", flexShrink: 0, cursor: "pointer" }}
                 />
               ) : null}
               <div>
-                <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{buildingBranding.programName || profile?.buildingName || "—"}</p>
+                <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{profile?.buildingProgramName || profile?.buildingName || "—"}</p>
                 <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>
                   {profile?.unitNumber ? (/^unit\b/i.test(profile.unitNumber.trim()) ? profile.unitNumber : `Unit ${profile.unitNumber}`) : ""}
                   {profile?.unitNumber && profile?.inviteCode ? " · " : ""}
                   {profile?.inviteCode || ""}
                 </p>
-                {buildingBranding.programName && (
+                {profile?.buildingProgramName && (
                   <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "2px 0 0" }}>Powered by AmenityFit</p>
                 )}
               </div>
@@ -17678,14 +17640,23 @@ export default function App() {
   // occasion a manager actually changes equipment — no polling, no repeated
   // fetches, negligible cost (same pattern already used for presence).
   const [liveBuildingEquipment, setLiveBuildingEquipment] = useState<string[] | null>(null);
+  // Building logo and program name, read from the same live subscription
+  // below instead of a separate listener - Profile used to fetch this
+  // itself, which meant a fresh fetch (and a visible flicker) every single
+  // time that screen remounted on a tab switch. Living here means it's
+  // fetched once per session and never refetched on navigation, exactly like
+  // the resident's own profile photo already behaves.
+  const [liveBuildingBranding, setLiveBuildingBranding] = useState<{ logoUrl?: string | null; programName?: string | null } | null>(null);
 
   useEffect(() => {
-    if (!userProfile?.buildingId) { setLiveBuildingEquipment(null); return; }
+    if (!userProfile?.buildingId) { setLiveBuildingEquipment(null); setLiveBuildingBranding(null); return; }
     const unsub = onSnapshot(
       doc(db, "buildings", userProfile.buildingId),
       (snap) => {
         if (snap.exists()) {
-          setLiveBuildingEquipment(snap.data().equipment || []);
+          const d = snap.data();
+          setLiveBuildingEquipment(d.equipment || []);
+          setLiveBuildingBranding({ logoUrl: d.logoUrl || null, programName: d.programName || null });
         }
       },
       (err) => {
@@ -17702,7 +17673,9 @@ export default function App() {
   const liveProfile = React.useMemo(() => ({
     ...userProfile,
     buildingEquipment: liveBuildingEquipment ?? userProfile?.buildingEquipment ?? [],
-  }), [userProfile, liveBuildingEquipment]);
+    buildingLogoUrl: liveBuildingBranding?.logoUrl ?? null,
+    buildingProgramName: liveBuildingBranding?.programName ?? null,
+  }), [userProfile, liveBuildingEquipment, liveBuildingBranding]);
 
   // previewDay: set when user taps "Preview Exercises" on an upcoming day
   const [previewDay, setPreviewDay] = useState<any>(null);
