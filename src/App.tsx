@@ -9776,7 +9776,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
 
   const todayLocal = React.useMemo(() => new Date(), []);
   const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment, parseInt(String(profile?.age)) || 30, profile?.sessionLength || 60, profile?.effectiveLevel || profile?.experience || "intermediate");
-  if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onBack={() => setScreen("dashboard")} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
 
   const todayDay = weekDays.find((d: any) => d.isToday) ?? null;
   const didAutoSelect = React.useRef(false);
@@ -12883,6 +12883,14 @@ const PhotoLightbox = ({ url, onClose }: { url: string | null; onClose: () => vo
   );
 };
 
+// Module-level (outside the component) so it survives ProfileScreen unmounting
+// and remounting on every tab visit - without this, buildingBranding always
+// starts empty and Firestore's onSnapshot needs a real round trip before the
+// first result arrives, causing a guaranteed flicker on the building photo
+// every single time, unlike the resident's own avatar which is already
+// available synchronously via the profile prop.
+const buildingBrandingCache: Record<string, { logoUrl?: string | null; programName?: string | null }> = {};
+
 const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, onManagerAccess = () => {} }) => {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState<any>(null);
@@ -12903,7 +12911,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
   const [bldgValidating, setBldgValidating] = useState(false);
   const [bldgError, setBldgError] = useState("");
   const [bldgSuccess, setBldgSuccess] = useState(false);
-  const [buildingBranding, setBuildingBranding] = useState<{ logoUrl?: string | null; programName?: string | null }>({});
+  const [buildingBranding, setBuildingBranding] = useState<{ logoUrl?: string | null; programName?: string | null }>(() => buildingBrandingCache[profile?.buildingId || ""] || {});
 
   // Live so a name change actually approved by AmenityFit, or a photo the
   // manager uploads, shows up here without the resident needing to do
@@ -12915,7 +12923,9 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
       (snap) => {
         if (snap.exists()) {
           const d = snap.data();
-          setBuildingBranding({ logoUrl: d.logoUrl || null, programName: d.programName || null });
+          const fresh = { logoUrl: d.logoUrl || null, programName: d.programName || null };
+          buildingBrandingCache[profile.buildingId] = fresh;
+          setBuildingBranding(fresh);
         }
       },
       (err) => console.error("Building branding listener error:", err)
