@@ -11136,7 +11136,19 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
           system: [
             { type: "text", text: buildSystemPrompt(profile), cache_control: { type: "ephemeral" } },
           ],
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          // Marks a cache breakpoint on the last message of the stable
+          // conversation history (everything before the question just
+          // typed). Since that history never changes retroactively, each
+          // new turn reuses the cached prefix at a fraction of normal input
+          // cost instead of resending the entire growing conversation at
+          // full price every single time - cost now stays roughly flat per
+          // turn instead of climbing as the conversation gets longer.
+          messages: newMessages.map((m, idx) => {
+            if (idx === newMessages.length - 2 && newMessages.length > 1) {
+              return { role: m.role, content: [{ type: "text", text: m.content, cache_control: { type: "ephemeral" } }] };
+            }
+            return { role: m.role, content: m.content };
+          }),
         }),
       });
 
