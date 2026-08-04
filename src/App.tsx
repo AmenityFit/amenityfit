@@ -5608,7 +5608,7 @@ const VIMEO_VIDEOS: Record<string, { vimeoIds: string[]; equipment: string }> = 
   "kettlebell-suitcase-deadlift": { vimeoIds: ["1183592415"], equipment: "Kettlebell" },
 
   // ── STUB ALIASES — generic IDs mapped to specific video sources ──────────
-  "seated-lat-pulldown-band": { vimeoIds: ["946570675"], equipment: "band" },  "lat-pulldown-cable": { vimeoIds: ["1183584741"], equipment: "Cable Machine" },
+  "seated-lat-pulldown-band": { vimeoIds: ["946570675"], equipment: "band" },
   "reverse-lat-pulldown": { vimeoIds: ["1183588323"], equipment: "Cable Machine" },
   "low-rope-rows": { vimeoIds: ["1183586531"], equipment: "Cable Machine" },  "pronated-grip-row-band": { vimeoIds: ["946406035"], equipment: "band" },
   "pronated-grip-row-band": { vimeoIds: ["946406035"], equipment: "band" },
