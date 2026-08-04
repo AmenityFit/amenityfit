@@ -9376,13 +9376,23 @@ if (showRest) {
         ).slice(0, 10); // show top 10 options
 
         return (
-          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "flex-end", zIndex: 999 }}>
-            <div style={{ width: "100%", background: COLORS.card, borderRadius: "24px 24px 0 0", padding: "28px 24px 48px", fontFamily: "'Inter', sans-serif", maxHeight: "80vh", overflowY: "auto" }}>
+          <div
+            onClick={() => setShowSwapModal(false)}
+            style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "flex-end", zIndex: 999 }}>
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{ width: "100%", background: COLORS.card, borderRadius: "24px 24px 0 0", padding: "28px 24px 48px", fontFamily: "'Inter', sans-serif", maxHeight: "80vh", overflowY: "auto" }}>
               <div style={{ width: 40, height: 4, background: COLORS.border, borderRadius: 2, margin: "0 auto 20px" }} />
               <h2 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: "0 0 4px" }}>Swap Exercise</h2>
               <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px" }}>
                 Replacing: {currentEx?.name} · {currentEx?.muscle}
               </p>
+              <button
+                onClick={() => setShowSwapModal(false)}
+                style={{ width: "100%", padding: "14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, cursor: "pointer", marginBottom: 16 }}
+              >
+                Cancel
+              </button>
               {candidates.length === 0 ? (
                 <p style={{ color: COLORS.textSecondary, fontSize: 14, textAlign: "center", padding: "20px 0" }}>
                   No suitable swap available for this exercise with your current equipment.
@@ -11444,7 +11454,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
             kept anywhere once it goes stale or the session ends. */}
         <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}30`, borderRadius: 14, padding: "12px 16px" }}>
           <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0, lineHeight: 1.5, textAlign: "center" }}>
-            This conversation is not saved once you leave. Long press any message to save it to your Notes.
+            This conversation resets every 24 hours. Long press any message to save it to your Notes.
           </p>
         </div>
 
