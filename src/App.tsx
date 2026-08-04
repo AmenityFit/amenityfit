@@ -9361,7 +9361,14 @@ if (showRest) {
             }
           });
         }
-        const currentSlotOriginalId = swappedExercises[`${currentExerciseIndex}_original`] || currentExSlotRaw?.id || "";
+        // The workoutGroups mapping already stamps _originalId onto any
+        // currently-swapped exercise slot, so that is the real source of
+        // truth here - the swappedExercises lookup this replaced used a key
+        // format ("${currentExerciseIndex}_original") that never matched
+        // what onSwap actually saves, and its fallback to currentExSlotRaw's
+        // own .id was wrong for an already-swapped slot, since .id at that
+        // point is the swapped-in exercise, not the true original.
+        const currentSlotOriginalId = currentExSlotRaw?._originalId || currentExSlotRaw?.id || "";
         const otherGroupIds = currentGroupIds.filter(id => id !== currentExSlot?.id && id !== currentSlotOriginalId);
         const candidates = getSwapCandidates(
           currentExSlot?.id || "",
@@ -9409,7 +9416,20 @@ if (showRest) {
                     >
                       <div style={{ width: 52, height: 36, borderRadius: 10, background: `${COLORS.primary}20`, flexShrink: 0, overflow: "hidden", position: "relative" }}>
                         {vid ? (
-                          <img src={getThumbnailUrl(ex.id, profile?.programDay) || ""} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <img
+                            src={getThumbnailUrl(ex.id, profile?.programDay) || ""}
+                            alt=""
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            // If the primary i.vimeocdn.com thumbnail ever fails to
+                            // load, retries once with the vumbnail.com fallback
+                            // instead of leaving the box permanently empty. Guards
+                            // against an infinite retry loop if that also fails.
+                            onError={(e) => {
+                              const img = e.currentTarget;
+                              const fallback = `https://vumbnail.com/${vid}_medium.jpg`;
+                              if (img.src !== fallback) img.src = fallback;
+                            }}
+                          />
                         ) : (
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
                             <Dumbbell size={16} color={COLORS.accent} />
