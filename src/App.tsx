@@ -17133,6 +17133,11 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
   const [residentsLoaded, setResidentsLoaded] = useState(false);
   const [residentSearch, setResidentSearch] = useState("");
   const [residentActionLoading, setResidentActionLoading] = useState<string | null>(null);
+  const [reassignTarget, setReassignTarget] = useState<any>(null);
+  const [reassignCandidates, setReassignCandidates] = useState<any[]>([]);
+  const [reassignLoadingCandidates, setReassignLoadingCandidates] = useState(false);
+  const [reassignSubmitting, setReassignSubmitting] = useState(false);
+  const [reassignError, setReassignError] = useState("");
 
   useEffect(() => {
     const resolvedId = buildingId || userProfile?.buildingId;
@@ -17804,18 +17809,37 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                               </p>
                             </div>
                             {isActive ? (
-                              <button
-                                onClick={async () => {
-                                  setResidentActionLoading(r.uid);
-                                  const ok = await deactivateResident(r.uid);
-                                  if (ok) setBuildingResidents(prev => prev.map(x => x.uid === r.uid ? { ...x, deactivated: true } : x));
-                                  setResidentActionLoading(null);
-                                }}
-                                disabled={isActioning}
-                                style={{ background: "#FF4D4D10", border: "1px solid #FF4D4D30", borderRadius: 8, padding: "7px 12px", color: isActioning ? COLORS.textSecondary : "#FF6B6B", fontSize: 12, fontWeight: 600, cursor: isActioning ? "not-allowed" : "pointer", flexShrink: 0 }}
-                              >
-                                {isActioning ? "..." : "Deactivate"}
-                              </button>
+                              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                                <button
+                                  onClick={async () => {
+                                    setReassignTarget(r);
+                                    setReassignError("");
+                                    setReassignSubmitting(false);
+                                    setReassignCandidates([]);
+                                    setReassignLoadingCandidates(true);
+                                    const resolvedId = buildingId || userProfile?.buildingId || "demo-building";
+                                    const codes = await fetchBuildingCodes(resolvedId);
+                                    const currentCode = r.currentPropertyCode || r.inviteCode || "";
+                                    setReassignCandidates(codes.filter((c: any) => c.id !== currentCode));
+                                    setReassignLoadingCandidates(false);
+                                  }}
+                                  style={{ background: `${COLORS.primary}10`, border: `1px solid ${COLORS.primary}30`, borderRadius: 8, padding: "7px 12px", color: COLORS.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                                >
+                                  Reassign
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    setResidentActionLoading(r.uid);
+                                    const ok = await deactivateResident(r.uid);
+                                    if (ok) setBuildingResidents(prev => prev.map(x => x.uid === r.uid ? { ...x, deactivated: true } : x));
+                                    setResidentActionLoading(null);
+                                  }}
+                                  disabled={isActioning}
+                                  style={{ background: "#FF4D4D10", border: "1px solid #FF4D4D30", borderRadius: 8, padding: "7px 12px", color: isActioning ? COLORS.textSecondary : "#FF6B6B", fontSize: 12, fontWeight: 600, cursor: isActioning ? "not-allowed" : "pointer" }}
+                                >
+                                  {isActioning ? "..." : "Deactivate"}
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 onClick={async () => {
@@ -17838,6 +17862,82 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               </>
             )}
           </>
+        )}
+
+        {/* Reassign Resident Modal */}
+        {reassignTarget && (
+          <div
+            onClick={() => { if (!reassignSubmitting) setReassignTarget(null); }}
+            style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: "calc(68px + env(safe-area-inset-bottom, 0px))", background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "flex-end", zIndex: 999 }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{ width: "100%", background: COLORS.card, borderRadius: "24px 24px 0 0", padding: "28px 24px 48px", fontFamily: "'Inter', sans-serif", maxHeight: "80vh", overflowY: "auto" }}
+            >
+              <div style={{ width: 40, height: 4, background: COLORS.border, borderRadius: 2, margin: "0 auto 20px" }} />
+              <h2 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: "0 0 4px" }}>Reassign Resident</h2>
+              <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px" }}>
+                {reassignTarget.name || "This resident"} is currently on {formatUnitLabel(reassignTarget.unitNumber)}. Choose the unit to move them to.
+              </p>
+              <button
+                onClick={() => { if (!reassignSubmitting) setReassignTarget(null); }}
+                disabled={reassignSubmitting}
+                style={{ width: "100%", padding: "14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, cursor: reassignSubmitting ? "not-allowed" : "pointer", marginBottom: 16 }}
+              >
+                Cancel
+              </button>
+              {reassignError && (
+                <div style={{ background: "#FF4D4D10", border: "1px solid #FF4D4D30", borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
+                  <p style={{ color: "#FF6B6B", fontSize: 13, margin: 0 }}>{reassignError}</p>
+                </div>
+              )}
+              {reassignLoadingCandidates ? (
+                <p style={{ color: COLORS.textSecondary, fontSize: 14, textAlign: "center", padding: "20px 0" }}>Loading available units...</p>
+              ) : reassignCandidates.length === 0 ? (
+                <p style={{ color: COLORS.textSecondary, fontSize: 14, textAlign: "center", padding: "20px 0" }}>
+                  No other units found for this building.
+                </p>
+              ) : (
+                reassignCandidates.map((c: any, i: number, arr: any[]) => {
+                  const occupantCount = (c.usedBy || []).length;
+                  return (
+                    <div
+                      key={c.id}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: i < arr.length - 1 ? `1px solid ${COLORS.border}` : "none" }}
+                    >
+                      <div>
+                        <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{formatUnitLabel(c.unitNumber)}</p>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>
+                          {occupantCount === 0 ? "Currently empty" : `${occupantCount} resident${occupantCount !== 1 ? "s" : ""} already here`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          setReassignSubmitting(true);
+                          setReassignError("");
+                          const resolvedId = buildingId || userProfile?.buildingId || "demo-building";
+                          const currentCode = reassignTarget.currentPropertyCode || reassignTarget.inviteCode || "";
+                          const result = await reassignResidentToCode(reassignTarget.uid, resolvedId, currentCode, c.id);
+                          if (result.success) {
+                            setBuildingResidents(prev => prev.map(x => x.uid === reassignTarget.uid ? { ...x, unitNumber: c.unitNumber, currentPropertyCode: c.id, inviteCode: c.id } : x));
+                            setReassignSubmitting(false);
+                            setReassignTarget(null);
+                          } else {
+                            setReassignError(result.error || "Something went wrong. Please try again.");
+                            setReassignSubmitting(false);
+                          }
+                        }}
+                        disabled={reassignSubmitting}
+                        style={{ background: `${COLORS.primary}10`, border: `1px solid ${COLORS.primary}30`, borderRadius: 8, padding: "7px 12px", color: reassignSubmitting ? COLORS.textSecondary : COLORS.accent, fontSize: 12, fontWeight: 600, cursor: reassignSubmitting ? "not-allowed" : "pointer", flexShrink: 0 }}
+                      >
+                        {reassignSubmitting ? "..." : "Move Here"}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         )}
 
         {/* EQUIPMENT TAB */}
