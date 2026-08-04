@@ -1690,15 +1690,27 @@ const Step1bHomeBuilding = ({ data, onChange, onNext, onBack }) => {
   );
 };
 
-const Step2Name = ({ data, onChange, onNext, onBack }) => (
-  <OnboardingShell step={3} onBack={onBack}>
-    <QuestionHeader label="What's your full name?" subtitle="We'll use this to personalize your experience." />
-    <input type="text" value={data.name} onChange={(e) => { const raw = e.target.value; const formatted = raw.split(" ").map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "); onChange({ name: formatted }); }} placeholder="First and last name"
-      style={{ width: "100%", padding: "18px 20px", borderRadius: 16, border: `1.5px solid ${data.name ? COLORS.accent : COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 20, fontWeight: 600, outline: "none", fontFamily: "'Inter', sans-serif", boxSizing: "border-box", marginBottom: 32, transition: "all 0.2s ease" }}
-    />
-    <ContinueButton onPress={onNext} disabled={data.name.trim().length < 2} />
-  </OnboardingShell>
-);
+const Step2Name = ({ data, onChange, onNext, onBack }) => {
+  // Requires an actual first and last name, not just any 2+ characters -
+  // without this, "Al" or a single nickname passed the old check, leaving
+  // the resident database full of names too incomplete to search or
+  // identify someone by later (e.g. matching a support email to their
+  // account, or telling two residents apart in the same unit).
+  const trimmedName = data.name.trim();
+  const hasFullName = trimmedName.split(/\s+/).filter(Boolean).length >= 2;
+  return (
+    <OnboardingShell step={3} onBack={onBack}>
+      <QuestionHeader label="What's your full name?" subtitle="We'll use this to personalize your experience." />
+      <input type="text" value={data.name} onChange={(e) => { const raw = e.target.value; const formatted = raw.split(" ").map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "); onChange({ name: formatted }); }} placeholder="First and last name"
+        style={{ width: "100%", padding: "18px 20px", borderRadius: 16, border: `1.5px solid ${data.name ? COLORS.accent : COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 20, fontWeight: 600, outline: "none", fontFamily: "'Inter', sans-serif", boxSizing: "border-box", marginBottom: 8, transition: "all 0.2s ease" }}
+      />
+      <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 24px", minHeight: 18 }}>
+        {trimmedName.length > 0 && !hasFullName ? "Please enter both your first and last name." : ""}
+      </p>
+      <ContinueButton onPress={onNext} disabled={!hasFullName} />
+    </OnboardingShell>
+  );
+};
 
 const Step2bCreateAccount = ({ data, onChange, onNext, onBack }) => {
   const [showPassword, setShowPassword] = useState(false);
