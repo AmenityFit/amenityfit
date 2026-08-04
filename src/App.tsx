@@ -17076,6 +17076,13 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
         setTempName(data.programName || data.name || "");
         setBuildingLogoUrl(data.logoUrl || null);
         setPendingProgramName(data.pendingProgramName || null);
+        // Starts the actual image download in parallel with this data
+        // fetch resolving, instead of waiting for the img tag to mount
+        // and only then request it.
+        if (data.logoUrl) {
+          const preloadImg = new window.Image();
+          preloadImg.src = data.logoUrl;
+        }
       }
       setBuildingLoading(false);
     });
