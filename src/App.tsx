@@ -18124,6 +18124,16 @@ export default function App() {
           const d = snap.data();
           setLiveBuildingEquipment(d.equipment || []);
           setLiveBuildingBranding({ logoUrl: d.logoUrl || null, programName: d.programName || null });
+          // Preloads the actual image bytes into the browser's cache the
+          // instant the URL is known, well before Profile ever gets opened -
+          // the data itself was already made instantly available session-
+          // wide by this same listener, but the underlying picture still
+          // needed its own network fetch on first render without this,
+          // causing a visible flicker every time Profile mounted fresh.
+          if (d.logoUrl) {
+            const preloadImg = new window.Image();
+            preloadImg.src = d.logoUrl;
+          }
         }
       },
       (err) => {
