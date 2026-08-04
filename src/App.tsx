@@ -12980,10 +12980,6 @@ const FAQ_ITEMS = [
     a: "Go to Profile and update the injury or limitation field. Once saved, your next session will filter out exercises that could aggravate it and the swap feature will prioritize safer alternatives. If you have not done today's workout yet, start the workout and tap the Swap Exercise button on any exercise to replace it.",
   },
   {
-    q: "How do I update my injury or physical limitations?",
-    a: "Go to Profile and update the injury or limitation field. Once saved, your next session will filter out exercises that could aggravate it and the swap feature will prioritize safer alternatives. If you haven't done today's workout yet, you can also use the swap feature right now to modify individual exercises.",
-  },
-  {
     q: "Does working out here count toward my stats?",
     a: "Every workout completed here is counted in your personal progress. If this is your home building, your sessions also contribute to the building's community stats.",
   },
