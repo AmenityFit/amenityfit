@@ -11438,87 +11438,37 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
         return;
       }
 
-      if (!response.ok || !response.body) {
+      if (!response.ok) {
         setMessages(prev => [...prev, { role: "assistant", content: "Having trouble connecting right now. Give it a second and try again.", createdAt: Date.now() }]);
         setLoading(false);
         return;
       }
 
-      // Streamed rather than waiting for the entire response to finish
-      // generating first - text now appears progressively as Claude
-      // generates it, the same way it does on claude.ai, instead of a
-      // blank wait followed by the whole answer appearing all at once.
-      setMessages(prev => [...prev, { role: "assistant", content: "", createdAt: Date.now() }]);
+      // The proxy Cloud Function calls Anthropic's API without ever
+      // requesting stream: true, and returns the complete response as one
+      // JSON object (confirmed via Content-Type: application/json and a
+      // fixed Content-Length in the actual network response) - not a live
+      // event stream. The reveal-timer/SSE-line-parsing logic this replaced
+      // was built for a stream that was never actually happening, so it
+      // always found zero matching lines and silently showed the generic
+      // connection-error message even when the request had genuinely
+      // succeeded and generated a real answer. This reads the response the
+      // way it's actually sent, and displays it immediately, matching the
+      // already-decided preference for instant replies over a typewriter
+      // reveal.
+      const data = await response.json();
+      const rawText = (data?.content || [])
+        .filter((block: any) => block.type === "text")
+        .map((block: any) => block.text)
+        .join("");
+      const cleaned = rawText.replace(/—/g, "").replace(/–/g, "").replace(/\s{2,}/g, " ");
+
       setLoading(false);
 
-      // Reset the reveal queue for this new message
-      if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
-      fullTextRef.current = "";
-      revealedLenRef.current = 0;
-      streamDoneRef.current = false;
-
-      const startRevealTimer = () => {
-        if (revealTimerRef.current) return;
-        revealTimerRef.current = setInterval(() => {
-          const target = fullTextRef.current;
-          if (revealedLenRef.current < target.length) {
-            // Reveals everything received so far immediately, rather than
-            // crawling a fixed number of characters at a time - the message
-            // now displays as fast as the network actually delivers it.
-            revealedLenRef.current = target.length;
-            const shown = target.slice(0, revealedLenRef.current);
-            setMessages(prev => {
-              const updated = [...prev];
-              updated[updated.length - 1] = { ...updated[updated.length - 1], content: shown };
-              return updated;
-            });
-            messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
-          } else if (streamDoneRef.current) {
-            clearInterval(revealTimerRef.current);
-            revealTimerRef.current = null;
-          }
-        }, 20);
-      };
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let fullText = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (!jsonStr) continue;
-          try {
-            const evt = JSON.parse(jsonStr);
-            if (evt.type === "content_block_delta" && evt.delta?.text) {
-              fullText += evt.delta.text;
-              const cleaned = fullText.replace(/—/g, "").replace(/–/g, "").replace(/\s{2,}/g, " ");
-              fullTextRef.current = cleaned;
-              startRevealTimer();
-            }
-          } catch (parseErr) {
-            // Incomplete chunk split mid-line - the leftover in buffer
-            // above already carries it forward to join with the next read
-          }
-        }
-      }
-
-      streamDoneRef.current = true;
-
-      if (!fullText.trim()) {
-        if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { ...updated[updated.length - 1], content: "Having trouble connecting right now. Give it a second and try again." };
-          return updated;
-        });
+      if (!cleaned.trim()) {
+        setMessages(prev => [...prev, { role: "assistant", content: "Having trouble connecting right now. Give it a second and try again.", createdAt: Date.now() }]);
+      } else {
+        setMessages(prev => [...prev, { role: "assistant", content: cleaned, createdAt: Date.now() }]);
       }
     } catch (err) {
       console.error("Assistant error:", err);
