@@ -39,6 +39,7 @@ import {
   arrayUnion,
   increment,
   deleteDoc,
+  runTransaction,
 } from "firebase/firestore";
 import {
   getStorage,
@@ -929,6 +930,70 @@ const reactivateResident = async (uid: string): Promise<boolean> => {
   } catch (e) {
     console.error("reactivateResident error:", e);
     return false;
+  }
+};
+
+// Moves a resident from one unit's invite code to another within the same
+// building - e.g. they moved units, or signed up on the wrong code. Runs as
+// a single atomic transaction so a partial failure (network hiccup, etc.)
+// can never leave the two codes' usedBy arrays, the resident's own profile,
+// and the building's redemption counter out of sync with each other. The
+// redemption counter only changes if this move actually flips a code's
+// real-world status: it decrements if this resident was the sole user of
+// their old code (that code becomes newly unredeemed), and increments if
+// the new code had zero residents before this move (newly redeemed) - a
+// like-for-like move within an already-redeemed pair of codes leaves the
+// total count correctly unchanged.
+const reassignResidentToCode = async (
+  uid: string,
+  buildingId: string,
+  oldCodeId: string,
+  newCodeId: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    await runTransaction(db, async (transaction) => {
+      const oldCodeRef = doc(db, "inviteCodes", oldCodeId);
+      const newCodeRef = doc(db, "inviteCodes", newCodeId);
+      const buildingRef = doc(db, "buildings", buildingId);
+      const userRef = doc(db, "users", uid);
+
+      // Every read in a Firestore transaction must happen before any write.
+      const [oldCodeSnap, newCodeSnap, buildingSnap] = await Promise.all([
+        transaction.get(oldCodeRef),
+        transaction.get(newCodeRef),
+        transaction.get(buildingRef),
+      ]);
+
+      if (!newCodeSnap.exists()) throw new Error("Target invite code does not exist.");
+      if (!buildingSnap.exists()) throw new Error("Building record not found.");
+
+      const oldUsedBy: string[] = oldCodeSnap.exists() ? (oldCodeSnap.data().usedBy || []) : [];
+      const newUsedBy: string[] = newCodeSnap.data().usedBy || [];
+
+      const oldCodeWasOnlyThem = oldUsedBy.length === 1 && oldUsedBy[0] === uid;
+      const newCodeWasEmpty = newUsedBy.length === 0;
+
+      const updatedOldUsedBy = oldUsedBy.filter((id: string) => id !== uid);
+      const updatedNewUsedBy = newUsedBy.includes(uid) ? newUsedBy : [...newUsedBy, uid];
+
+      const currentRedeemed = buildingSnap.data().inviteCodesRedeemed || 0;
+      const delta = (newCodeWasEmpty ? 1 : 0) - (oldCodeWasOnlyThem ? 1 : 0);
+
+      if (oldCodeSnap.exists()) {
+        transaction.set(oldCodeRef, { usedBy: updatedOldUsedBy }, { merge: true });
+      }
+      transaction.set(newCodeRef, { usedBy: updatedNewUsedBy }, { merge: true });
+      transaction.set(buildingRef, { inviteCodesRedeemed: Math.max(0, currentRedeemed + delta) }, { merge: true });
+      transaction.set(userRef, {
+        unitNumber: newCodeSnap.data().unitNumber || "",
+        currentPropertyCode: newCodeId,
+        inviteCode: newCodeId,
+      }, { merge: true });
+    });
+    return { success: true };
+  } catch (e: any) {
+    console.error("reassignResidentToCode error:", e);
+    return { success: false, error: e.message || "Failed to reassign resident." };
   }
 };
 
@@ -17296,10 +17361,27 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
             {!buildingLoading && buildingData && <>
             {/* Adoption */}
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Adoption</p>
-            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
               <ManagerMetricCard label="Signed Up" value={`${b.inviteCodesRedeemed}/${b.inviteCodesGenerated}`} sub={`${adoptionRate}% adoption rate`} accent={COLORS.success} />
               <ManagerMetricCard label="Active This Month" value={String(b.activeUsersThisMonth)} sub="logged a workout" accent={COLORS.accent} />
             </div>
+            {/* Recalculates inviteCodesRedeemed directly from each code's
+                real usedBy data, self-healing any building whose stored
+                counter never caught up to a real signup - not just a
+                one-off fix for this specific building. */}
+            <button
+              onClick={async () => {
+                const resolvedId = buildingId || userProfile?.buildingId;
+                if (!resolvedId) return;
+                const codes = await fetchBuildingCodes(resolvedId);
+                const redeemedCount = codes.filter(c => (c.usedBy || []).length > 0).length;
+                await setDoc(doc(db, "buildings", resolvedId), { inviteCodesRedeemed: redeemedCount }, { merge: true });
+                setBuildingData((prev: any) => ({ ...prev, inviteCodesRedeemed: redeemedCount }));
+              }}
+              style={{ width: "100%", padding: "10px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: 20 }}
+            >
+              ↻ Recalculate Signed Up Count
+            </button>
 
             {/* Engagement */}
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Engagement — {month}</p>
