@@ -11361,7 +11361,10 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
         revealTimerRef.current = setInterval(() => {
           const target = fullTextRef.current;
           if (revealedLenRef.current < target.length) {
-            revealedLenRef.current = Math.min(revealedLenRef.current + 3, target.length);
+            // Reveals everything received so far immediately, rather than
+            // crawling a fixed number of characters at a time - the message
+            // now displays as fast as the network actually delivers it.
+            revealedLenRef.current = target.length;
             const shown = target.slice(0, revealedLenRef.current);
             setMessages(prev => {
               const updated = [...prev];
