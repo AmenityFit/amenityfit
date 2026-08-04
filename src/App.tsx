@@ -9445,12 +9445,6 @@ if (showRest) {
                   );
                 })
               )}
-              <button
-                onClick={() => setShowSwapModal(false)}
-                style={{ width: "100%", marginTop: 20, padding: "16px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}
-              >
-                Cancel
-              </button>
             </div>
           </div>
         );
