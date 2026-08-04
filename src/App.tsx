@@ -9377,7 +9377,7 @@ if (showRest) {
           fullProgramExerciseIds,
           profile?.equipmentPreference || "gym-and-bands",
           profile?.injuries || "",
-          profile?.experience || "beginner",
+          profile?.effectiveLevel || profile?.experience || "beginner",
           profile?.buildingEquipment || [],
           (parseInt(String(profile?.age)) || 30) >= 65
         ).slice(0, 10); // show top 10 options
