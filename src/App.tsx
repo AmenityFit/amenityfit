@@ -31,6 +31,7 @@ import {
   collection,
   addDoc,
   getDocs,
+  getDocsFromCache,
   getDocsFromServer,
   query,
   orderBy,
@@ -4393,12 +4394,29 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
     };
     const fetchNotifs = async () => {
       setNotifLoading(true);
-      // Fast-then-verify: show cached notifications immediately, then
-      // confirm with a real server read and correct if anything was missed.
+      // Fast-then-verify: the first read is explicitly forced to come from
+      // local cache (getDocsFromCache), not the plain getDocs() default,
+      // which doesn't reliably guarantee a cache-only read and can end up
+      // making a full network round trip anyway - defeating the entire
+      // point of showing something instantly. This guarantees an instant
+      // render regardless of connection quality, then a real verified
+      // server read quietly confirms and corrects in the background with
+      // no further loading state, so a slow connection only ever delays
+      // the silent correction, never the first thing the person sees.
       try {
-        const fastSnap = await getDocs(collection(db, "users", profile.uid, "notifications"));
-        setNotifications(parseNotifs(fastSnap));
-        setNotifLoading(false);
+        const cacheSnap = await getDocsFromCache(collection(db, "users", profile.uid, "notifications"));
+        const cached = parseNotifs(cacheSnap);
+        // Only trust an empty cache result if it's genuinely a repeat
+        // visit with nothing there - on a first-ever load the cache is
+        // always empty regardless of what's actually on the server, so
+        // flipping to "No notifications yet" immediately would flash a
+        // possibly-wrong empty state. Keep showing the loading state a
+        // little longer in that specific case and let the real server
+        // read below settle it instead.
+        if (cached.length > 0) {
+          setNotifications(cached);
+          setNotifLoading(false);
+        }
       } catch {}
       try {
         const snap = await getDocsFromServer(collection(db, "users", profile.uid, "notifications"));
