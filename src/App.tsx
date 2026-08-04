@@ -11179,19 +11179,22 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     { role: "assistant", content: openingMessage, createdAt: Date.now() }
   ]);
 
-  // Forces a real 24-hour reset regardless of whether the browser happens
-  // to keep this screen's state alive in memory across backgrounding/
-  // relocking (iOS can suspend rather than fully destroy a page, so a
-  // simple unmount-based reset isn't reliable on its own). Stores only a
-  // timestamp locally, never conversation content, so this adds no real
+  // Resets on the calendar day, not a rolling 24 hours - opening the app
+  // at 7pm and coming back at 9pm the same day keeps the conversation, but
+  // the moment midnight passes it starts fresh, no matter how few hours
+  // have actually elapsed. This also guards against the browser keeping
+  // this screen's state alive in memory across backgrounding/relocking
+  // (iOS can suspend rather than fully destroy a page, so a simple
+  // unmount-based reset isn't reliable on its own). Stores only a date
+  // string locally, never conversation content, so this adds no real
   // storage weight and involves zero Firestore or API cost.
   useEffect(() => {
-    const lastActive = sessionStorage.getItem("assistantLastActiveAt");
-    const now = Date.now();
-    if (!lastActive || now - parseInt(lastActive, 10) > 24 * 60 * 60 * 1000) {
-      setMessages([{ role: "assistant", content: openingMessage, createdAt: now }]);
+    const lastActiveDate = sessionStorage.getItem("assistantLastActiveDate");
+    const todayStr = new Date().toDateString();
+    if (!lastActiveDate || lastActiveDate !== todayStr) {
+      setMessages([{ role: "assistant", content: openingMessage, createdAt: Date.now() }]);
     }
-    sessionStorage.setItem("assistantLastActiveAt", String(now));
+    sessionStorage.setItem("assistantLastActiveDate", todayStr);
   }, []);
   const [input, setInput] = useState(() => sessionStorage.getItem("assistantDraft") || "");
 
@@ -11555,7 +11558,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
             kept anywhere once it goes stale or the session ends. */}
         <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}30`, borderRadius: 14, padding: "12px 16px" }}>
           <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0, lineHeight: 1.5, textAlign: "center" }}>
-            This conversation resets every 24 hours. Long press any message to save it to your Notes.
+            This conversation resets daily. Long press any message to save it to your Notes.
           </p>
         </div>
 
