@@ -11,6 +11,11 @@
          React to render and request it. This is currently ~58% of Largest
          Contentful Paint time per Lighthouse. -->
     <link rel="preload" as="image" href="https://res.cloudinary.com/dk5g9itw8/image/upload/Logo_rkq0cv" fetchpriority="high" />
+    <!-- Preloads the Power 24 header image at normal priority - it's a
+         fixed, known-in-advance asset, so the browser can fetch it
+         quietly in the background well before someone actually navigates
+         to that screen, eliminating the flicker on arrival. -->
+    <link rel="preload" as="image" href="https://res.cloudinary.com/dk5g9itw8/image/upload/p24Header_hkelnv" />
   </head>
   <body>
     <div id="root"></div>
