@@ -10593,6 +10593,13 @@ onSaveState={(round: number, exerciseIndex: number, cells?: string[]) => {
           if (profile?.uid) {
             setDoc(doc(db, "users", profile.uid), { programSwaps: updated }, { merge: true });
           }
+          // Immediately syncs the parent's own userProfile state, the same
+          // way saveProgressToFirestore already does for workout progress.
+          // Without this, a swap only ever lived in this component's own
+          // local state and Firestore - the parent never found out, so a
+          // fresh mount after navigating away had no way to know about it
+          // until an async re-fetch caught up, if it ever did.
+          onProfileUpdate?.({ programSwaps: updated });
         }}
       />
     );
