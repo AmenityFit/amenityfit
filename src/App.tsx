@@ -14702,6 +14702,14 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [selectedBuildingCodes, setSelectedBuildingCodes] = React.useState<any[]>([]);
   const [showBuildingCodes, setShowBuildingCodes] = React.useState(false);
+  const [selectedBuildingResidents, setSelectedBuildingResidents] = React.useState<any[]>([]);
+  const [showBuildingResidents, setShowBuildingResidents] = React.useState(false);
+  const [saResidentActionLoading, setSaResidentActionLoading] = React.useState<string | null>(null);
+  const [saReassignTarget, setSaReassignTarget] = React.useState<any>(null);
+  const [saReassignCandidates, setSaReassignCandidates] = React.useState<any[]>([]);
+  const [saReassignLoadingCandidates, setSaReassignLoadingCandidates] = React.useState(false);
+  const [saReassignSubmitting, setSaReassignSubmitting] = React.useState(false);
+  const [saReassignError, setSaReassignError] = React.useState("");
   const [batchInput, setBatchInput] = React.useState("");
   const [batchPmEmail, setBatchPmEmail] = React.useState("");
   const [batchCompanyName, setBatchCompanyName] = React.useState("");
@@ -15122,6 +15130,155 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                       <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>No codes found for this building.</p>
                     )}
                   </div>
+
+                  {/* Residents - full name and email visible here since this
+                      is your own operational tool, unlike the aggregate-only
+                      reports shown to property managers. Reuses the exact
+                      same fetch/deactivate/reactivate/reassign functions
+                      already proven in the Building Manager Dashboard. */}
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: 0 }}>Residents</p>
+                      <button
+                        onClick={async () => {
+                          if (showBuildingResidents) { setShowBuildingResidents(false); return; }
+                          const residents = await fetchBuildingResidents(String(selectedBuilding.id));
+                          setSelectedBuildingResidents(residents);
+                          setShowBuildingResidents(true);
+                        }}
+                        style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: "6px 12px", color: COLORS.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                      >
+                        {showBuildingResidents ? "Hide Residents" : "View Residents"}
+                      </button>
+                    </div>
+                    {showBuildingResidents && selectedBuildingResidents.length > 0 && (
+                      <div style={{ background: COLORS.background, borderRadius: 12, border: `1px solid ${COLORS.border}`, overflow: "hidden", maxHeight: 400, overflowY: "auto" }}>
+                        {selectedBuildingResidents.map((r: any) => {
+                          const isActive = !r.deactivated;
+                          const isActioning = saResidentActionLoading === r.uid;
+                          return (
+                            <div key={r.uid} style={{ padding: "10px 14px", borderBottom: `1px solid ${COLORS.border}` }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                                <div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                                    <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{r.name || "Resident"}</span>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? COLORS.success : COLORS.textSecondary }}>{isActive ? "ACTIVE" : "DEACTIVATED"}</span>
+                                  </div>
+                                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 2px" }}>{r.email || "No email on file"}</p>
+                                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{formatUnitLabel(r.unitNumber)}</p>
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                {isActive && (
+                                  <button
+                                    onClick={async () => {
+                                      setSaReassignTarget(r);
+                                      setSaReassignError("");
+                                      setSaReassignSubmitting(false);
+                                      setSaReassignCandidates([]);
+                                      setSaReassignLoadingCandidates(true);
+                                      const codes = await fetchBuildingCodes(String(selectedBuilding.id));
+                                      const currentCode = r.currentPropertyCode || r.inviteCode || "";
+                                      setSaReassignCandidates(codes.filter((c: any) => c.id !== currentCode));
+                                      setSaReassignLoadingCandidates(false);
+                                    }}
+                                    style={{ background: `${COLORS.primary}10`, border: `1px solid ${COLORS.primary}30`, borderRadius: 8, padding: "6px 12px", color: COLORS.accent, fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                                  >
+                                    Reassign
+                                  </button>
+                                )}
+                                <button
+                                  onClick={async () => {
+                                    setSaResidentActionLoading(r.uid);
+                                    const ok = isActive ? await deactivateResident(r.uid) : await reactivateResident(r.uid);
+                                    if (ok) setSelectedBuildingResidents(prev => prev.map(x => x.uid === r.uid ? { ...x, deactivated: isActive } : x));
+                                    setSaResidentActionLoading(null);
+                                  }}
+                                  disabled={isActioning}
+                                  style={{ background: isActive ? "#FF4D4D10" : `${COLORS.success}10`, border: `1px solid ${isActive ? "#FF4D4D30" : COLORS.success + "30"}`, borderRadius: 8, padding: "6px 12px", color: isActioning ? COLORS.textSecondary : (isActive ? "#FF6B6B" : COLORS.success), fontSize: 11, fontWeight: 600, cursor: isActioning ? "not-allowed" : "pointer" }}
+                                >
+                                  {isActioning ? "..." : (isActive ? "Deactivate" : "Reactivate")}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {showBuildingResidents && selectedBuildingResidents.length === 0 && (
+                      <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>No residents found for this building.</p>
+                    )}
+                  </div>
+
+                  {/* Reassign Resident Modal (Super Admin) */}
+                  {saReassignTarget && (
+                    <div
+                      onClick={() => { if (!saReassignSubmitting) setSaReassignTarget(null); }}
+                      style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "flex-end", zIndex: 999 }}
+                    >
+                      <div
+                        onClick={e => e.stopPropagation()}
+                        style={{ width: "100%", background: COLORS.card, borderRadius: "24px 24px 0 0", padding: "28px 24px 48px", fontFamily: "'Inter', sans-serif", maxHeight: "80vh", overflowY: "auto" }}
+                      >
+                        <div style={{ width: 40, height: 4, background: COLORS.border, borderRadius: 2, margin: "0 auto 20px" }} />
+                        <h2 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: "0 0 4px" }}>Reassign Resident</h2>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px" }}>
+                          {saReassignTarget.name || "This resident"} is currently on {formatUnitLabel(saReassignTarget.unitNumber)}. Choose the unit to move them to.
+                        </p>
+                        <button
+                          onClick={() => { if (!saReassignSubmitting) setSaReassignTarget(null); }}
+                          disabled={saReassignSubmitting}
+                          style={{ width: "100%", padding: "14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, cursor: saReassignSubmitting ? "not-allowed" : "pointer", marginBottom: 16 }}
+                        >
+                          Cancel
+                        </button>
+                        {saReassignError && (
+                          <div style={{ background: "#FF4D4D10", border: "1px solid #FF4D4D30", borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
+                            <p style={{ color: "#FF6B6B", fontSize: 13, margin: 0 }}>{saReassignError}</p>
+                          </div>
+                        )}
+                        {saReassignLoadingCandidates ? (
+                          <p style={{ color: COLORS.textSecondary, fontSize: 14, textAlign: "center", padding: "20px 0" }}>Loading available units...</p>
+                        ) : saReassignCandidates.length === 0 ? (
+                          <p style={{ color: COLORS.textSecondary, fontSize: 14, textAlign: "center", padding: "20px 0" }}>No other units found for this building.</p>
+                        ) : (
+                          saReassignCandidates.map((c: any, i: number, arr: any[]) => {
+                            const occupantCount = (c.usedBy || []).length;
+                            return (
+                              <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: i < arr.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
+                                <div>
+                                  <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{formatUnitLabel(c.unitNumber)}</p>
+                                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>
+                                    {occupantCount === 0 ? "Currently empty" : `${occupantCount} resident${occupantCount !== 1 ? "s" : ""} already here`}
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={async () => {
+                                    setSaReassignSubmitting(true);
+                                    setSaReassignError("");
+                                    const currentCode = saReassignTarget.currentPropertyCode || saReassignTarget.inviteCode || "";
+                                    const result = await reassignResidentToCode(saReassignTarget.uid, String(selectedBuilding.id), currentCode, c.id);
+                                    if (result.success) {
+                                      setSelectedBuildingResidents(prev => prev.map(x => x.uid === saReassignTarget.uid ? { ...x, unitNumber: c.unitNumber, currentPropertyCode: c.id, inviteCode: c.id } : x));
+                                      setSaReassignSubmitting(false);
+                                      setSaReassignTarget(null);
+                                    } else {
+                                      setSaReassignError(result.error || "Something went wrong. Please try again.");
+                                      setSaReassignSubmitting(false);
+                                    }
+                                  }}
+                                  disabled={saReassignSubmitting}
+                                  style={{ background: `${COLORS.primary}10`, border: `1px solid ${COLORS.primary}30`, borderRadius: 8, padding: "7px 12px", color: saReassignSubmitting ? COLORS.textSecondary : COLORS.accent, fontSize: 12, fontWeight: 600, cursor: saReassignSubmitting ? "not-allowed" : "pointer", flexShrink: 0 }}
+                                >
+                                  {saReassignSubmitting ? "..." : "Move Here"}
+                                </button>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Cancel contract */}
                   {selectedBuilding.subscription !== "churned" && (
