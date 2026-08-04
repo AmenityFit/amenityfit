@@ -17267,15 +17267,17 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div style={{ display: "flex", gap: 0, padding: "0 8px", borderBottom: `1px solid ${COLORS.border}`, flexShrink: 0 }}>
+      {/* Tab bar - horizontally scrollable so every label shows in full,
+          matching the pattern already working correctly in Command Center,
+          instead of splitting evenly and truncating with an ellipsis. */}
+      <div style={{ display: "flex", padding: "0 8px", borderBottom: `1px solid ${COLORS.border}`, flexShrink: 0, overflowX: "auto", WebkitOverflowScrolling: "touch" as any, scrollbarWidth: "none" as any }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id as any)} style={{
-            flex: 1, minWidth: 0, padding: "12px 4px", background: "none", border: "none", cursor: "pointer",
+            padding: "12px 16px", background: "none", border: "none", cursor: "pointer",
             color: activeTab === t.id ? COLORS.white : COLORS.textSecondary,
             fontSize: 12, fontWeight: activeTab === t.id ? 700 : 500,
             borderBottom: `2px solid ${activeTab === t.id ? COLORS.accent : "transparent"}`,
-            transition: "all 0.15s ease", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            transition: "all 0.15s ease", whiteSpace: "nowrap" as const,
           }}>{t.label}</button>
         ))}
       </div>
