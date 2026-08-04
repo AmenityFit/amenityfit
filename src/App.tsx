@@ -9417,7 +9417,7 @@ if (showRest) {
                       <div style={{ width: 52, height: 36, borderRadius: 10, background: `${COLORS.primary}20`, flexShrink: 0, overflow: "hidden", position: "relative" }}>
                         {vid ? (
                           <img
-                            src={getThumbnailUrl(ex.id, profile?.programDay) || ""}
+                            src={getThumbnailUrl(c.id, profile?.programDay) || ""}
                             alt=""
                             style={{ width: "100%", height: "100%", objectFit: "cover" }}
                             // If the primary i.vimeocdn.com thumbnail ever fails to
