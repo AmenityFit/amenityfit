@@ -18811,6 +18811,15 @@ const isInitialLoad = React.useRef(true);
     const newStreak = isYesterday || !userProfile.lastSessionDate ? (userProfile.streak || 0) + 1 : 1;
     const newCompleted = (userProfile.sessionsCompleted || 0) + 1;
     const currentProgramDay = userProfile.programDay || 1;
+    // Resolved separately from currentProgramDay above - this is
+    // specifically the content-identity that was actually performed, which
+    // can differ from the natural sequence if today was swapped. Used only
+    // for tagging what got completed (completedProgramDays entry and the
+    // snapshot below). The sequence itself (cycleFinished check and
+    // newProgramDay advancement) deliberately keeps using the raw,
+    // unswapped currentProgramDay - a swap only ever changes what shows on
+    // a given date, never the underlying day-count sequence.
+    const resolvedCompletedDay = resolveProgramDayForDate(currentProgramDay, new Date(), userProfile?.dayOverrides);
 
     // Check if this completes the 30-day cycle
     if (currentProgramDay >= 30) {
@@ -18836,13 +18845,13 @@ const isInitialLoad = React.useRef(true);
       lastSessionDate: todayStr,
       programDay: newProgramDay,
       cycleSessionsCompleted: (userProfile.cycleSessionsCompleted || 0) + 1,
-      completedProgramDays: [...new Set([...(userProfile.completedProgramDays || []), currentProgramDay])],
+      completedProgramDays: [...new Set([...(userProfile.completedProgramDays || []), resolvedCompletedDay])],
       reEntrySessions: newReEntrySessions,
       lastWorkoutSnapshot: {
         groups: completedGroups,
         sessionLength: completedSessionLength,
         equipmentPreference: userProfile.equipmentPreference || "gym-and-bands",
-        programDay: currentProgramDay,
+        programDay: resolvedCompletedDay,
         date: todayStr,
       },
     };
