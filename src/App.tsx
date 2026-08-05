@@ -9855,6 +9855,27 @@ const getWorkoutTypeForProgramDay = (
 };
 
 // Returns the 7-day week starting from today, reading day types from actual program data
+// Resolves which program day's content is actually in effect for a given
+// calendar date, accounting for any active day-swap for the current week.
+// Swaps are stored as a date-string -> program-day map, so any number of
+// swaps within a week compose correctly on top of each other, and a swap
+// automatically stops applying once its date has passed - nothing needs
+// active resetting. Everything downstream (getWorkoutTypeForProgramDay,
+// getProgramDay, completion tracking, progression) continues to operate
+// purely on whatever day number this resolves to, and has no awareness a
+// swap ever happened - this is the single shared source every screen that
+// shows "what workout happens on this date" reads from, replacing what
+// used to be independently computed in three separate places.
+const resolveProgramDayForDate = (
+  naturalProgramDay: number,
+  date: Date,
+  dayOverrides?: Record<string, number>
+): number => {
+  if (!dayOverrides) return naturalProgramDay;
+  const dateKey = date.toDateString();
+  return dayOverrides[dateKey] ?? naturalProgramDay;
+};
+
 const getWeekSchedule = (
   currentProgramDay: number,
   frequency: number,
@@ -9868,7 +9889,8 @@ const getWeekSchedule = (
   buildingEquipment?: string[],
   age?: number,
   sessionLength?: number,
-  experience?: string
+  experience?: string,
+  dayOverrides?: Record<string, number>
 ) => {
   const isSenior = (age || 30) >= 65;
   const today = todayOverride || new Date();
@@ -9879,7 +9901,8 @@ const getWeekSchedule = (
   for (let i = 0; i < 7; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
-    const programDay = currentProgramDay + i;
+    const naturalProgramDay = currentProgramDay + i;
+    const programDay = resolveProgramDayForDate(naturalProgramDay, date, dayOverrides);
     // Pass programKey through so calendar reads from your actual program structure
     const workout = getWorkoutTypeForProgramDay(programDay, frequency, date.getDay(), programKey, generatedDays);
     // Apply filters so weekly titles match actual workout content
@@ -10017,7 +10040,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
   }, [frequency]);
 
   const todayLocal = React.useMemo(() => new Date(), []);
-  const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment, parseInt(String(profile?.age)) || 30, profile?.sessionLength || 60, profile?.effectiveLevel || profile?.experience || "intermediate");
+  const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment, parseInt(String(profile?.age)) || 30, profile?.sessionLength || 60, profile?.effectiveLevel || profile?.experience || "intermediate", profile?.dayOverrides);
   if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
 
   const todayDay = weekDays.find((d: any) => d.isToday) ?? null;
@@ -10045,6 +10068,22 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
     if (type === "cardio") return "center 30%";
     return "center 35%";
   };
+
+  // Preloads every day's hero image the instant this screen mounts, not
+  // just the currently selected one - without this, each day's image only
+  // started fetching the moment someone actually tapped into it, causing
+  // a visible flicker on every day's first view. Since getImageForDay is
+  // declared below, this runs after weekDays is available but the effect
+  // itself only needs read access to it, so declaration order here is fine.
+  React.useEffect(() => {
+    weekDays.forEach((day: any) => {
+      const url = getImageForDay(day);
+      if (url) {
+        const preloadImg = new window.Image();
+        preloadImg.src = url;
+      }
+    });
+  }, [weekDays]);
 
   const getImageForDay = (day: any): string => {
     const type = day.isRest ? "rest" : day.type;
