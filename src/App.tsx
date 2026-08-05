@@ -12344,43 +12344,69 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
   const hasBaseline = logs.length > 0;
 
   const completedDays: number[] = profile?.completedProgramDays || [];
+  const workoutDoneToday = profile?.lastSessionDate === new Date().toDateString();
+  const rawProgramDay = profile?.programDay || 1;
+  const currentDay = workoutDoneToday ? Math.max(rawProgramDay - 1, 1) : rawProgramDay;
+
   const restDayNumbers: number[] = (() => {
     const progKey = profile?.programKey;
     if (!progKey) return [];
     const isMonth6 = progKey.startsWith("month6-");
-    if (!isMonth6 && profile?.restProgramDays?.length > 0) return profile.restProgramDays;
-    if (isMonth6) {
-      const freq = profile?.frequency || 6;
-      const restDaysByFrequency: Record<number, number[]> = {
-        6: [7], 5: [4, 7], 4: [3, 5, 7], 3: [2, 4, 6, 7], 2: [2, 4, 5, 6, 7],
-      };
-      const weekRestDays = restDaysByFrequency[freq] || [7];
-      const allRestDays: number[] = [];
-      for (let day = 1; day <= 30; day++) {
-        const cycleDay = ((day - 1) % 7) + 1;
-        if (weekRestDays.includes(cycleDay)) allRestDays.push(day);
-      }
-      return allRestDays;
-    }
-    // For regular programs use PROGRAMS data
     const baseProgramKey = isMonth6 ? progKey.replace("month6-", "") : progKey;
-    const program = PROGRAMS[baseProgramKey];
-    if (!program?.days) return [];
-    const programLength = program.days.length;
-    const restIndices = program.days
-      .filter((d: any) => d.isRest)
-      .map((d: any) => d.dayNum)
-      .filter(Boolean);
+
+    // Reusable check: is this specific program-day number naturally a rest
+    // day according to the program's own template, ignoring any swap.
+    // Extracted so the reconciliation pass below can reuse the exact same
+    // logic to evaluate a swapped-to day's natural rest status.
+    const isNaturallyRestDay = (day: number): boolean => {
+      if (!isMonth6 && profile?.restProgramDays?.length > 0) {
+        return profile.restProgramDays.includes(day);
+      }
+      if (isMonth6) {
+        const freq = profile?.frequency || 6;
+        const restDaysByFrequency: Record<number, number[]> = {
+          6: [7], 5: [4, 7], 4: [3, 5, 7], 3: [2, 4, 6, 7], 2: [2, 4, 5, 6, 7],
+        };
+        const weekRestDays = restDaysByFrequency[freq] || [7];
+        const cycleDay = ((day - 1) % 7) + 1;
+        return weekRestDays.includes(cycleDay);
+      }
+      const program = PROGRAMS[baseProgramKey];
+      if (!program?.days) return false;
+      const programLength = program.days.length;
+      const restIndices = program.days.filter((d: any) => d.isRest).map((d: any) => d.dayNum).filter(Boolean);
+      const cycleDay = ((day - 1) % programLength) + 1;
+      return restIndices.includes(cycleDay);
+    };
+
     const allRestDays: number[] = [];
     for (let day = 1; day <= 30; day++) {
-      const cycleDay = ((day - 1) % programLength) + 1;
-      if (restIndices.includes(cycleDay)) allRestDays.push(day);
+      if (isNaturallyRestDay(day)) allRestDays.push(day);
     }
+
+    // Reconciles the natural 30-day pattern against any active swap. Only
+    // days whose real calendar date actually has an entry in dayOverrides
+    // are affected, which by construction can only fall within the current
+    // week, since a swap is never created for a future week. Every other
+    // day in this 30-day view is untouched, correctly showing the
+    // program's natural pattern rather than something that was never
+    // actually swapped.
+    if (profile?.dayOverrides) {
+      const today = new Date();
+      Object.entries(profile.dayOverrides).forEach(([dateKey, resolvedDay]) => {
+        const overrideDate = new Date(dateKey);
+        const diffDays = Math.round((overrideDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const naturalDayForDate = currentDay + diffDays;
+        if (naturalDayForDate < 1 || naturalDayForDate > 30) return;
+        const resolvedIsRest = isNaturallyRestDay(resolvedDay as number);
+        const idx = allRestDays.indexOf(naturalDayForDate);
+        if (resolvedIsRest && idx === -1) allRestDays.push(naturalDayForDate);
+        if (!resolvedIsRest && idx !== -1) allRestDays.splice(idx, 1);
+      });
+    }
+
     return allRestDays;
   })();
-  const workoutDoneToday = profile?.lastSessionDate === new Date().toDateString();
-  const rawProgramDay = profile?.programDay || 1;
-  const currentDay = workoutDoneToday ? Math.max(rawProgramDay - 1, 1) : rawProgramDay;
   const totalSessions = profile?.cycleSessionsCompleted || 0;
   const frequency = profile?.frequency || 3;
   const weeklyTarget = frequency;
