@@ -10782,7 +10782,8 @@ const getSuggestedQuestions = (profile: any): string[] => {
   const isEvolvedProgramming = cycleNumber >= 4 || profile?.progressionPhase === "month6+" || profile?.progressionPhase === "Month6+";
 
   const isRestDay = (() => {
-    const day = getProgramDay(programKey, programDay, profile?.generatedDays);
+    const resolvedDay = resolveProgramDayForDate(programDay, new Date(), profile?.dayOverrides);
+    const day = getProgramDay(programKey, resolvedDay, profile?.generatedDays);
     return day?.isRest || day?.groups?.length === 0 || false;
   })();
 
@@ -10790,7 +10791,8 @@ const getSuggestedQuestions = (profile: any): string[] => {
   const displayProgramDay = workoutDoneToday ? Math.max(programDay - 1, 1) : programDay;
   const todayFocus = (() => {
     if (!hasProgram) return null;
-    const dayData = getProgramDay(programKey, displayProgramDay, profile?.generatedDays);
+    const resolvedDisplayDay = resolveProgramDayForDate(displayProgramDay, new Date(), profile?.dayOverrides);
+    const dayData = getProgramDay(programKey, resolvedDisplayDay, profile?.generatedDays);
     return dayData?.focus || dayData?.title || null;
   })();
 
