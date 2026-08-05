@@ -17455,7 +17455,13 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                 <span style={{ color: COLORS.white, fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase" }}>Building Manager</span>
               </div>
               <h1 style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: "0 0 2px", letterSpacing: -0.5, textShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>{b.name}</h1>
-              <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, margin: "0 0 4px", textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>{buildingName}</p>
+              {/* Only shown when the building has set a distinct branded
+                  program name - buildingName falls back to the building's
+                  own name when none is set, which previously just repeated
+                  the line above with nothing new to show. */}
+              {buildingName && buildingName !== b.name && (
+                <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, margin: "0 0 4px", textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>{buildingName}</p>
+              )}
               <p style={{ color: "rgba(255,255,255,0.45)", fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: 0 }}>{tabLabels[activeTab]}</p>
             </div>
 <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
