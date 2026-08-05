@@ -880,28 +880,22 @@ const reactivateCode = async (code: string): Promise<boolean> => {
 // client side rather than in the query itself, so a resident missing a
 // role field entirely (an older record) still shows up correctly instead
 // of silently vanishing.
-// Logs a real event to the building's "Resident Milestones" feed on the
-// Manager Portal - reuses the exact same, already-tested detection logic
-// that already drives the resident-facing notifications (first workout,
-// streak thresholds, cycle completion) rather than recomputing any of that
-// separately, which is exactly the class of bug (two independent
-// computations of the same thing silently drifting apart) that caused
-// several real problems earlier tonight. Reads the current list, prepends
-// the new entry, and keeps only the most recent 10 so this can never grow
-// unbounded over a building's lifetime. Buildings docs are open-write
-// (`allow write: if true` in firestore.rules), so this is safe to call
-// directly from the resident's own client session - same trust model
-// already used for invite code counts and other building-level stats.
-const logBuildingMilestone = async (buildingId: string, message: string): Promise<void> => {
+// Increments the building's "Resident Milestones" counts on the Manager
+// Portal - reuses the exact same, already-tested detection logic that
+// already drives the resident-facing notifications (first workout, streak
+// thresholds, cycle completion), rather than recomputing any of that
+// separately. Deliberately anonymous by design: counts per milestone type
+// only, never a named per-resident event feed - the report footer promises
+// "aggregate and anonymous" data, and a feed naming specific residents to
+// their own building manager would contradict that promise outright.
+// Atomic increment means no read-before-write and no risk of two
+// concurrent milestones from different residents clobbering each other.
+const incrementBuildingMilestone = async (buildingId: string, category: "firstWorkout" | "streakMilestone" | "cycleComplete"): Promise<void> => {
   if (!buildingId) return;
   try {
-    const buildingRef = doc(db, "buildings", buildingId);
-    const snap = await getDoc(buildingRef);
-    const existing = snap.exists() ? (snap.data().milestones || []) : [];
-    const updated = [{ message, date: new Date().toISOString() }, ...existing].slice(0, 10);
-    await setDoc(buildingRef, { milestones: updated }, { merge: true });
+    await setDoc(doc(db, "buildings", buildingId), { milestoneCounts: { [category]: increment(1) } }, { merge: true });
   } catch (e) {
-    console.error("logBuildingMilestone error:", e);
+    console.error("incrementBuildingMilestone error:", e);
   }
 };
 
@@ -16953,7 +16947,7 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
   // request.
   const [pendingName, setPendingName] = useState<string | null>(null);
   const [pendingActionLoading, setPendingActionLoading] = useState(false);
-  const [buildingMilestones, setBuildingMilestones] = useState<any[]>([]);
+  const [buildingMilestoneCounts, setBuildingMilestoneCounts] = useState<{ firstWorkout?: number; streakMilestone?: number; cycleComplete?: number } | null>(null);
   useEffect(() => {
     if (!building?.id) return;
     getDoc(doc(db, "buildings", building.id)).then(snap => {
@@ -16962,7 +16956,7 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
         // Same reasoning as pendingName above - fetched fresh here rather
         // than trusted from the parent buildings list prop, which may be a
         // point-in-time snapshot from when the portfolio view first loaded.
-        setBuildingMilestones(snap.data().milestones || []);
+        setBuildingMilestoneCounts(snap.data().milestoneCounts || null);
       }
     }).catch(e => console.error("Pending program name fetch error:", e));
   }, [building?.id]);
@@ -17080,13 +17074,12 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
         )}
 
         <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "24px 0 4px" }}>Resident Milestones</p>
-        {buildingMilestones.length > 0 ? (
-          buildingMilestones.map((m: any, i: number) => (
-            <div key={i} style={{ padding: "10px 0", borderBottom: i < buildingMilestones.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
-              <p style={{ color: COLORS.white, fontSize: 13, margin: 0, lineHeight: 1.5 }}>{m.message}</p>
-              {m.date && <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "2px 0 0" }}>{new Date(m.date).toLocaleDateString()}</p>}
-            </div>
-          ))
+        {buildingMilestoneCounts && ((buildingMilestoneCounts.firstWorkout || 0) + (buildingMilestoneCounts.streakMilestone || 0) + (buildingMilestoneCounts.cycleComplete || 0)) > 0 ? (
+          <>
+            <StatRow label="First Workouts" value={String(buildingMilestoneCounts.firstWorkout || 0)} />
+            <StatRow label="Streak Milestones Hit" value={String(buildingMilestoneCounts.streakMilestone || 0)} />
+            <StatRow label="Full Cycles Completed" value={String(buildingMilestoneCounts.cycleComplete || 0)} />
+          </>
         ) : (
           <p style={{ color: COLORS.textSecondary, fontSize: 13, padding: "12px 0" }}>No milestones recorded this month.</p>
         )}
@@ -17494,8 +17487,17 @@ const ManagerMetricCard = ({ label, value, sub = null, accent = COLORS.accent })
   </div>
 );
 
+// Percentage entries (d.pct) scale against a fixed 100 - a percentage
+// already has an absolute 0-100 scale of its own, so stretching the highest
+// bar in the group to fill the full width (as the old code did, dividing by
+// the group's own max instead of 100) made a 48% look visually identical to
+// 100%, which is actively misleading for data that's supposed to read at
+// face value. Count entries (d.count) have no natural ceiling of their own,
+// so scaling them relative to the group's max remains the correct, more
+// readable choice there - only percentages needed this fix.
 const ManagerBarChart = ({ data, color }) => {
-  const max = Math.max(...data.map(d => d.pct || d.count));
+  const isPercentageData = data.length > 0 && data[0].pct !== undefined;
+  const max = isPercentageData ? 100 : Math.max(...data.map(d => d.count));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {data.map((d, i) => (
@@ -17505,7 +17507,7 @@ const ManagerBarChart = ({ data, color }) => {
             <span style={{ color: COLORS.white, fontSize: 12, fontWeight: 700 }}>{d.pct !== undefined ? `${d.pct}%` : d.count}</span>
           </div>
           <div style={{ height: 6, background: COLORS.border, borderRadius: 99, overflow: "hidden" }}>
-            <div style={{ height: "100%", borderRadius: 99, background: color, width: `${((d.pct || d.count) / max) * 100}%`, transition: "width 0.5s ease" }} />
+            <div style={{ height: "100%", borderRadius: 99, background: color, width: `${((d.pct ?? d.count) / max) * 100}%`, transition: "width 0.5s ease" }} />
           </div>
         </div>
       ))}
@@ -18075,18 +18077,30 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               })()}
             </div>
 
-            {/* Milestones */}
+            {/* Milestones - counts by type, deliberately anonymous. The
+                report footer promises "aggregate and anonymous" data, and a
+                feed naming specific residents to their own building manager
+                would contradict that promise outright. */}
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Resident Milestones</p>
             <div style={{ background: COLORS.card, borderRadius: 18, padding: "4px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
-            {(b.milestones || []).map((m, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 0", borderBottom: i < (b.milestones || []).length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 99, background: COLORS.success, flexShrink: 0, marginTop: 5 }} />
-                  <div>
-                    <p style={{ color: COLORS.white, fontSize: 14, margin: "0 0 2px", lineHeight: 1.4 }}>{m.message}</p>
-                    {m.date && <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{new Date(m.date).toLocaleDateString()}</p>}
+              {(b.milestoneCounts && ((b.milestoneCounts.firstWorkout || 0) + (b.milestoneCounts.streakMilestone || 0) + (b.milestoneCounts.cycleComplete || 0)) > 0) ? (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: `1px solid ${COLORS.border}` }}>
+                    <span style={{ color: COLORS.white, fontSize: 14 }}>First Workouts</span>
+                    <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 700 }}>{b.milestoneCounts.firstWorkout || 0}</span>
                   </div>
-                </div>
-              ))}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: `1px solid ${COLORS.border}` }}>
+                    <span style={{ color: COLORS.white, fontSize: 14 }}>Streak Milestones Hit</span>
+                    <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 700 }}>{b.milestoneCounts.streakMilestone || 0}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0" }}>
+                    <span style={{ color: COLORS.white, fontSize: 14 }}>Full Cycles Completed</span>
+                    <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 700 }}>{b.milestoneCounts.cycleComplete || 0}</span>
+                  </div>
+                </>
+              ) : (
+                <p style={{ color: COLORS.textSecondary, fontSize: 13, padding: "14px 0", margin: 0 }}>No milestones recorded this month.</p>
+              )}
             </div>
 
             {/* Subscription */}
@@ -18809,12 +18823,19 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                 })()}
               </div>
 
-              {/* Milestones */}
+              {/* Milestones - counts by type, deliberately anonymous, same
+                  reasoning as the Overview tab's version above. */}
               <div style={{ background: COLORS.background, borderRadius: 14, padding: "16px", marginBottom: 20 }}>
                 <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 12px" }}>Resident Milestones</p>
-                {(b.milestones || []).map((m, i) => (
-                  <p key={i} style={{ color: COLORS.white, fontSize: 13, margin: "0 0 6px", lineHeight: 1.5 }}>• {m.message}{m.date ? ` (${new Date(m.date).toLocaleDateString()})` : ""}</p>
-                ))}
+                {(b.milestoneCounts && ((b.milestoneCounts.firstWorkout || 0) + (b.milestoneCounts.streakMilestone || 0) + (b.milestoneCounts.cycleComplete || 0)) > 0) ? (
+                  <>
+                    <p style={{ color: COLORS.white, fontSize: 13, margin: "0 0 6px", lineHeight: 1.5 }}>• {b.milestoneCounts.firstWorkout || 0} first workouts</p>
+                    <p style={{ color: COLORS.white, fontSize: 13, margin: "0 0 6px", lineHeight: 1.5 }}>• {b.milestoneCounts.streakMilestone || 0} streak milestones hit</p>
+                    <p style={{ color: COLORS.white, fontSize: 13, margin: 0, lineHeight: 1.5 }}>• {b.milestoneCounts.cycleComplete || 0} full cycles completed</p>
+                  </>
+                ) : (
+                  <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>No milestones recorded this month.</p>
+                )}
               </div>
 
               {/* Footer */}
@@ -19251,7 +19272,6 @@ const isInitialLoad = React.useRef(true);
       (() => {
         const notifBase = collection(db, "users", uid, "notifications");
         const streakMilestones = [3, 7, 14, 30, 60, 90];
-        const residentFirstName = userProfile?.name ? userProfile.name.split(" ")[0].trim() : "A resident";
         const buildingIdForMilestone = userProfile?.buildingId;
         if (streakMilestones.includes(newStreak)) {
           addDoc(notifBase, {
@@ -19260,7 +19280,7 @@ const isInitialLoad = React.useRef(true);
             read: false,
             createdAt: serverTimestamp(),
           });
-          logBuildingMilestone(buildingIdForMilestone, `${residentFirstName} hit a ${newStreak}-day streak`);
+          incrementBuildingMilestone(buildingIdForMilestone, "streakMilestone");
         }
         if (newCompleted === 1) {
           addDoc(notifBase, {
@@ -19269,7 +19289,7 @@ const isInitialLoad = React.useRef(true);
             read: false,
             createdAt: serverTimestamp(),
           });
-          logBuildingMilestone(buildingIdForMilestone, `${residentFirstName} completed their first workout`);
+          incrementBuildingMilestone(buildingIdForMilestone, "firstWorkout");
         } else if (newCompleted % 10 === 0) {
           addDoc(notifBase, {
             type: "workout",
@@ -19285,7 +19305,7 @@ const isInitialLoad = React.useRef(true);
             read: false,
             createdAt: serverTimestamp(),
           });
-          logBuildingMilestone(buildingIdForMilestone, `${residentFirstName} completed a full 30-day cycle`);
+          incrementBuildingMilestone(buildingIdForMilestone, "cycleComplete");
         }
       })();
 
