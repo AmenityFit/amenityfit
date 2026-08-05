@@ -9977,6 +9977,22 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
     onProfileUpdate?.({ dayOverrides: updatedOverrides });
   };
 
+  // Long-press picks a day up (matching the same timer-based long-press
+  // pattern already used in the Fitness Assistant chat), then a single tap
+  // on any other eligible day completes the swap - deliberately not
+  // continuous drag, since this list also needs to scroll, and reliably
+  // telling "wants to scroll" apart from "wants to drag this row" is a
+  // genuinely hard gesture problem. Tapping the picked-up day again cancels.
+  const [pickedUpDay, setPickedUpDay] = useState<any>(null);
+  const pickupTimerRef = React.useRef<any>(null);
+  const startPickupTimer = (day: any) => {
+    if (day.isCompleted || day.isPast) return;
+    pickupTimerRef.current = setTimeout(() => setPickedUpDay(day), 500);
+  };
+  const cancelPickupTimer = () => {
+    if (pickupTimerRef.current) { clearTimeout(pickupTimerRef.current); pickupTimerRef.current = null; }
+  };
+
   const [selectedDay, setSelectedDay] = useState<any>(initialSelectedDay ?? null);
   // Ensure today is always selected on mount if no day was passed in
   React.useEffect(() => {
@@ -10342,19 +10358,56 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
           );
         })()}
 
+        {/* One-time hint - shown once ever per resident, dismissible, never
+            reappears once dismissed or once they successfully do a swap */}
+        {!profile?.hasSeenReorderHint && (
+          <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}30`, borderRadius: 14, padding: "12px 16px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <p style={{ color: COLORS.white, fontSize: 12, margin: 0, lineHeight: 1.4, flex: 1 }}>New: press and hold any day below to move your workouts and rest days around.</p>
+            <button onClick={() => {
+              if (profile?.uid) setDoc(doc(db, "users", profile.uid), { hasSeenReorderHint: true }, { merge: true });
+              onProfileUpdate?.({ hasSeenReorderHint: true });
+            }} style={{ background: "none", border: "none", color: COLORS.accent, fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Got it</button>
+          </div>
+        )}
+
+        {/* Swap-in-progress banner */}
+        {pickedUpDay && (
+          <div style={{ background: `${COLORS.accent}20`, border: `1px solid ${COLORS.accent}50`, borderRadius: 14, padding: "12px 16px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <p style={{ color: COLORS.white, fontSize: 13, fontWeight: 600, margin: 0 }}>Tap another day to swap with {pickedUpDay.dayName}</p>
+            <button onClick={() => setPickedUpDay(null)} style={{ background: "none", border: "none", color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Cancel</button>
+          </div>
+        )}
+
         {/* Week summary */}
         <div style={{ background: COLORS.card, borderRadius: 18, padding: "16px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 80 }}>
           <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" as const, margin: "0 0 14px" }}>Week at a Glance</p>
           {weekDays.map((day, i) => {
+            const isEligible = !day.isCompleted && !day.isPast;
+            const isPickedUp = pickedUpDay && pickedUpDay.date.toDateString() === day.date.toDateString();
+            const isDimmedTarget = !!pickedUpDay && !isPickedUp && !isEligible;
             const isSelected = selectedDay?.programDay === day.programDay || (!selectedDay && day.isToday);
             return (
             <div key={i} data-selected-day={isSelected ? "true" : undefined} onClick={() => {
+              if (pickedUpDay) {
+                if (isPickedUp) { setPickedUpDay(null); return; }
+                if (isEligible) { swapDays(pickedUpDay, day); setPickedUpDay(null); }
+                return;
+              }
               setSelectedDay(day);
               // If it's a future workout day with exercises, open preview directly
               if (!day.isRest && !day.isToday && !day.isCompleted && day.groups?.length > 0 && onPreviewWorkout) {
                 onPreviewWorkout(day);
               }
-            }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 0", borderBottom: i < 6 ? `1px solid ${COLORS.border}` : "none", cursor: "pointer", background: isSelected ? `${COLORS.primary}12` : "transparent", margin: "0 -20px", padding: i < 6 ? "10px 20px" : "10px 20px 4px", borderRadius: isSelected ? 10 : 0 }}>
+            }}
+            onTouchStart={() => startPickupTimer(day)}
+            onTouchEnd={cancelPickupTimer}
+            onMouseDown={() => startPickupTimer(day)}
+            onMouseUp={cancelPickupTimer}
+            onMouseLeave={cancelPickupTimer}
+            style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 0", borderBottom: i < 6 ? `1px solid ${COLORS.border}` : "none", cursor: "pointer", background: isPickedUp ? `${COLORS.accent}20` : isSelected ? `${COLORS.primary}12` : "transparent", margin: "0 -20px", padding: i < 6 ? "10px 20px" : "10px 20px 4px", borderRadius: isSelected || isPickedUp ? 10 : 0, opacity: isDimmedTarget ? 0.35 : 1, border: isPickedUp ? `1.5px solid ${COLORS.accent}` : "1.5px solid transparent", transition: "opacity 0.15s ease, background 0.15s ease" }}>
+              {isEligible && (
+                <span style={{ color: isPickedUp ? COLORS.accent : COLORS.textSecondary, fontSize: 14, letterSpacing: 1, flexShrink: 0, opacity: 0.6 }}>≡</span>
+              )}
               <div style={{ width: 36, textAlign: "center" as const }}>
                 <p style={{ color: isSelected ? COLORS.accent : (day.isToday ? COLORS.accent : COLORS.textSecondary), fontSize: 11, fontWeight: 700, textTransform: "uppercase" as const, margin: 0 }}>{day.dayName}</p>
                 <p style={{ color: isSelected ? COLORS.white : (day.isToday ? COLORS.accent : COLORS.white), fontSize: 14, fontWeight: 700, margin: 0 }}>{day.dateNum}</p>
