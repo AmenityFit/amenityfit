@@ -11242,20 +11242,29 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
   const uid = profile?.uid;
   const todayStr = new Date().toDateString();
 
-  // Load today's conversation from Firestore on mount
+  // Load today's conversation from Firestore on mount. Same fast-then-
+  // verify pattern used for notifications and My Notes - forces an instant
+  // cache-only first read (the plain getDoc() default doesn't reliably
+  // guarantee this) so a real saved conversation swaps in almost instantly
+  // instead of leaving the fresh opening-message screen visible on screen
+  // for however long a slower network read takes.
   useEffect(() => {
     if (!uid) return;
     const load = async () => {
-      try {
-        const docRef = doc(db, "users", uid, "assistantChat", "today");
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data.date === todayStr && data.messages?.length > 0) {
-            setMessages(data.messages);
-            setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "auto" }), 50);
-          }
+      const docRef = doc(db, "users", uid, "assistantChat", "today");
+      const apply = (data: any) => {
+        if (data.date === todayStr && data.messages?.length > 0) {
+          setMessages(data.messages);
+          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "auto" }), 50);
         }
+      };
+      try {
+        const cacheSnap = await getDocFromCache(docRef);
+        if (cacheSnap.exists()) apply(cacheSnap.data());
+      } catch (e) {}
+      try {
+        const snap = await getDocFromServer(docRef);
+        if (snap.exists()) apply(snap.data());
       } catch (e) {
         // Silent fail — just use default opening message
       }
