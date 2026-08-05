@@ -905,6 +905,37 @@ const logBuildingMilestone = async (buildingId: string, message: string): Promis
   }
 };
 
+// True per-resident retention: what fraction of last month's ACTUAL active
+// residents (by permanent account ID, not invite code - codes get reassigned
+// or reused when a tenant moves, which would silently corrupt this) are
+// still active this month. This is a real set intersection between two
+// resident-ID arrays, not a comparison of two independent counts - the old
+// approach (min(current,last)/last) couldn't distinguish "the same 6 people
+// stayed" from "2 of the original 6 churned but 3 new residents joined,
+// netting to a similar or higher count" - both looked identical as bare
+// numbers even though they describe very different retention realities.
+// lastMonthActiveUserIds only exists on buildings that have been through a
+// monthly reset since this real tracking was added - falls back to the
+// older bare-count display for buildings that haven't yet, rather than
+// showing a broken or misleading number during that transition.
+const computeRetention = (
+  lastMonthActiveUserIds: string[] | undefined,
+  activeUserIdsThisMonth: string[] | undefined,
+  lastMonthActiveUsersCount: number | undefined
+): { hasRealData: boolean; lastCount: number; retainedCount?: number; pct?: number } | null => {
+  const lastIds = lastMonthActiveUserIds || [];
+  if (lastIds.length > 0) {
+    const currentIds = activeUserIdsThisMonth || [];
+    const retainedCount = lastIds.filter(id => currentIds.includes(id)).length;
+    const pct = Math.round((retainedCount / lastIds.length) * 100);
+    return { hasRealData: true, lastCount: lastIds.length, retainedCount, pct };
+  }
+  if (lastMonthActiveUsersCount) {
+    return { hasRealData: false, lastCount: lastMonthActiveUsersCount };
+  }
+  return null;
+};
+
 const fetchBuildingResidents = async (buildingId: string): Promise<any[]> => {
   try {
     const snap = await getDocs(query(collection(db, "users"), where("buildingId", "==", buildingId)));
@@ -17016,18 +17047,21 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
 
         <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "24px 0 4px" }}>Retention</p>
         {(() => {
-          const last = building.lastMonthActiveUsers;
           const current = building.activeUsersThisMonth;
-          if (last == null || last === 0) {
+          const retention = computeRetention(building.lastMonthActiveUserIds, building.activeUserIdsThisMonth, building.lastMonthActiveUsers);
+          if (!retention) {
             return <p style={{ color: COLORS.textSecondary, fontSize: 13, padding: "12px 0" }}>Retention data available after first full month.</p>;
           }
-          const retained = Math.min(current, last);
-          const pct = Math.round((retained / last) * 100);
+          if (!retention.hasRealData) {
+            return <p style={{ color: COLORS.textSecondary, fontSize: 13, padding: "12px 0" }}>Retention data available after this building's next monthly cycle.</p>;
+          }
+          const pct = retention.pct as number;
           const color = pct >= 70 ? "#22c55e" : pct >= 50 ? "#f59e0b" : "#ef4444";
           return (
             <>
-              <StatRow label="Active Last Month" value={String(last)} />
+              <StatRow label="Active Last Month" value={String(retention.lastCount)} />
               <StatRow label="Still Active This Month" value={String(current ?? "—")} />
+              <StatRow label="Retained From Last Month" value={String(retention.retainedCount)} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: `1px solid ${COLORS.border}` }}>
                 <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>Month-over-Month Retention</span>
                 <span style={{ color, fontSize: 14, fontWeight: 700 }}>{pct}%</span>
@@ -18008,22 +18042,29 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
             <div style={{ background: COLORS.card, borderRadius: 18, padding: "18px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
               <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 14px" }}>Retention</p>
               {(() => {
-                const last = b.lastMonthActiveUsers;
                 const current = b.activeUsersThisMonth;
-                if (last == null || last === 0) {
+                const retention = computeRetention(b.lastMonthActiveUserIds, b.activeUserIdsThisMonth, b.lastMonthActiveUsers);
+                if (!retention) {
                   return <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Available after first full month.</p>;
                 }
-                const pct = Math.min(100, Math.round((Math.min(current, last) / last) * 100));
+                if (!retention.hasRealData) {
+                  return <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Available after this building's next monthly cycle.</p>;
+                }
+                const pct = retention.pct as number;
                 const color = pct >= 70 ? "#22c55e" : pct >= 50 ? "#f59e0b" : "#ef4444";
                 return (
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                       <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Active Last Month</span>
-                      <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{last}</span>
+                      <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{retention.lastCount}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                       <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Still Active This Month</span>
                       <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{current ?? "—"}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                      <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Retained From Last Month</span>
+                      <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{retention.retainedCount}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Month-over-Month</span>
@@ -18735,22 +18776,29 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               <div style={{ background: COLORS.background, borderRadius: 14, padding: "16px", marginTop: 8, marginBottom: 16 }}>
                 <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 12px" }}>Resident Retention</p>
                 {(() => {
-                  const last = b.lastMonthActiveUsers;
                   const current = b.activeUsersThisMonth;
-                  if (last == null || last === 0) {
+                  const retention = computeRetention(b.lastMonthActiveUserIds, b.activeUserIdsThisMonth, b.lastMonthActiveUsers);
+                  if (!retention) {
                     return <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Available after first full month.</p>;
                   }
-                  const pct = Math.min(100, Math.round((Math.min(current, last) / last) * 100));
+                  if (!retention.hasRealData) {
+                    return <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Available after this building's next monthly cycle.</p>;
+                  }
+                  const pct = retention.pct as number;
                   const color = pct >= 70 ? "#22c55e" : pct >= 50 ? "#f59e0b" : "#ef4444";
                   return (
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                         <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Active Last Month</span>
-                        <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{last}</span>
+                        <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{retention.lastCount}</span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                         <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Still Active This Month</span>
                         <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{current ?? "—"}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Retained From Last Month</span>
+                        <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 700 }}>{retention.retainedCount}</span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
                         <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>Month-over-Month</span>
