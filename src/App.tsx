@@ -11656,6 +11656,18 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     setLoading(true);
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
+    // Counts toward the building's "Fitness Assistant Sessions" stat on the
+    // Manager Portal - was previously never wired to anything real anywhere
+    // in the app, always showing 0. Counted here specifically (not inside
+    // anthropicProxy) because that Cloud Function is shared with the
+    // separate AI program-generation call, which isn't a resident "question"
+    // and shouldn't count. Fire-and-forget and never blocks the actual
+    // message send if it fails - this is an engagement stat, not something
+    // that should ever be able to break the chat itself.
+    if (profile?.buildingId) {
+      setDoc(doc(db, "buildings", profile.buildingId), { fitnessAssistantQuestionsThisMonth: increment(1) }, { merge: true }).catch(() => {});
+    }
+
     try {
       const response = await fetch(ANTHROPIC_PROXY_URL, {
         method: "POST",
