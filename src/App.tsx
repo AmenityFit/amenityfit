@@ -19326,16 +19326,21 @@ const isInitialLoad = React.useRef(true);
       (async () => {
         const isMonth4 = userProfile.programKey?.startsWith("month6-");
         const baseProgramKey = isMonth4 ? userProfile.programKey.replace("month6-", "") : userProfile.programKey;
+        // Same resolved-day fix as handleWorkoutComplete - this is a
+        // genuinely separate save path (writes to the workoutSessions
+        // collection that Progress's history list reads from), so it needed
+        // its own independent fix, not just the one already applied there.
+        const resolvedSessionDay = resolveProgramDayForDate(userProfile.programDay || 1, new Date(), userProfile?.dayOverrides);
         const progDay = isMonth4
-          ? userProfile.generatedDays?.find((d: any) => d.dayNum === userProfile.programDay)
-          : PROGRAMS[baseProgramKey]?.days?.find((d: any) => d.dayNum === userProfile.programDay);
+          ? userProfile.generatedDays?.find((d: any) => d.dayNum === resolvedSessionDay)
+          : PROGRAMS[baseProgramKey]?.days?.find((d: any) => d.dayNum === resolvedSessionDay);
         const sessionId = `${uid}_${Date.now()}`;
         saveWorkoutSession(uid, {
           uid,
           programKey: userProfile.programKey,
           programLabel: isMonth4 ? `${getEvolvedProgramName(userProfile.programKey) || PROGRAMS[baseProgramKey]?.label || baseProgramKey} (Evolved)` : (getProgramMotivationalName(baseProgramKey) || PROGRAMS[baseProgramKey]?.label || userProfile.programKey),
-          programDay: userProfile.programDay,
-          dayTitle: expandDayTitle(progDay?.title || `Day ${userProfile.programDay}`),
+          programDay: resolvedSessionDay,
+          dayTitle: expandDayTitle(progDay?.title || `Day ${resolvedSessionDay}`),
           dayFocus: (() => {
             const actualGroups = snapshot.groups || [];
             const muscles: string[] = [];
