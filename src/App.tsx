@@ -17062,6 +17062,7 @@ const MANAGER_CDN = "https://res.cloudinary.com/dk5g9itw8/image/upload";
 const MANAGER_TAB_IMAGES: Record<string, string> = {
   overview:  `${MANAGER_CDN}/Amenities_1_e18neh`,
   codes:     `${MANAGER_CDN}/Amenities_2_zxpi1t`,
+  residents: `${MANAGER_CDN}/Squoosh_3_ybyzrz`,
   equipment: `${CDN}/Equipment_fpcbsn`,
   branding:  `${MANAGER_CDN}/Amenities_3_d9ro9r`,
   report:    `${MANAGER_CDN}/Amenties_4_chczyb`,
@@ -17069,6 +17070,7 @@ const MANAGER_TAB_IMAGES: Record<string, string> = {
 const MANAGER_TAB_IMAGE_POSITIONS: Record<string, string> = {
   overview:  "center center",
   codes:     "center 20%",
+  residents: "center center",
   equipment: "center center",
   branding:  "center center",
   report:    "center 25%",
