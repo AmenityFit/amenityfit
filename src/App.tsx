@@ -11678,7 +11678,15 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
         body: JSON.stringify({
           uid: profile?.uid || null,
           model: "claude-sonnet-4-6",
-          max_tokens: 1000,
+          // Lowered from 1000 - the system prompt already instructs "default
+          // to short, 2-3 sentences" and treats longer answers as something
+          // earned by the conversation, not given by default. 1000 tokens let
+          // that safety-net case run 3-4x longer than the prompt's own design
+          // intent, which directly inflates output cost (billed at $15/MTok,
+          // 5x the input rate) on every message that used it. 500 still
+          // leaves real room for a genuinely deeper answer (form cues, injury
+          // explanations) without paying for runaway length nobody asked for.
+          max_tokens: 500,
           // Marked cacheable since this same, fairly large system prompt
           // gets resent on every single message in a conversation
           // (each API call is stateless) but doesn't actually change
@@ -11706,9 +11714,22 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
       });
 
       if (response.status === 429) {
+        // Two different limits now share this status code (daily cap vs. a
+        // new per-minute burst throttle), each with a genuinely different
+        // meaning for the person waiting - "come back tomorrow" would be
+        // actively wrong and needlessly discouraging for a burst throttle
+        // that clears in under a minute. Reads the real message from the
+        // response body instead of assuming which one fired.
+        let limitMessage = "You've reached your daily limit for the Fitness Assistant. Your limit resets tomorrow — come back then and we'll pick up where we left off. 💪";
+        try {
+          const errorData = await response.json();
+          if (errorData?.error?.toLowerCase().includes("too quickly")) {
+            limitMessage = "Give it a few seconds between messages and try again. 💪";
+          }
+        } catch (e) { /* fall back to the daily-limit message above */ }
         setMessages(prev => [...prev, {
           role: "assistant",
-          content: "You've reached your daily limit for the Fitness Assistant. Your limit resets tomorrow — come back then and we'll pick up where we left off. 💪",
+          content: limitMessage,
           createdAt: Date.now(),
         }]);
         setLoading(false);
