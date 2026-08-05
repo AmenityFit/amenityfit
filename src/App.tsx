@@ -10528,11 +10528,21 @@ const savedCompletedCellsRef = React.useRef<string[]>(savedProgress?.completedCe
   // Use the snapshot's saved programDay (the day that was actually completed).
   const workoutWasDoneToday = profile?.lastSessionDate === new Date().toDateString();
   const snapshotDay = profile?.lastWorkoutSnapshot?.programDay;
+  // Only the third branch (starting a not-yet-completed workout right now)
+  // resolves through the swap-aware resolver. The first two branches are
+  // reviewing a workout that's already completed - that historical record
+  // is frozen and must never be affected by a later swap, matching the
+  // rule that a completed day can never be part of a swap in the first
+  // place. This is exactly why "Start Today's Workout" was still loading
+  // the pre-swap content: this computation never went through the shared
+  // resolver Dashboard's card text, Weekly View, and the assistant already
+  // use, even though it's the one place that actually matters most - what
+  // content someone is about to do right now.
   const actualCompletedDay = isReview && workoutWasDoneToday && snapshotDay
     ? snapshotDay
     : isReview && workoutWasDoneToday
     ? Math.max((profile?.programDay || 1) - 1, 1)
-    : (profile?.programDay || 1);
+    : resolveProgramDayForDate(profile?.programDay || 1, new Date(), profile?.dayOverrides);
     const day = getProgramDay(profile?.programKey || selectProgram(profile), actualCompletedDay, profile?.generatedDays);
   // In review mode: use the frozen snapshot of what was actually completed.
   const snapshotGroups = profile?.lastWorkoutSnapshot?.groups;
