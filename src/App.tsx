@@ -767,20 +767,6 @@ const formatUnitLabel = (unitValue: string): string => {
 const validateInviteCode = async (code: string): Promise<any | null> => {
   if (!code || !code.startsWith("AF-") || code.length !== 9) return null;
 
-  // ── DEV TEST CODE ──────────────────────────────────────────────────────────
-  // AF-TEST01 always works for testing — remove before production launch
-  if (code.trim().toUpperCase() === "AF-TEST01") {
-    return {
-      id: "AF-TEST01",
-      buildingId: "test-building",
-      buildingName: "AmenityFit Test Building",
-      unitNumber: "101",
-      status: "active",
-      buildingEquipment: ["dumbbells", "barbell", "bench", "squat-rack", "cables", "cable-machine", "smith-machine", "kettlebells", "pull-up-bar", "leg-press", "leg-curl", "leg-extension", "chest-press-machine", "chest-fly-machine", "seated-row-machine", "treadmill", "bike", "elliptical", "stairmaster", "rowing-machine", "jump-rope", "resistance-bands", "trx", "swiss-ball", "medicine-balls", "bosu-ball"],
-    };
-  }
-  // ──────────────────────────────────────────────────────────────────────────
-
   try {
     const codeRef = doc(db, "inviteCodes", code.trim().toUpperCase());
     const codeSnap = await getDoc(codeRef);
