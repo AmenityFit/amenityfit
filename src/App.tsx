@@ -11270,14 +11270,16 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
   const isRestDay = (() => {
     if (!programKey || !PROGRAMS[programKey]) return false;
     const days = PROGRAMS[programKey].days || [];
-    const idx = (programDay - 1) % days.length;
+    const resolvedDay = resolveProgramDayForDate(programDay, new Date(), profile?.dayOverrides);
+    const idx = (resolvedDay - 1) % days.length;
     return days[idx]?.isRest || false;
   })();
   // If workout done today, programDay already incremented — step back to get the day actually completed
   const displayProgramDay = workoutDoneToday ? Math.max(programDay - 1, 1) : programDay;
   const todayFocus = (() => {
     if (!programKey || !PROGRAMS[programKey]) return null;
-    const dayData = getProgramDay(programKey, displayProgramDay, profile?.generatedDays);
+    const resolvedDisplayDay = resolveProgramDayForDate(displayProgramDay, new Date(), profile?.dayOverrides);
+    const dayData = getProgramDay(programKey, resolvedDisplayDay, profile?.generatedDays);
     return dayData?.focus || dayData?.title || null;
   })();
 
