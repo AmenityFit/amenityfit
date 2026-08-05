@@ -10957,7 +10957,17 @@ onSaveState={(round: number, exerciseIndex: number, cells?: string[]) => {
       userName={profile?.name ? (profile.name.split(" ")[0].charAt(0).toUpperCase() + profile.name.split(" ")[0].slice(1).toLowerCase()) : ""}
       sessionCount={profile?.sessionsCompleted || 0}
       uid={profile?.uid || ""}
-      onDone={() => onComplete({ groups: workoutGroups, sessionLength, weightsLogged: workoutFlowWeightsRef.current })}
+      // completedProgramDay is passed up alongside the groups so the save
+      // path never has to independently recompute "what day was this" from
+      // userProfile.programDay at some later point in time. That second,
+      // separate computation is exactly what caused the label saved onto
+      // lastWorkoutSnapshot to disagree with the actual groups saved right
+      // next to it - programDay could drift between when this screen chose
+      // its content and when completion got processed. actualCompletedDay
+      // is the single value this screen already uses for both the visible
+      // day badge and the content lookup, so passing it through guarantees
+      // the saved label can never disagree with the saved content again.
+      onDone={() => onComplete({ groups: workoutGroups, sessionLength, weightsLogged: workoutFlowWeightsRef.current, completedProgramDay: actualCompletedDay })}
     />
   );
 };
@@ -18942,7 +18952,7 @@ const isInitialLoad = React.useRef(true);
     }
   }, [userProfile?.programDay]);
 
-  const handleWorkoutComplete = (snapshot?: { groups: any[]; sessionLength: number }, resolvedUid?: string) => {
+  const handleWorkoutComplete = (snapshot?: { groups: any[]; sessionLength: number; completedProgramDay?: number }, resolvedUid?: string) => {
     const completedGroups = snapshot?.groups || [];
     const completedSessionLength = snapshot?.sessionLength || userProfile.sessionLength || 45;
     let cycleFinished = false;
@@ -18959,15 +18969,19 @@ const isInitialLoad = React.useRef(true);
     const newStreak = isYesterday || !userProfile.lastSessionDate ? (userProfile.streak || 0) + 1 : 1;
     const newCompleted = (userProfile.sessionsCompleted || 0) + 1;
     const currentProgramDay = userProfile.programDay || 1;
-    // Resolved separately from currentProgramDay above - this is
-    // specifically the content-identity that was actually performed, which
-    // can differ from the natural sequence if today was swapped. Used only
-    // for tagging what got completed (completedProgramDays entry and the
-    // snapshot below). The sequence itself (cycleFinished check and
-    // newProgramDay advancement) deliberately keeps using the raw,
-    // unswapped currentProgramDay - a swap only ever changes what shows on
-    // a given date, never the underlying day-count sequence.
-    const resolvedCompletedDay = resolveProgramDayForDate(currentProgramDay, new Date(), userProfile?.dayOverrides);
+    // Prefer the day WorkoutFlow actually used to select and display this
+    // session's content (passed through on the snapshot as
+    // completedProgramDay) over recomputing it independently here. Recomputing
+    // separately is exactly what caused the saved label to disagree with the
+    // saved groups before: userProfile.programDay can differ at completion
+    // time from what it was when the session's content was chosen, so two
+    // independent calls to resolveProgramDayForDate() at two different moments
+    // could silently diverge. Falling back to the old computation only when no
+    // snapshot day is present (e.g. the rest-day completion path, which has no
+    // WorkoutFlow session to inherit a day from) keeps this safe for every caller.
+    const resolvedCompletedDay = typeof snapshot?.completedProgramDay === "number"
+      ? snapshot.completedProgramDay
+      : resolveProgramDayForDate(currentProgramDay, new Date(), userProfile?.dayOverrides);
 
     // Check if this completes the 30-day cycle
     if (currentProgramDay >= 30) {
@@ -19474,11 +19488,20 @@ const isInitialLoad = React.useRef(true);
       (async () => {
         const isMonth4 = userProfile.programKey?.startsWith("month6-");
         const baseProgramKey = isMonth4 ? userProfile.programKey.replace("month6-", "") : userProfile.programKey;
-        // Same resolved-day fix as handleWorkoutComplete - this is a
-        // genuinely separate save path (writes to the workoutSessions
-        // collection that Progress's history list reads from), so it needed
-        // its own independent fix, not just the one already applied there.
-        const resolvedSessionDay = resolveProgramDayForDate(userProfile.programDay || 1, new Date(), userProfile?.dayOverrides);
+        // Uses the exact day WorkoutFlow itself used to choose this
+        // session's content (passed through as snapshot.completedProgramDay)
+        // rather than a third independent resolveProgramDayForDate() call
+        // against userProfile.programDay at this later point in time. Two
+        // earlier "independent fixes" here and in handleWorkoutComplete each
+        // recomputed the same thing separately and could still silently
+        // disagree with each other and with what was actually displayed -
+        // this makes all three save paths share the single value the
+        // workout screen already computed once, so they can never drift
+        // apart again. Falls back to the old computation only in the
+        // unexpected case no day was passed through.
+        const resolvedSessionDay = typeof snapshot.completedProgramDay === "number"
+          ? snapshot.completedProgramDay
+          : resolveProgramDayForDate(userProfile.programDay || 1, new Date(), userProfile?.dayOverrides);
         const progDay = isMonth4
           ? userProfile.generatedDays?.find((d: any) => d.dayNum === resolvedSessionDay)
           : PROGRAMS[baseProgramKey]?.days?.find((d: any) => d.dayNum === resolvedSessionDay);
