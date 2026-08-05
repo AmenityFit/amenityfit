@@ -8390,13 +8390,43 @@ const RestTimer = ({ restLabel, onDone, showWater = false }) => {
     if (label.includes("2 min") || label.includes("120")) return 110; // lean to 2 mins
     return 60;
   };
-  const [seconds, setSeconds] = useState(getSeconds(restLabel));
+  const totalSeconds = getSeconds(restLabel);
+  // Timestamp-based countdown instead of tick-counting: mobile browsers and
+  // WebViews throttle or fully suspend setInterval/setTimeout when the app is
+  // backgrounded or the screen locks, so a naive "subtract 1 every 1000ms"
+  // timer silently stalls and resumes with a wrong, stale value. Anchoring to
+  // a real start timestamp and always recomputing from actual elapsed wall-
+  // clock time means the displayed value is correct the instant we're able to
+  // render again, regardless of how many (if any) ticks actually fired while
+  // backgrounded - no drift, no manual resync logic needed.
+  const startTimeRef = React.useRef(Date.now());
+  const [seconds, setSeconds] = useState(totalSeconds);
 
   useEffect(() => {
-    if (seconds <= 0) { onDone(); return; }
-    const t = setTimeout(() => setSeconds(s => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [seconds]);
+    startTimeRef.current = Date.now();
+    setSeconds(totalSeconds);
+  }, [restLabel]);
+
+  useEffect(() => {
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      const remaining = Math.max(totalSeconds - elapsed, 0);
+      setSeconds(remaining);
+      if (remaining <= 0) onDone();
+    };
+    // Recompute immediately whenever the tab/app regains visibility, rather
+    // than waiting for the next interval tick - covers the common case of a
+    // rest period fully elapsing while backgrounded, so the timer shows 0 and
+    // advances the moment the person comes back instead of quietly resuming
+    // a stale countdown for another second or more.
+    const handleVisibility = () => { if (document.visibilityState === "visible") tick(); };
+    document.addEventListener("visibilitychange", handleVisibility);
+    const interval = setInterval(tick, 1000);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [totalSeconds]);
 
   const pct = seconds / getSeconds(restLabel);
 
