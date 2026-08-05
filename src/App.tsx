@@ -18207,7 +18207,9 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                   <div>
                     <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 6px" }}>Monthly Amenity Report</p>
                     <h2 style={{ color: COLORS.white, fontSize: 20, fontWeight: 900, margin: "0 0 4px", letterSpacing: -0.3 }}>{b.name}</h2>
-                    <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>{buildingName}</p>
+                    {buildingName && buildingName !== b.name && (
+                      <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>{buildingName}</p>
+                    )}
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 2px" }}>{month}</p>
