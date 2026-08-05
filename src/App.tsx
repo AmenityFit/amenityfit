@@ -6994,6 +6994,58 @@ const PROGRAMS: Record<string, { key: string; label: string; days: any[] }> = {
 
 };
 
+// ─── Exercise Difficulty Range (spans multiple program tiers) ──────────────
+// Each exercise in EXERCISES_DATA carries a single static "difficulty" tag,
+// but the same exercise ID often actually appears across multiple program
+// tiers (e.g. a "beginner"-tagged row variation also showing up in an
+// intermediate-6x program day). Showing only the static tag understates
+// this. Rather than hand-maintaining a second lookup table (which would
+// silently drift out of sync the moment a program is edited - the exact
+// failure mode already hit twice tonight with stale data disagreeing with
+// its source of truth), this computes the real span once, at module load,
+// by scanning PROGRAMS itself: the tier is inferred from each program key's
+// own prefix (beginner-/intermediate-/advanced-), and every exercise id used
+// anywhere in that program's days is recorded against that tier. After this
+// one-time scan, lookups are O(1) and can never go stale relative to
+// PROGRAMS, because they are derived from it directly rather than copied.
+const DIFFICULTY_TIER_ORDER = ["beginner", "intermediate", "advanced"];
+const exerciseDifficultyTiers: Record<string, Set<string>> = (() => {
+  const map: Record<string, Set<string>> = {};
+  for (const programKey of Object.keys(PROGRAMS)) {
+    const tier = DIFFICULTY_TIER_ORDER.find(t => programKey.startsWith(t));
+    if (!tier) continue;
+    const days = PROGRAMS[programKey]?.days || [];
+    for (const day of days) {
+      for (const group of day.groups || []) {
+        for (const ex of group.exercises || []) {
+          if (!ex?.id) continue;
+          if (!map[ex.id]) map[ex.id] = new Set();
+          map[ex.id].add(tier);
+        }
+      }
+    }
+  }
+  return map;
+})();
+
+// Returns a display label like "Beginner" or "Beginner-Advanced" (span of
+// the lowest to highest tier this exercise actually appears in across real
+// programs). Falls back to the exercise's own static difficulty tag if it
+// was never found in any program's exercise list (e.g. a newly-added
+// exercise not yet wired into a program day).
+const getExerciseDifficultyLabel = (exerciseId: string, fallbackDifficulty?: string): string => {
+  const tiers = exerciseDifficultyTiers[exerciseId];
+  const capitalize = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+  if (!tiers || tiers.size === 0) {
+    return fallbackDifficulty ? capitalize(fallbackDifficulty) : "";
+  }
+  const present = DIFFICULTY_TIER_ORDER.filter(t => tiers.has(t));
+  if (present.length <= 1) return capitalize(present[0] || fallbackDifficulty || "");
+  const lo = present[0];
+  const hi = present[present.length - 1];
+  return `${capitalize(lo)}-${capitalize(hi)}`;
+};
+
 // Filter exercises based on session length
 // Exercise priority scoring for intelligent filtering
 // Higher score = more important to keep
@@ -9322,7 +9374,7 @@ if (showRest) {
           {currentEx?.difficulty && (
             <div style={{ flex: 1, background: COLORS.card, borderRadius: 14, padding: "14px 16px", border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
               <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, margin: "0 0 4px" }}>Level</p>
-              <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: 0, textTransform: "capitalize" }}>{currentEx.difficulty}</p>
+              <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: 0 }}>{getExerciseDifficultyLabel(currentEx.id, currentEx.difficulty)}</p>
             </div>
           )}
         </div>
