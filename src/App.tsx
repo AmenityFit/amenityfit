@@ -11047,24 +11047,34 @@ const buildSystemPrompt = (profile: any) => {
     programName = motivationalName || (progName && levelTag ? `${progName} · ${levelTag}` : (progName || safeLabel || programKey));
     const days = prog.days || [];
     if (days.length > 0) {
-      // If workout done today, programDay already incremented — step back to get actual today
+      // Reuses the exact same getWeekSchedule function Weekly View itself
+      // calls for its own display, instead of maintaining a second,
+      // independently-computed version of "what's today/tomorrow/this
+      // week" that can drift out of sync with what the user actually
+      // sees - which is precisely what happened here (a rest-day swap
+      // wasn't correctly reflected by the old duplicate index math).
+      // Guarantees the assistant can never describe a different schedule
+      // than what's genuinely shown on screen.
       const workoutDoneTodayCoach = profile?.lastSessionDate === new Date().toDateString();
-      const naturalTodayDayNumber = workoutDoneTodayCoach ? programDay - 1 : programDay;
-      const naturalTomorrowDayNumber = naturalTodayDayNumber + 1;
-      const tomorrowDate = new Date();
-      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-      // Resolved against each day's own actual calendar date - today's swap
-      // and tomorrow's swap are two independent lookups, not the same one
-      // reused, so a swap that only affects tomorrow doesn't bleed into
-      // today's resolution or vice versa.
-      const resolvedTodayDayNumber = resolveProgramDayForDate(naturalTodayDayNumber, new Date(), profile?.dayOverrides);
-      const resolvedTomorrowDayNumber = resolveProgramDayForDate(naturalTomorrowDayNumber, tomorrowDate, profile?.dayOverrides);
-      // Double-modulo preserves the same negative-number safety the
-      // original index math already had, just carried forward in the new
-      // resolved-day form rather than removed.
-      const todayIdx = ((resolvedTodayDayNumber - 1) % days.length + days.length) % days.length;
-      const tomorrowIdx = ((resolvedTomorrowDayNumber - 1) % days.length + days.length) % days.length;
-      const todayDay = days[todayIdx];
+      const coachCurrentProgramDay = workoutDoneTodayCoach ? Math.max(programDay - 1, 1) : programDay;
+      const weekDaysForCoach = getWeekSchedule(
+        coachCurrentProgramDay,
+        profile?.frequency || 4,
+        profile?.completedProgramDays || [],
+        profile?.lastSessionDate || "",
+        programKey,
+        new Date(),
+        profile?.generatedDays,
+        profile?.injuries,
+        profile?.equipmentPreference,
+        profile?.buildingEquipment,
+        parseInt(String(profile?.age)) || 30,
+        profile?.sessionLength || 60,
+        profile?.effectiveLevel || profile?.experience || "intermediate",
+        profile?.dayOverrides
+      );
+      const todayDay = weekDaysForCoach[0];
+      const tomorrowDay = weekDaysForCoach[1];
       if (todayDay) {
         isRestDay = !!todayDay.isRest;
         todayFocus = todayDay.focus || todayDay.title || "";
@@ -11086,12 +11096,10 @@ const buildSystemPrompt = (profile: any) => {
       const cardioGroups = (todayDay?.groups || []).filter((g: any) => g.type === "cardio");
       totalCardioMins = cardioGroups.reduce((sum: number, g: any) => sum + (g.cardioMinutes || 0), 0);
 
-      const tomorrowDay = days[tomorrowIdx];
       if (tomorrowDay) {
         tomorrowFocus = tomorrowDay.isRest ? "Rest day" : (tomorrowDay.focus || tomorrowDay.title || "");
       }
-      weekStructure = days
-        .slice(0, 7)
+      weekStructure = weekDaysForCoach
         .map((d: any, i: number) => `Day ${i + 1}: ${d.isRest ? "Rest" : (d.focus || d.title || "Workout")}`)
         .join(", ");
     }
