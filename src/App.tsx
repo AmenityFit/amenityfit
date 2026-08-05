@@ -4464,9 +4464,14 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
   // After completion programDay increments — we keep the hero and card showing
   // the day that was just completed until a genuinely new calendar day starts.
   const programDay = workoutDoneToday ? Math.max(rawProgramDay - 1, 1) : rawProgramDay;
+  // Resolves through the same shared function Weekly View uses, so a
+  // day/rest-day swap shows up here identically and instantly - this and
+  // Weekly View are reading the exact same underlying data, not two
+  // separate copies that could ever disagree with each other.
+  const resolvedProgramDay = resolveProgramDayForDate(programDay, new Date(), profile?.dayOverrides);
   // Determine workout type from Day 1 of the matched program
   // When workout engine is built this will pull from actual scheduled day
-  const currentDay = getProgramDay(profile.programKey || selectProgram(profile), programDay, profile?.generatedDays);
+  const currentDay = getProgramDay(profile.programKey || selectProgram(profile), resolvedProgramDay, profile?.generatedDays);
   const isCardioDay = currentDay.type === "cardio" || currentDay.groups?.every((g: any) => g.type === "cardio");
   const isRestDay = currentDay.isRest || currentDay.groups?.length === 0;
   const dayFocuses = currentDay.groups
