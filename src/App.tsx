@@ -9951,7 +9951,32 @@ const getWeekSchedule = (
 
 // ─── Weekly Program View Screen ───────────────────────────────────────────────
 
-const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay = () => {}, onReviewWorkout, workoutDoneToday, isInProgress = false, onPreviewWorkout = null as any, initialSelectedDay = null as any }) => {
+const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay = () => {}, onReviewWorkout, workoutDoneToday, isInProgress = false, onPreviewWorkout = null as any, initialSelectedDay = null as any, onProfileUpdate = (updates: any) => {} }) => {
+  // Swaps two days' worth of content for the current week - guarded twice
+  // over: the UI never gives a completed or past day a drag handle in the
+  // first place, and this function independently re-checks both days
+  // aren't completed or past before writing anything, so a stale click
+  // (e.g. a day that got completed in another tab moments earlier) can
+  // never slip through. Writes both a real Firestore save and an
+  // immediate local profile update, the same paired pattern already used
+  // for exercise swaps and workout progress, so a fresh mount elsewhere in
+  // the app (Dashboard, the assistant) picks up the change instantly
+  // rather than waiting on an async re-fetch.
+  const swapDays = async (day1: any, day2: any) => {
+    if (day1.isCompleted || day2.isCompleted || day1.isPast || day2.isPast) return;
+    const dateKey1 = day1.date.toDateString();
+    const dateKey2 = day2.date.toDateString();
+    const updatedOverrides = {
+      ...(profile?.dayOverrides || {}),
+      [dateKey1]: day2.programDay,
+      [dateKey2]: day1.programDay,
+    };
+    if (profile?.uid) {
+      await setDoc(doc(db, "users", profile.uid), { dayOverrides: updatedOverrides }, { merge: true });
+    }
+    onProfileUpdate?.({ dayOverrides: updatedOverrides });
+  };
+
   const [selectedDay, setSelectedDay] = useState<any>(initialSelectedDay ?? null);
   // Ensure today is always selected on mount if no day was passed in
   React.useEffect(() => {
@@ -10046,7 +10071,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
 
   const todayLocal = React.useMemo(() => new Date(), []);
   const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment, parseInt(String(profile?.age)) || 30, profile?.sessionLength || 60, profile?.effectiveLevel || profile?.experience || "intermediate", profile?.dayOverrides);
-  if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
 
   const todayDay = weekDays.find((d: any) => d.isToday) ?? null;
   const didAutoSelect = React.useRef(false);
@@ -19184,7 +19209,7 @@ const isInitialLoad = React.useRef(true);
     }
     setScreen("dashboard");
   }} />;
-  if (screen === "weekly") return <WeeklyProgramView key={screen + new Date().toDateString()} profile={liveProfile} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  if (screen === "weekly") return <WeeklyProgramView key={screen + new Date().toDateString()} profile={liveProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
   if (screen === "preview" && previewDay) {
     const previewType = previewDay.type || "full-body";
     const previewImage = getWorkoutImage(previewType, previewDay.programDay || 1);
