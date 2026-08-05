@@ -17925,6 +17925,22 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                   <ManagerMetricCard label="Deactivated" value={String(buildingResidents.filter(r => r.deactivated).length)} accent={COLORS.textSecondary} />
                 </div>
 
+                {/* This reads via a one-time fetch, not a live listener, so
+                    a resident who signs up while this tab is open won't
+                    appear until refreshed - matching the same limitation
+                    the Codes tab already has a Refresh control for. */}
+                <button
+                  onClick={async () => {
+                    setResidentsLoading(true);
+                    const residents = await fetchBuildingResidents(buildingId || "demo-building");
+                    setBuildingResidents(residents);
+                    setResidentsLoading(false);
+                  }}
+                  style={{ width: "100%", padding: "10px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: 16 }}
+                >
+                  {residentsLoading ? "..." : "↻ Refresh"}
+                </button>
+
                 <input
                   type="text"
                   value={residentSearch}
