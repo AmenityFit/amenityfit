@@ -880,6 +880,31 @@ const reactivateCode = async (code: string): Promise<boolean> => {
 // client side rather than in the query itself, so a resident missing a
 // role field entirely (an older record) still shows up correctly instead
 // of silently vanishing.
+// Logs a real event to the building's "Resident Milestones" feed on the
+// Manager Portal - reuses the exact same, already-tested detection logic
+// that already drives the resident-facing notifications (first workout,
+// streak thresholds, cycle completion) rather than recomputing any of that
+// separately, which is exactly the class of bug (two independent
+// computations of the same thing silently drifting apart) that caused
+// several real problems earlier tonight. Reads the current list, prepends
+// the new entry, and keeps only the most recent 10 so this can never grow
+// unbounded over a building's lifetime. Buildings docs are open-write
+// (`allow write: if true` in firestore.rules), so this is safe to call
+// directly from the resident's own client session - same trust model
+// already used for invite code counts and other building-level stats.
+const logBuildingMilestone = async (buildingId: string, message: string): Promise<void> => {
+  if (!buildingId) return;
+  try {
+    const buildingRef = doc(db, "buildings", buildingId);
+    const snap = await getDoc(buildingRef);
+    const existing = snap.exists() ? (snap.data().milestones || []) : [];
+    const updated = [{ message, date: new Date().toISOString() }, ...existing].slice(0, 10);
+    await setDoc(buildingRef, { milestones: updated }, { merge: true });
+  } catch (e) {
+    console.error("logBuildingMilestone error:", e);
+  }
+};
+
 const fetchBuildingResidents = async (buildingId: string): Promise<any[]> => {
   try {
     const snap = await getDocs(query(collection(db, "users"), where("buildingId", "==", buildingId)));
@@ -16897,11 +16922,36 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
   // request.
   const [pendingName, setPendingName] = useState<string | null>(null);
   const [pendingActionLoading, setPendingActionLoading] = useState(false);
+  const [buildingMilestones, setBuildingMilestones] = useState<any[]>([]);
   useEffect(() => {
     if (!building?.id) return;
     getDoc(doc(db, "buildings", building.id)).then(snap => {
-      if (snap.exists()) setPendingName(snap.data().pendingProgramName || null);
+      if (snap.exists()) {
+        setPendingName(snap.data().pendingProgramName || null);
+        // Same reasoning as pendingName above - fetched fresh here rather
+        // than trusted from the parent buildings list prop, which may be a
+        // point-in-time snapshot from when the portfolio view first loaded.
+        setBuildingMilestones(snap.data().milestones || []);
+      }
     }).catch(e => console.error("Pending program name fetch error:", e));
+  }, [building?.id]);
+
+  // Residents by level - queried fresh for the same reason, and computed
+  // client-side from the raw list rather than trusting any cached count, so
+  // it can never disagree with the real current resident roster.
+  const [residentsByLevel, setResidentsByLevel] = useState<{ beginner: number; intermediate: number; advanced: number } | null>(null);
+  useEffect(() => {
+    if (!building?.id) return;
+    getDocs(query(collection(db, "users"), where("buildingId", "==", building.id))).then(snap => {
+      const counts = { beginner: 0, intermediate: 0, advanced: 0 };
+      snap.docs.forEach(d => {
+        const r = d.data();
+        if (r.role === "manager" || r.deactivated) return;
+        const level = (r.effectiveLevel || r.experience || "").toLowerCase();
+        if (level === "beginner" || level === "intermediate" || level === "advanced") counts[level as "beginner" | "intermediate" | "advanced"]++;
+      });
+      setResidentsByLevel(counts);
+    }).catch(e => console.error("Residents-by-level fetch error:", e));
   }, [building?.id]);
 
   const StatRow = ({ label, value }: { label: string; value: string }) => (
@@ -16985,6 +17035,27 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
             </>
           );
         })()}
+
+        {residentsByLevel && (residentsByLevel.beginner + residentsByLevel.intermediate + residentsByLevel.advanced) > 0 && (
+          <>
+            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "24px 0 4px" }}>Residents by Fitness Level</p>
+            <StatRow label="Beginner" value={String(residentsByLevel.beginner)} />
+            <StatRow label="Intermediate" value={String(residentsByLevel.intermediate)} />
+            <StatRow label="Advanced" value={String(residentsByLevel.advanced)} />
+          </>
+        )}
+
+        <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "24px 0 4px" }}>Resident Milestones</p>
+        {buildingMilestones.length > 0 ? (
+          buildingMilestones.map((m: any, i: number) => (
+            <div key={i} style={{ padding: "10px 0", borderBottom: i < buildingMilestones.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
+              <p style={{ color: COLORS.white, fontSize: 13, margin: 0, lineHeight: 1.5 }}>{m.message}</p>
+              {m.date && <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "2px 0 0" }}>{new Date(m.date).toLocaleDateString()}</p>}
+            </div>
+          ))
+        ) : (
+          <p style={{ color: COLORS.textSecondary, fontSize: 13, padding: "12px 0" }}>No milestones recorded this month.</p>
+        )}
 
         <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "24px 0 4px" }}>Building Info</p>
         <StatRow label="Units" value={String(building.units ?? "—")} />
@@ -18288,6 +18359,29 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                   <ManagerMetricCard label="Deactivated" value={String(buildingResidents.filter(r => r.deactivated).length)} accent={COLORS.textSecondary} />
                 </div>
 
+                {/* Grouped from the same buildingResidents list already
+                    fetched above - no separate query, so this can never
+                    disagree with the Total/Active/Deactivated counts right
+                    above it. Only rendered once there's at least one active
+                    resident with a real level on file, so a brand-new
+                    building with no data yet doesn't show an empty/zeroed
+                    breakdown that looks broken. */}
+                {buildingResidents.filter(r => !r.deactivated && r.effectiveLevel).length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 10px" }}>Residents by Fitness Level</p>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      {["beginner", "intermediate", "advanced"].map(level => (
+                        <ManagerMetricCard
+                          key={level}
+                          label={level.charAt(0).toUpperCase() + level.slice(1)}
+                          value={String(buildingResidents.filter(r => !r.deactivated && (r.effectiveLevel || "").toLowerCase() === level).length)}
+                          accent={level === "beginner" ? COLORS.success : level === "intermediate" ? COLORS.accent : "#A78BFA"}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* This reads via a one-time fetch, not a live listener, so
                     a resident who signs up while this tab is open won't
                     appear until refreshed - matching the same limitation
@@ -19098,6 +19192,8 @@ const isInitialLoad = React.useRef(true);
       (() => {
         const notifBase = collection(db, "users", uid, "notifications");
         const streakMilestones = [3, 7, 14, 30, 60, 90];
+        const residentFirstName = userProfile?.name ? userProfile.name.split(" ")[0].trim() : "A resident";
+        const buildingIdForMilestone = userProfile?.buildingId;
         if (streakMilestones.includes(newStreak)) {
           addDoc(notifBase, {
             type: "streak",
@@ -19105,6 +19201,7 @@ const isInitialLoad = React.useRef(true);
             read: false,
             createdAt: serverTimestamp(),
           });
+          logBuildingMilestone(buildingIdForMilestone, `${residentFirstName} hit a ${newStreak}-day streak`);
         }
         if (newCompleted === 1) {
           addDoc(notifBase, {
@@ -19113,6 +19210,7 @@ const isInitialLoad = React.useRef(true);
             read: false,
             createdAt: serverTimestamp(),
           });
+          logBuildingMilestone(buildingIdForMilestone, `${residentFirstName} completed their first workout`);
         } else if (newCompleted % 10 === 0) {
           addDoc(notifBase, {
             type: "workout",
@@ -19128,6 +19226,7 @@ const isInitialLoad = React.useRef(true);
             read: false,
             createdAt: serverTimestamp(),
           });
+          logBuildingMilestone(buildingIdForMilestone, `${residentFirstName} completed a full 30-day cycle`);
         }
       })();
 
