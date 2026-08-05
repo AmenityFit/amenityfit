@@ -8156,7 +8156,7 @@ const VideoModal = ({ exercise, exData, vimeoId, onClose, sets, reps }) => (
           {exData?.difficulty && (
             <div style={{ flex: 1, background: COLORS.background, borderRadius: 14, padding: "12px 16px", border: `1px solid ${COLORS.border}` }}>
               <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, margin: "0 0 4px" }}>Level</p>
-              <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: 0, textTransform: "capitalize" }}>{exData.difficulty}</p>
+              <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: 0 }}>{getExerciseDifficultyLabel(exercise, exData.difficulty)}</p>
             </div>
           )}
         </div>
@@ -9494,7 +9494,7 @@ if (showRest) {
             )}
             <div className="ae-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 24px", scrollbarWidth: "none" as any }}>
               <h2 style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: "0 0 4px" }}>{ex?.name}</h2>
-              <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 20px" }}>{ex?.muscle} · {ex?.equipment} · {ex?.difficulty}</p>
+              <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 20px" }}>{ex?.muscle} · {ex?.equipment} · {getExerciseDifficultyLabel(previewSwapCandidate, ex?.difficulty)}</p>
               {ex?.coachingCue && (
                 <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}30`, borderRadius: 16, padding: "16px 18px" }}>
                   <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 12px" }}>Coach's Note</p>
@@ -9624,7 +9624,7 @@ if (showRest) {
                       </div>
                       <div style={{ flex: 1 }}>
                         <p style={{ color: COLORS.white, fontWeight: 600, fontSize: 14, margin: "0 0 2px" }}>{ex?.name}</p>
-                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{ex?.muscle} · {ex?.equipment} · {ex?.difficulty}</p>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{ex?.muscle} · {ex?.equipment} · {getExerciseDifficultyLabel(c.id, ex?.difficulty)}</p>
                       </div>
                       <span style={{ color: COLORS.accent, fontSize: 18, fontWeight: 700 }}>›</span>
                     </div>
