@@ -19556,7 +19556,7 @@ const isInitialLoad = React.useRef(true);
     handleWorkoutComplete(snapshot, uid);
   }} onBack={() => setScreen(workoutDoneToday ? "weekly" : "dashboard")} onGoHomeSave={(updatedProfile: any) => { setUserProfile(updatedProfile); setScreen("dashboard"); }} isReview={workoutDoneToday} />;
   if (screen === "history") return <HistoryScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("progress")} onNavigate={navigate} />;
-  if (screen === "progress") return <ProgressScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("dashboard")} onNavigate={navigate} onUpdate={(updated) => setUserProfile(updated)} />;  if (screen === "assistant") return <FitnessAssistantScreen profile={liveProfile} onBack={() => setScreen("dashboard")} onNavigate={navigate} />;
+  if (screen === "progress") return <ProgressScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("dashboard")} onNavigate={navigate} onUpdate={(updated) => setUserProfile(updated)} />;  if (screen === "assistant") return <FitnessAssistantScreen key={"assistant" + JSON.stringify(userProfile?.dayOverrides || {})} profile={liveProfile} onBack={() => setScreen("dashboard")} onNavigate={navigate} />;
   if (screen === "myNotes") return <MyNotesScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("profile")} />;
   if (screen === "nutrition") return <NutritionScreen onBack={() => setScreen("dashboard")} onNavigate={navigate} />;
   if (screen === "profile") return <ProfileScreen profile={liveProfile} onUpdate={(updated) => {
