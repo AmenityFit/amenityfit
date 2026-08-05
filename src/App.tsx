@@ -25,6 +25,7 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocFromCache,
   getDocFromServer,
   updateDoc,
   serverTimestamp,
@@ -13018,10 +13019,22 @@ const MyNotesScreen = ({ profile, onBack }) => {
 
   useEffect(() => {
     if (!uid) return;
+    // Same fast-then-verify pattern used for notifications - forces an
+    // instant cache-only first read (which the plain getDoc() default
+    // doesn't reliably guarantee) so notes appear immediately regardless
+    // of connection quality, with a real server read quietly confirming
+    // and correcting in the background afterward.
     const load = async () => {
+      const ref = doc(db, "users", uid, "coachingNotes", "notes");
       try {
-        const ref = doc(db, "users", uid, "coachingNotes", "notes");
-        const snap = await getDoc(ref);
+        const cacheSnap = await getDocFromCache(ref);
+        if (cacheSnap.exists()) {
+          setNotes(cacheSnap.data().notes || []);
+          setLoading(false);
+        }
+      } catch (e) {}
+      try {
+        const snap = await getDocFromServer(ref);
         if (snap.exists()) setNotes(snap.data().notes || []);
       } catch (e) {}
       setLoading(false);
