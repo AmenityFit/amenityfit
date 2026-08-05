@@ -10961,12 +10961,21 @@ const buildSystemPrompt = (profile: any) => {
     if (days.length > 0) {
       // If workout done today, programDay already incremented — step back to get actual today
       const workoutDoneTodayCoach = profile?.lastSessionDate === new Date().toDateString();
-      const todayIdx = workoutDoneTodayCoach
-        ? (programDay - 2 + days.length) % days.length
-        : (programDay - 1) % days.length;
-      const tomorrowIdx = workoutDoneTodayCoach
-        ? (programDay - 1) % days.length
-        : programDay % days.length;
+      const naturalTodayDayNumber = workoutDoneTodayCoach ? programDay - 1 : programDay;
+      const naturalTomorrowDayNumber = naturalTodayDayNumber + 1;
+      const tomorrowDate = new Date();
+      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      // Resolved against each day's own actual calendar date - today's swap
+      // and tomorrow's swap are two independent lookups, not the same one
+      // reused, so a swap that only affects tomorrow doesn't bleed into
+      // today's resolution or vice versa.
+      const resolvedTodayDayNumber = resolveProgramDayForDate(naturalTodayDayNumber, new Date(), profile?.dayOverrides);
+      const resolvedTomorrowDayNumber = resolveProgramDayForDate(naturalTomorrowDayNumber, tomorrowDate, profile?.dayOverrides);
+      // Double-modulo preserves the same negative-number safety the
+      // original index math already had, just carried forward in the new
+      // resolved-day form rather than removed.
+      const todayIdx = ((resolvedTodayDayNumber - 1) % days.length + days.length) % days.length;
+      const tomorrowIdx = ((resolvedTomorrowDayNumber - 1) % days.length + days.length) % days.length;
       const todayDay = days[todayIdx];
       if (todayDay) {
         isRestDay = !!todayDay.isRest;
