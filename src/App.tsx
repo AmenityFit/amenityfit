@@ -9984,6 +9984,23 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
     onProfileUpdate?.({ dayOverrides: updatedOverrides });
   };
 
+  // Clears every active swap at once, reverting the week back to the
+  // program's original, unmoved arrangement. Since every screen (Progress,
+  // Program Calendar, both Weekly View lists, the assistant) already reads
+  // live from this same dayOverrides field through the shared resolver,
+  // clearing it here is enough on its own to update everywhere at once -
+  // no separate wiring needed per screen. Also clears today's saved chat,
+  // the same way an individual swap does, so the assistant reflects the
+  // reset immediately rather than continuing to reference the arrangement
+  // that just got undone.
+  const resetWeek = async () => {
+    if (!profile?.uid) return;
+    if (!window.confirm("Reset this week back to your original schedule? Any days you've moved will go back to where they started.")) return;
+    await setDoc(doc(db, "users", profile.uid), { dayOverrides: {} }, { merge: true });
+    deleteDoc(doc(db, "users", profile.uid, "assistantChat", "today")).catch(() => {});
+    onProfileUpdate?.({ dayOverrides: {} });
+  };
+
   // Long-press picks a day up (matching the same timer-based long-press
   // pattern already used in the Fitness Assistant chat), then a single tap
   // on any other eligible day completes the swap - deliberately not
@@ -10393,7 +10410,12 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
 
         {/* Week summary */}
         <div style={{ background: COLORS.card, borderRadius: 18, padding: "16px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 80 }}>
-          <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" as const, margin: "0 0 14px" }}>Week at a Glance</p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" as const, margin: 0 }}>Week at a Glance</p>
+            {profile?.dayOverrides && Object.keys(profile.dayOverrides).length > 0 && (
+              <button onClick={resetWeek} style={{ background: "none", border: "none", color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Reset Week</button>
+            )}
+          </div>
           {weekDays.map((day, i) => {
             const isEligible = !day.isCompleted && !day.isPast;
             const isPickedUp = pickedUpDay && pickedUpDay.date.toDateString() === day.date.toDateString();
