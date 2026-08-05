@@ -17035,7 +17035,7 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
         <StatRow label="Active Residents" value={String(building.activeUsersThisMonth ?? building.active ?? "—")} />
         <StatRow label="Workouts This Month" value={String(building.totalWorkoutsThisMonth ?? building.workouts ?? "—")} />
         <StatRow label="Adoption Rate" value={`${adoption}% (${building.inviteCodesRedeemed ?? 0}/${building.inviteCodesGenerated ?? 0} residents)`} />
-        <StatRow label="Avg Sessions / Week" value={String(building.avgSessionsPerUserPerWeek ?? "—")} />
+        <StatRow label="Avg Sessions / Resident / Week" value={String(building.avgSessionsPerUserPerWeek ?? "—")} />
         <StatRow label="Fitness Assistant Sessions" value={String(building.fitnessAssistantQuestionsThisMonth ?? building.assistantSessions ?? "—")} />
         <StatRow label="Last Activity" value={building.weeksSinceLastActivity === 0 ? "This week" : building.weeksSinceLastActivity === 1 ? "Last week" : `${building.weeksSinceLastActivity ?? "—"} weeks ago`} />
 
@@ -18025,7 +18025,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Engagement — {month}</p>
             <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
               <ManagerMetricCard label="Workouts Done" value={String(b.totalWorkoutsThisMonth)} accent="#FF6B35" />
-              <ManagerMetricCard label="Avg/User/Week" value={String(b.avgSessionsPerUserPerWeek)} accent={COLORS.accent} />
+              <ManagerMetricCard label="Avg Sessions/User/Week" value={String(b.avgSessionsPerUserPerWeek)} accent={COLORS.accent} />
               <ManagerMetricCard label="Fitness Assistant Sessions" value={String(b.fitnessAssistantQuestionsThisMonth)} accent="#A78BFA" />
             </div>
 
@@ -18034,8 +18034,16 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               <ManagerBarChart data={b.popularTimes || []} color={`linear-gradient(90deg, ${COLORS.primary}, ${COLORS.accent})`} />
             </div>
 
-            {/* Program progress */}
-            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Program Progress</p>
+            {/* Program progress - renamed from "Program Progress" which read
+                like a headcount of residents currently on program-week-N (a
+                totally different, wrong idea). This is actually workout
+                VOLUME broken down by which calendar week of the month it
+                happened in - the subtitle spells that out explicitly so a
+                PM glancing at "22" next to "Week 2" doesn't read it as 22
+                people, especially since the whole building only has a
+                handful of residents. */}
+            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 4px" }}>Workouts By Week</p>
+            <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 12px", opacity: 0.7 }}>Total workouts logged during each week of this month</p>
             <div style={{ background: COLORS.card, borderRadius: 18, padding: "18px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
               <ManagerBarChart data={b.programWeekBreakdown || []} color={COLORS.success} />
             </div>
