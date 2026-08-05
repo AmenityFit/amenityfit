@@ -13458,7 +13458,7 @@ const PhotoLightbox = ({ url, onClose }: { url: string | null; onClose: () => vo
   );
 };
 
-const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, onManagerAccess = () => {} }) => {
+const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, onManagerAccess = (email?: string, password?: string) => {} }) => {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState<any>(null);
   const [showExperienceConfirm, setShowExperienceConfirm] = useState(false);
@@ -13517,9 +13517,15 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
     setManagerAccessVerifying(false);
     if (granted) {
       setShowManagerAccess(false);
+      // Passed through in memory only (never persisted to Firestore or
+      // localStorage) so the peek session can re-verify itself server-side
+      // when fetching residents, since this peek never actually switches
+      // the resident's own Firebase Auth session to the manager's - see
+      // getBuildingResidentsForManager for why that server-side re-check
+      // is necessary rather than optional.
+      onManagerAccess(managerAccessEmail.trim(), managerAccessPassword);
       setManagerAccessEmail("");
       setManagerAccessPassword("");
-      onManagerAccess();
     } else {
       setManagerAccessError("Incorrect credentials, or this account isn't the manager on file for this building.");
     }
@@ -17553,7 +17559,33 @@ const ForcePasswordChangeScreen = ({ userProfile, onComplete, onSignOut }) => {
   );
 };
 
-const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingId = null, userProfile = null }) => {
+const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingId = null, userProfile = null, peekCredentials = null as { email: string; password: string } | null }) => {
+  // When accessed via the resident-side "Building Portal" peek (peekCredentials
+  // present), a direct client Firestore query for residents is correctly denied
+  // by firestore.rules, since this peek never actually re-authenticates as the
+  // manager - see getBuildingResidentsForManager for the full explanation. Route
+  // through that endpoint instead in peek mode; the real Manager Login flow has
+  // no peekCredentials and keeps using the original direct query, which already
+  // works correctly there since request.auth really is the manager in that case.
+  const fetchResidentsForThisSession = async (bId: string): Promise<any[]> => {
+    if (!peekCredentials) return fetchBuildingResidents(bId);
+    try {
+      const res = await fetch(
+        "https://us-central1-amenityfit-31276.cloudfunctions.net/getBuildingResidentsForManager",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: peekCredentials.email, password: peekCredentials.password, residentBuildingId: bId }),
+        }
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.residents || [];
+    } catch (e) {
+      console.error("fetchResidentsForThisSession error:", e);
+      return [];
+    }
+  };
   const [activeTab, setActiveTab] = useState<"overview" | "codes" | "residents" | "branding" | "equipment" | "report">("overview");
   const [buildingData, setBuildingData] = useState<any>(null);
   const [buildingLoading, setBuildingLoading] = useState(true);
@@ -18204,7 +18236,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               <button
                 onClick={async () => {
                   setResidentsLoading(true);
-                  const residents = await fetchBuildingResidents(buildingId || "demo-building");
+                  const residents = await fetchResidentsForThisSession(buildingId || "demo-building");
                   setBuildingResidents(residents);
                   setResidentsLoaded(true);
                   setResidentsLoading(false);
@@ -18230,7 +18262,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                 <button
                   onClick={async () => {
                     setResidentsLoading(true);
-                    const residents = await fetchBuildingResidents(buildingId || "demo-building");
+                    const residents = await fetchResidentsForThisSession(buildingId || "demo-building");
                     setBuildingResidents(residents);
                     setResidentsLoading(false);
                   }}
@@ -18741,6 +18773,11 @@ export default function App() {
   }, [currentUid, userProfile?.role, userProfile?.buildingId]);
 
   const [managerLoggedIn, setManagerLoggedIn] = useState(false);
+  // In-memory only (never persisted to Firestore or localStorage), and only
+  // ever set on the resident-side peek path - the real Manager Login screen
+  // actually swaps the Firebase Auth session itself, so it has no need for
+  // this and correctly leaves it null. Cleared on sign-out below.
+  const [managerPeekCreds, setManagerPeekCreds] = useState<{ email: string; password: string } | null>(null);
   const [superAdminLoggedIn, setSuperAdminLoggedIn] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
@@ -18753,6 +18790,7 @@ export default function App() {
   const resetToWelcome = async () => {
     try { await signOut(auth); } catch (e) { /* ignore */ }
     setManagerLoggedIn(false);
+    setManagerPeekCreds(null);
     setSuperAdminLoggedIn(false);
     setPendingNavigation(null);
     setUserProfile({});
@@ -19287,9 +19325,10 @@ const isInitialLoad = React.useRef(true);
   />;
   if (managerLoggedIn) return <BuildingManagerDashboard
     onSignOut={resetToWelcome}
-    onBackToWorkout={userProfile?.programKey ? () => { setManagerLoggedIn(false); setScreen("dashboard"); } : null}
+    onBackToWorkout={userProfile?.programKey ? () => { setManagerLoggedIn(false); setManagerPeekCreds(null); setScreen("dashboard"); } : null}
     userProfile={userProfile}
     buildingId={userProfile?.buildingId || null}
+    peekCredentials={managerPeekCreds}
   />;
   if (screen === "manager-login") return <ManagerLoginScreen onLogin={(profile) => { setUserProfile(profile); setManagerLoggedIn(true); }} onBack={() => setScreen("welcome")} />;
 
@@ -19553,7 +19592,7 @@ const isInitialLoad = React.useRef(true);
       setDoc(doc(db, "users", uid), stripUndefinedDeep(dataToSave), { merge: true })
         .catch(e => console.error("Failed to save profile update:", e));
     }
-  }} onSignOut={resetToWelcome} onNavigate={navigate} onManagerAccess={() => setManagerLoggedIn(true)} />;
+  }} onSignOut={resetToWelcome} onNavigate={navigate} onManagerAccess={(email?: string, password?: string) => { setManagerLoggedIn(true); setManagerPeekCreds(email && password ? { email, password } : null); }} />;
   if (screen === "privacy") return <PrivacyPolicyScreen onBack={() => setScreen("profile")} />;
   if (screen === "terms") return <TermsOfServiceScreen onBack={() => setScreen("profile")} />;
 
