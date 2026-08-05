@@ -9973,6 +9973,13 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
     };
     if (profile?.uid) {
       await setDoc(doc(db, "users", profile.uid), { dayOverrides: updatedOverrides }, { merge: true });
+      // Clears today's saved Fitness Assistant conversation, the same way
+      // it would naturally reset at midnight - without this, if someone
+      // already asked about "tomorrow" earlier in the day, the assistant
+      // would keep agreeing with its own now-stale earlier answer for the
+      // rest of the day (chat history persists until the natural daily
+      // reset), rather than reflecting the swap that just happened.
+      deleteDoc(doc(db, "users", profile.uid, "assistantChat", "today")).catch(() => {});
     }
     onProfileUpdate?.({ dayOverrides: updatedOverrides });
   };
@@ -10043,9 +10050,15 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
           }
           return logs;
         };
+        // Forces the first read from local cache explicitly - the plain
+        // getDocs() default used here previously doesn't reliably guarantee
+        // a cache-only read, and could quietly fall through to a real
+        // network round trip, which is exactly what caused a visible
+        // flicker (briefly empty, then repopulated) every time this screen
+        // remounted after navigating away and back.
         try {
-          const fastSnap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)));
-          setDayWeightLog(parseDayLogs(fastSnap));
+          const cacheSnap = await getDocsFromCache(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)));
+          setDayWeightLog(parseDayLogs(cacheSnap));
         } catch {}
         getDocsFromServer(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)))
           .then(serverSnap => setDayWeightLog(parseDayLogs(serverSnap)))
