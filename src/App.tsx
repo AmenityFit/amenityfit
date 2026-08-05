@@ -17925,17 +17925,28 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
 
       {/* Tab bar - horizontally scrollable so every label shows in full,
           matching the pattern already working correctly in Command Center,
-          instead of splitting evenly and truncating with an ellipsis. */}
-      <div style={{ display: "flex", padding: "0 8px", borderBottom: `1px solid ${COLORS.border}`, flexShrink: 0, overflowX: "auto", WebkitOverflowScrolling: "touch" as any, scrollbarWidth: "none" as any }}>
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id as any)} style={{
-            padding: "12px 16px", background: "none", border: "none", cursor: "pointer",
-            color: activeTab === t.id ? COLORS.white : COLORS.textSecondary,
-            fontSize: 12, fontWeight: activeTab === t.id ? 700 : 500,
-            borderBottom: `2px solid ${activeTab === t.id ? COLORS.accent : "transparent"}`,
-            transition: "all 0.15s ease", whiteSpace: "nowrap" as const,
-          }}>{t.label}</button>
-        ))}
+          instead of splitting evenly and truncating with an ellipsis. A real
+          user testing this couldn't tell there was a "Report" tab past
+          Branding - the native scrollbar is deliberately hidden, so a fully
+          scrolled-left row looks indistinguishable from a row with nothing
+          more to scroll to. The fade on the right edge below is a standard,
+          low-risk fix for exactly this: a soft gradient hint that visually
+          says "more content here" without needing to track scroll position
+          in JS or add a separate arrow icon that could itself go stale if
+          tabs are added or removed later. */}
+      <div style={{ position: "relative", flexShrink: 0 }}>
+        <div style={{ display: "flex", padding: "0 8px", borderBottom: `1px solid ${COLORS.border}`, overflowX: "auto", WebkitOverflowScrolling: "touch" as any, scrollbarWidth: "none" as any }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id as any)} style={{
+              padding: "12px 16px", background: "none", border: "none", cursor: "pointer",
+              color: activeTab === t.id ? COLORS.white : COLORS.textSecondary,
+              fontSize: 12, fontWeight: activeTab === t.id ? 700 : 500,
+              borderBottom: `2px solid ${activeTab === t.id ? COLORS.accent : "transparent"}`,
+              transition: "all 0.15s ease", whiteSpace: "nowrap" as const,
+            }}>{t.label}</button>
+          ))}
+        </div>
+        <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: 32, background: `linear-gradient(90deg, transparent, ${COLORS.background})`, pointerEvents: "none" }} />
       </div>
 
       <div style={{ flex: 1, minHeight: 0, padding: "20px 24px 80px", overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch" as any }}>
@@ -18030,8 +18041,8 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                 <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 0", borderBottom: i < (b.milestones || []).length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
                   <div style={{ width: 8, height: 8, borderRadius: 99, background: COLORS.success, flexShrink: 0, marginTop: 5 }} />
                   <div>
-                    <p style={{ color: COLORS.white, fontSize: 14, margin: "0 0 2px", lineHeight: 1.4 }}>{m.text}</p>
-                    <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{m.date}</p>
+                    <p style={{ color: COLORS.white, fontSize: 14, margin: "0 0 2px", lineHeight: 1.4 }}>{m.message}</p>
+                    {m.date && <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{new Date(m.date).toLocaleDateString()}</p>}
                   </div>
                 </div>
               ))}
@@ -18754,7 +18765,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               <div style={{ background: COLORS.background, borderRadius: 14, padding: "16px", marginBottom: 20 }}>
                 <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 12px" }}>Resident Milestones</p>
                 {(b.milestones || []).map((m, i) => (
-                  <p key={i} style={{ color: COLORS.white, fontSize: 13, margin: "0 0 6px", lineHeight: 1.5 }}>• {m.text}</p>
+                  <p key={i} style={{ color: COLORS.white, fontSize: 13, margin: "0 0 6px", lineHeight: 1.5 }}>• {m.message}{m.date ? ` (${new Date(m.date).toLocaleDateString()})` : ""}</p>
                 ))}
               </div>
 
