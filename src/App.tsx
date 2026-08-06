@@ -4628,7 +4628,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
       <div style={{ flex: 1, minHeight: 0, padding: "16px 24px 24px", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
 
         {/* Today's Workout */}
-        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return deriveMuscleFocusLabel(_d) || currentDay?.focus; })()} groups={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); return dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); })()} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
+        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return deriveWorkoutSubtitle(_d) || currentDay?.focus; })()} groups={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); return dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); })()} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
 
         {/* View Full Week link */}
         <button onClick={onViewWeekly} style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20, marginTop: -8 }}>
@@ -8272,24 +8272,7 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
           </span>
         </div>
         <h1 style={{ color: COLORS.white, fontSize: 30, fontWeight: 900, margin: "0 0 4px", letterSpacing: -0.8 }}>{deriveWorkoutTitle(groups, workoutType)}</h1>
-        <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 20px" }}>{(() => {
-          // Note: there is deliberately no early-return for workoutType === "cardio"
-          // here. That used to short-circuit straight to the generic word "Cardio"
-          // for ANY day tagged with the broad "cardio" category, even mixed days
-          // that also include calves/abs/etc - bypassing the accurate muscle-list
-          // computation below and causing this subtitle to read "Cardio" while the
-          // title above (which does use the real exercise list) correctly showed
-          // something like "Legs & Abs & Cardio". The logic below already handles
-          // pure-cardio days correctly on its own (falls through to "Cardio" alone
-          // when no other muscles are present).
-          if (workoutType === "rest") return "Active Recovery & Mobility";
-          const muscles = [...new Set(groups.filter((g: any) => g.type !== "cardio").flatMap((g: any) =>
-            (g.exercises || []).map((ex: any) => { const d = EXERCISES_DATA[ex.id]; return d?.muscle || null; }).filter(Boolean)
-          ))].filter(m => m !== "Full Body" && m !== "Cardio").slice(0, 5);
-          const hasCardio = groups.some((g: any) => g.type === "cardio");
-          const parts = muscles.length > 0 ? muscles.join(", ") : "";
-          return hasCardio ? (parts ? parts + " & Cardio" : "Cardio") : parts;
-        })()}</p>
+        <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 20px" }}>{workoutType === "rest" ? "Active Recovery & Mobility" : deriveWorkoutSubtitle(groups)}</p>
         <div style={{ display: "flex", gap: 16 }}>
           {!isPureCardio && (
           <div style={{ background: COLORS.card, borderRadius: 12, padding: "10px 16px", border: `1px solid ${COLORS.border}` }}>
@@ -9879,24 +9862,23 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
 // extracts that same logic into a reusable function instead of leaving
 // Dashboard and any other consumer to keep reading the raw, driftable field
 // independently, which is exactly how they ended up disagreeing.
-const deriveMuscleFocusLabel = (groups: any[]): string => {
-  const allMuscles: string[] = [];
-  (groups || []).forEach((g: any) => {
-    if (g.type === "cardio") { if (!allMuscles.includes("Cardio")) allMuscles.push("Cardio"); return; }
-    (g.exercises || []).forEach((ex: any) => {
-      const m = (EXERCISES_DATA as any)[ex.id]?.muscle;
-      if (m && !allMuscles.includes(m)) allMuscles.push(m);
-    });
-  });
-  const muscleToLabel: Record<string, string> = {
-    "Chest": "Chest", "Back": "Back", "Shoulders": "Shoulders",
-    "Triceps": "Triceps", "Biceps": "Biceps", "Quads": "Legs",
-    "Hamstrings": "Legs", "Glutes": "Glutes", "Core": "Abs",
-    "Full Body": "Full Body", "Cardio": "Cardio", "Calves": "Calves",
-  };
-  const hasCardio = allMuscles.includes("Cardio");
-  const muscleLabels = [...new Set(allMuscles.filter(m => m !== "Cardio").map(m => muscleToLabel[m] || m))];
-  return [...muscleLabels.slice(0, 4), ...(hasCardio && !muscleLabels.includes("Cardio") ? ["Cardio"] : [])].join(", ");
+// Extracted verbatim from WorkoutListScreen's own subtitle computation -
+// the actual, confirmed-accurate source of truth for "what does this
+// workout really contain," not a second approximation of it. Deliberately
+// uses raw muscle names with no collapsing (Quads and Hamstrings stay
+// separate, not merged into an umbrella "Legs"), and deliberately excludes
+// "Full Body"-tagged exercises from the summary - a single exercise tagged
+// generically "Full Body" (e.g. kettlebell swings) doesn't mean the whole
+// day is full-body, and including it here was misleading exactly the way
+// it looked on Dashboard. Cardio is handled as a trailing "& Cardio" suffix
+// rather than a muscle name, matching Review's own display.
+const deriveWorkoutSubtitle = (groups: any[]): string => {
+  const muscles = [...new Set((groups || []).filter((g: any) => g.type !== "cardio").flatMap((g: any) =>
+    (g.exercises || []).map((ex: any) => { const d = (EXERCISES_DATA as any)[ex.id]; return d?.muscle || null; }).filter(Boolean)
+  ))].filter(m => m !== "Full Body" && m !== "Cardio").slice(0, 5);
+  const hasCardio = (groups || []).some((g: any) => g.type === "cardio");
+  const parts = muscles.length > 0 ? muscles.join(", ") : "";
+  return hasCardio ? (parts ? parts + " & Cardio" : "Cardio") : parts;
 };
 
 const getWorkoutTypeForProgramDay = (
@@ -9992,7 +9974,7 @@ const getWorkoutTypeForProgramDay = (
         const hasLower = allMuscles.some(m => ["Quads","Hamstrings","Glutes","Calves"].includes(m));
         const derivedType = hasUpper && hasLower ? "full-body" : hasUpper ? "upper-body" : hasLower ? "lower-body" : "full-body";
         const derivedLabel = titleParts.length > 0 ? titleParts.join(" & ") : expandDayTitle(day.title || day.focus || "Workout");
-        const derivedFocus = [...muscleLabels.slice(0, 4), ...(hasCardio && !muscleLabels.includes("Cardio") ? ["Cardio"] : [])].join(", ") || day.focus || "Workout";
+        const derivedFocus = deriveWorkoutSubtitle(rawGroups) || day.focus || "Workout";
         return {
           type: derivedType,
           label: derivedLabel,
@@ -11101,7 +11083,7 @@ const getSuggestedQuestions = (profile: any): string[] => {
     if (!hasProgram) return null;
     const resolvedDisplayDay = resolveProgramDayForDate(displayProgramDay, new Date(), profile?.dayOverrides);
     const dayData = getProgramDay(programKey, resolvedDisplayDay, profile?.generatedDays);
-    return dayData?.focus || dayData?.title || null;
+    return deriveWorkoutSubtitle(dayData?.groups || []) || dayData?.title || null;
   })();
 
   // Gender-aware question
@@ -11508,7 +11490,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     if (!programKey || !PROGRAMS[programKey]) return null;
     const resolvedDisplayDay = resolveProgramDayForDate(displayProgramDay, new Date(), profile?.dayOverrides);
     const dayData = getProgramDay(programKey, resolvedDisplayDay, profile?.generatedDays);
-    return dayData?.focus || dayData?.title || null;
+    return deriveWorkoutSubtitle(dayData?.groups || []) || dayData?.title || null;
   })();
 
   // Detects a real level-up exactly once, then permanently records it so it
