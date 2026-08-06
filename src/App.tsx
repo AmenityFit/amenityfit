@@ -4628,7 +4628,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
       <div style={{ flex: 1, minHeight: 0, padding: "16px 24px 24px", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
 
         {/* Today's Workout */}
-        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={currentDay?.focus} groups={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); return dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); })()} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
+        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return deriveMuscleFocusLabel(_d) || currentDay?.focus; })()} groups={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); return dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); })()} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
 
         {/* View Full Week link */}
         <button onClick={onViewWeekly} style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20, marginTop: -8 }}>
@@ -9869,6 +9869,36 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
 // Maps a program day number to workout type — reads directly from the actual program data.
 // This is the source of truth for what day type/rest status shows in calendar and weekly view.
 // No generic patterns — your programs define the structure, this just reads them.
+// Real muscle-group label derived from the actual exercises in a day's
+// groups, instead of the static "focus" text baked into that day's authored
+// data - which can silently drift out of sync with the real content (e.g.
+// a day's focus field still saying "& Cardio" long after the cardio block
+// was removed from its groups, exactly the kind of stale-copy bug that's
+// caused real confusion tonight). getWorkoutTypeForProgramDay already
+// computed this correctly for Weekly View and the workout screens - this
+// extracts that same logic into a reusable function instead of leaving
+// Dashboard and any other consumer to keep reading the raw, driftable field
+// independently, which is exactly how they ended up disagreeing.
+const deriveMuscleFocusLabel = (groups: any[]): string => {
+  const allMuscles: string[] = [];
+  (groups || []).forEach((g: any) => {
+    if (g.type === "cardio") { if (!allMuscles.includes("Cardio")) allMuscles.push("Cardio"); return; }
+    (g.exercises || []).forEach((ex: any) => {
+      const m = (EXERCISES_DATA as any)[ex.id]?.muscle;
+      if (m && !allMuscles.includes(m)) allMuscles.push(m);
+    });
+  });
+  const muscleToLabel: Record<string, string> = {
+    "Chest": "Chest", "Back": "Back", "Shoulders": "Shoulders",
+    "Triceps": "Triceps", "Biceps": "Biceps", "Quads": "Legs",
+    "Hamstrings": "Legs", "Glutes": "Glutes", "Core": "Abs",
+    "Full Body": "Full Body", "Cardio": "Cardio", "Calves": "Calves",
+  };
+  const hasCardio = allMuscles.includes("Cardio");
+  const muscleLabels = [...new Set(allMuscles.filter(m => m !== "Cardio").map(m => muscleToLabel[m] || m))];
+  return [...muscleLabels.slice(0, 4), ...(hasCardio && !muscleLabels.includes("Cardio") ? ["Cardio"] : [])].join(", ");
+};
+
 const getWorkoutTypeForProgramDay = (
   programDay: number,
   frequency: number,
@@ -10059,9 +10089,22 @@ const getWeekSchedule = (
     const isToday = date.toLocaleDateString() === today.toLocaleDateString();
     const isPast = i < 0;
     const isFutureDay = i > 0;
+    // TODAY's completion status must rely ONLY on the real, unambiguous
+    // signal (lastSessionDate matching today) - the same one Dashboard
+    // already uses - never on completedProgramDays.includes(programDay).
+    // Day-numbers are not unique to a single calendar date: they can and do
+    // repeat across a cycle, a program swap, or a recalibration, so "was
+    // this day-number ever completed, on any date" is a fundamentally
+    // different question than "was today specifically completed" - and
+    // answering the wrong one here is exactly what caused Weekly View to
+    // show "Today's Workout Complete" while Dashboard correctly showed
+    // "Start Today's Workout" for the same real day, at the same moment.
+    // Past days keep the looser historical check since that's just a
+    // glance-back, not an active "should I start this" decision point.
     const isCompleted = !isFutureDay && (
-      completedProgramDays?.includes(programDay) ||
-      (isToday && lastSessionDate === today.toDateString())
+      isToday
+        ? lastSessionDate === today.toDateString()
+        : completedProgramDays?.includes(programDay)
     );
 
     const isRestFinal = (isToday && isCompleted) ? false : workout.isRest;
