@@ -9872,36 +9872,25 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
 // day is full-body, and including it here was misleading exactly the way
 // it looked on Dashboard. Cardio is handled as a trailing "& Cardio" suffix
 // rather than a muscle name, matching Review's own display.
-// Short 2-part title ("Legs & Abs") derived the same real way as the
-// subtitle above - extracted from the exact same logic that already
-// produces the correct title on Dashboard, Weekly View, and Review, so the
-// chat can use a short name instead of the long muscle-list subtitle
-// without introducing yet another separate approximation of "what is this
-// workout called."
-const deriveWorkoutTitleAndType = (groups: any[], fallbackTitle?: string): { label: string; type: string } => {
+// Type classification only ("upper-body" / "lower-body" / "full-body") -
+// the actual TITLE text now always comes from deriveWorkoutTitle (defined
+// earlier in this file), the one genuinely robust source already proven
+// correct on Review - it buckets Quads/Hamstrings/Glutes/Calves into one
+// unified "Legs" category and checks category presence, rather than
+// picking "whichever two muscles happened to appear first in exercise
+// order," which is exactly what caused chat to show "Legs & Calves"
+// instead of "Legs & Abs" for the same real workout Review correctly named.
+const deriveWorkoutType = (groups: any[]): string => {
   const allMuscles: string[] = [];
   (groups || []).forEach((g: any) => {
-    if (g.type === "cardio") { if (!allMuscles.includes("Cardio")) allMuscles.push("Cardio"); return; }
     (g.exercises || []).forEach((ex: any) => {
       const m = (EXERCISES_DATA as any)[ex.id]?.muscle;
       if (m && !allMuscles.includes(m)) allMuscles.push(m);
     });
   });
-  const muscleToLabel: Record<string, string> = {
-    "Chest": "Chest", "Back": "Back", "Shoulders": "Shoulders",
-    "Triceps": "Triceps", "Biceps": "Biceps", "Quads": "Legs",
-    "Hamstrings": "Legs", "Glutes": "Glutes", "Core": "Abs",
-    "Full Body": "Full Body", "Cardio": "Cardio", "Calves": "Calves",
-  };
-  const hasCardio = allMuscles.includes("Cardio");
-  const muscleLabels = [...new Set(allMuscles.filter(m => m !== "Cardio").map(m => muscleToLabel[m] || m))];
-  const titleParts = muscleLabels.slice(0, 2);
-  if (hasCardio && titleParts.length < 3) titleParts.push("Cardio");
   const hasUpper = allMuscles.some(m => ["Chest","Back","Shoulders","Triceps","Biceps"].includes(m));
   const hasLower = allMuscles.some(m => ["Quads","Hamstrings","Glutes","Calves"].includes(m));
-  const type = hasUpper && hasLower ? "full-body" : hasUpper ? "upper-body" : hasLower ? "lower-body" : "full-body";
-  const label = titleParts.length > 0 ? titleParts.join(" & ") : expandDayTitle(fallbackTitle || "Workout");
-  return { label, type };
+  return hasUpper && hasLower ? "full-body" : hasUpper ? "upper-body" : hasLower ? "lower-body" : "full-body";
 };
 
 const deriveWorkoutSubtitle = (groups: any[]): string => {
@@ -9984,8 +9973,9 @@ const getWorkoutTypeForProgramDay = (
         }
         // Derive title from actual exercise content to avoid mismatch
         const rawGroups = day.groups || [];
-        const { label: derivedLabel, type: derivedType } = deriveWorkoutTitleAndType(rawGroups, day.title || day.focus);
+        const derivedType = deriveWorkoutType(rawGroups);
         const derivedFocus = deriveWorkoutSubtitle(rawGroups) || day.focus || "Workout";
+        const derivedLabel = deriveWorkoutTitle(rawGroups, derivedType, derivedFocus) || expandDayTitle(day.title || day.focus || "Workout");
         return {
           type: derivedType,
           label: derivedLabel,
@@ -11094,7 +11084,7 @@ const getSuggestedQuestions = (profile: any): string[] => {
     if (!hasProgram) return null;
     const resolvedDisplayDay = resolveProgramDayForDate(displayProgramDay, new Date(), profile?.dayOverrides);
     const dayData = getProgramDay(programKey, resolvedDisplayDay, profile?.generatedDays);
-    return deriveWorkoutTitleAndType(dayData?.groups || [], dayData?.title).label || null;
+    return deriveWorkoutTitle(dayData?.groups || [], undefined, dayData?.focus) || dayData?.title || null;
   })();
 
   // Gender-aware question
@@ -11501,7 +11491,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     if (!programKey || !PROGRAMS[programKey]) return null;
     const resolvedDisplayDay = resolveProgramDayForDate(displayProgramDay, new Date(), profile?.dayOverrides);
     const dayData = getProgramDay(programKey, resolvedDisplayDay, profile?.generatedDays);
-    return deriveWorkoutTitleAndType(dayData?.groups || [], dayData?.title).label || null;
+    return deriveWorkoutTitle(dayData?.groups || [], undefined, dayData?.focus) || dayData?.title || null;
   })();
 
   // Detects a real level-up exactly once, then permanently records it so it
