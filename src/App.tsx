@@ -2454,7 +2454,18 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
     const original = (EXERCISES_DATA as any)[originalId];
     if (!original) return null;
     const targetMuscle = original.muscle;
-    const targetDifficulty = original.difficulty || experience;
+    // Prefer the person's real level over the borrowed exercise's own
+    // authored difficulty whenever their real level is HIGHER - otherwise
+    // borrowing a day from a lower-tier template (Month 6+ Phase 2, or a
+    // narrow slice like advanced+bands+female where pools[] genuinely has
+    // no higher-tier option to offer) would leave every exercise capped at
+    // that lower tier's difficulty forever, rather than actually being
+    // upgraded toward what's appropriate for this specific person. Never
+    // downgrades - if the borrowed exercise is already tagged at or above
+    // the person's level, its own tag is kept as-is.
+    const difficultyRank: Record<string, number> = { beginner: 1, intermediate: 2, advanced: 3 };
+    const originalDifficulty = original.difficulty || experience;
+    const targetDifficulty = (difficultyRank[experience] || 2) > (difficultyRank[originalDifficulty] || 2) ? experience : originalDifficulty;
 
     const preferredCandidates = validExerciseIds
     .filter(id => {
