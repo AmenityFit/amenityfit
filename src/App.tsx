@@ -3675,7 +3675,7 @@ const getGreeting = () => {
   return "Good evening";
 };
 
-const TodayWorkoutCard = ({ type = "upper-body", sessionLength = 45, experience = "Intermediate", programDay = 1, programWeek = 1, workoutDoneToday = false, isInProgress = false, onStartWorkout = () => {}, onCompleteRestDay = () => {}, exerciseCount = 0, dayFocus = "", groups = [] as any[] }) => {
+const TodayWorkoutCard = ({ type = "upper-body", sessionLength = 45, experience = "Intermediate", programDay = 1, programWeek = 1, workoutDoneToday = false, isInProgress = false, onStartWorkout = () => {}, onCompleteRestDay = () => {}, exerciseCount = 0, dayFocus = "", groups = [] as any[], profile = null as any }) => {
   // Preload today's exercise thumbnails as soon as this card renders (i.e. the
   // moment the Dashboard loads), well before the user actually taps into the
   // workout screen. Without this, the exercise-list screen's <img> tags only
@@ -3696,7 +3696,53 @@ const TodayWorkoutCard = ({ type = "upper-body", sessionLength = 45, experience 
         }
       });
     });
-  }, [groups, programDay]);
+
+    // Also preload swap-candidate thumbnails for every exercise in today's
+    // workout, not just each exercise's own thumbnail. Previously these
+    // only started fetching the moment someone actually opened the swap
+    // picker mid-workout, causing a visible loading delay right when
+    // someone's mid-set and wants a fast decision. Running this here means
+    // it's already warm in the browser's cache before Begin Workout is even
+    // tapped, matching the exact same preload pattern already used above
+    // for each exercise's own thumbnail. Uses each exercise's own id as a
+    // stand-in "original" for candidate scoring purposes, which is close
+    // enough for a background warm-up - the live modal computes the exact
+    // real original at swap time, this just needs to be a good approximation
+    // of what's likely to be shown.
+    if (profile?.programKey && PROGRAMS[profile.programKey]) {
+      const fullProgramExerciseIds: string[] = [];
+      PROGRAMS[profile.programKey].days?.forEach((day: any) => {
+        if (!day.isRest && day.groups) {
+          day.groups.forEach((dg: any) => {
+            dg.exercises?.forEach((e: any) => {
+              if (e.id && !fullProgramExerciseIds.includes(e.id)) fullProgramExerciseIds.push(e.id);
+            });
+          });
+        }
+      });
+      groups.forEach((g: any) => {
+        const groupIds = (g.exercises || []).map((e: any) => e.id);
+        (g.exercises || []).forEach((ex: any) => {
+          const otherIds = groupIds.filter((id: string) => id !== ex.id);
+          const candidates = getSwapCandidates(
+            ex.id, ex.id, otherIds, fullProgramExerciseIds,
+            profile?.equipmentPreference || "gym-and-bands",
+            profile?.injuries || "none",
+            profile?.effectiveLevel || profile?.experience || "beginner",
+            profile?.buildingEquipment || [],
+            (parseInt(String(profile?.age)) || 30) >= 65
+          );
+          candidates.forEach((c: any) => {
+            const thumbUrl = getThumbnailUrl(c.id, programDay);
+            if (thumbUrl) {
+              const preloadImg = new window.Image();
+              preloadImg.src = thumbUrl;
+            }
+          });
+        });
+      });
+    }
+  }, [groups, programDay, profile]);
   return (
   <div style={{
     borderRadius: 24, overflow: "hidden", marginBottom: 20, position: "relative",
@@ -4628,7 +4674,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
       <div style={{ flex: 1, minHeight: 0, padding: "16px 24px 24px", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
 
         {/* Today's Workout */}
-        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} dayFocus={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return deriveWorkoutSubtitle(_d) || currentDay?.focus; })()} groups={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); return dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); })()} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
+        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} profile={profile} dayFocus={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return deriveWorkoutSubtitle(_d) || currentDay?.focus; })()} groups={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); return dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); })()} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
 
         {/* View Full Week link */}
         <button onClick={onViewWeekly} style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20, marginTop: -8 }}>
@@ -14259,7 +14305,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
                   src={profile.buildingLogoUrl}
                   alt=""
                   onClick={() => setLightboxUrl(profile.buildingLogoUrl!)}
-                  style={{ width: 40, height: 40, borderRadius: 12, objectFit: "cover", flexShrink: 0, cursor: "pointer" }}
+                  style={{ width: 56, height: 56, borderRadius: 16, objectFit: "cover", flexShrink: 0, cursor: "pointer" }}
                 />
               ) : null}
               <div>
@@ -18438,7 +18484,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "16px 0 12px" }}>Your Building</p>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 {buildingLogoUrl ? (
-                  <img src={buildingLogoUrl} alt="" style={{ width: 40, height: 40, borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
+                  <img src={buildingLogoUrl} alt="" style={{ width: 56, height: 56, borderRadius: 16, objectFit: "cover", flexShrink: 0 }} />
                 ) : null}
                 <div>
                   <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{buildingName}</p>
