@@ -2557,36 +2557,26 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
   const equipKey = equipment === "gym" ? "gym" : equipment === "bands" ? "bands" : "gym-and-bands";
   const poolKey = `${levelKey}-${equipKey}`;
 
-  // Every real constraint EXCEPT recency - level, equipment, gender, and
-  // goal are never negotiable, so they're always applied first, unlike the
-  // "avoid the last 3 cycles" rule below, which only makes sense when the
-  // eligible pool is large enough to support it.
+  // Every real constraint EXCEPT recency - reads from pools[], the same
+  // manually-curated, already-proven-correct source the separate
+  // pool-rotation branch already uses, instead of re-deriving eligibility
+  // by guessing from program key NAMES (the previous approach). Confirmed
+  // via direct simulation that string-matching genuinely misses real,
+  // correctly curated programs whose key names simply don't happen to
+  // contain the exact substrings being searched for - a real
+  // advanced+bands+female program existed in pools[], but since its key
+  // name didn't literally contain both "advanced" and "band", it was
+  // invisible to the old filter, leaving zero eligible options and forcing
+  // a dangerous unconstrained fallback. Gender and goal still need their
+  // own filtering here since pools[] mixes multiple genders and goals
+  // within each level+equipment bucket.
   const usedBaseKeysM6 = getUsedBaseKeys(previousPrograms);
   const recentPrograms = usedBaseKeysM6.slice(-3);
-  const fullyEligiblePrograms = Object.keys(PROGRAMS).filter(key => {
+  const rawPoolList = pools[poolKey] || pools[`${levelKey}-gym-and-bands`] || [];
+  const fullyEligiblePrograms = rawPoolList.filter(key => {
     const prog = PROGRAMS[key];
     if (!prog) return false;
-    // Match level
-    if (isSenior && !key.includes("senior")) return false;
-    if (!isSenior && key.includes("senior")) return false;
-    if (experience === "beginner" && (key.includes("intermediate") || key.includes("advanced"))) return false;
-    // Confirmed via direct simulation: the two rules below alone let a
-    // "beginner-" key stay eligible for intermediate AND advanced users,
-    // since neither rule excludes based on the word "beginner" at all -
-    // only pools[] (used by the separate pool-rotation branch) correctly
-    // kept beginner/intermediate/advanced in genuinely separate arrays.
-    // This function's own independent string-heuristic filter needed the
-    // same real separation, which it never actually had.
-    if ((experience === "intermediate" || experience === "advanced") && key.includes("beginner")) return false;
-    if (experience === "intermediate" && key.includes("advanced") && !key.includes("intermediate")) return false;
-    if (experience === "advanced" && !key.includes("advanced")) return false;
-    // Match equipment preference roughly
-    if (equipment === "bands" && !key.includes("band")) return false;
-    if (equipment === "gym" && key.includes("band")) return false;
-    // Match gender preference — never assign a mens-/womens- named program to someone
-    // who didn't select that gender, including on into ongoing Month 6+ generation
     if (!isProgramGenderCompatible(key, profile.gender)) return false;
-    // Match goal preference — athletic-specific programs only for athletic performance goal
     if (!isProgramGoalCompatible(key, profile.primaryGoal || "general_fitness")) return false;
     return true;
   });
