@@ -2278,6 +2278,40 @@ const isProgramGoalCompatible = (key: string, goal: string): boolean => {
 const stripMonth6Prefix = (key: string): string => key.startsWith("month6-") ? key.slice("month6-".length) : key;
 const getUsedBaseKeys = (previousPrograms: string[]): string[] => previousPrograms.map(stripMonth6Prefix);
 
+// Classifies a day's real muscle-group composition into a specific, narrow
+// category (not the broad upper-body/lower-body/full-body split used
+// elsewhere) - this is what lets Month 6+ Phase 2 recombination (once every
+// whole skeleton has been used at least once) match a leg day to another
+// template's leg day specifically, a back day to another back day, rather
+// than treating any two "upper-body" days as interchangeable, which would
+// blur the actual muscle targeting of a borrowed day.
+const classifyDayCategory = (groups: any[]): string => {
+  const muscleCounts: Record<string, number> = {};
+  (groups || []).forEach((g: any) => {
+    if (g.type === "cardio") { muscleCounts["Cardio"] = (muscleCounts["Cardio"] || 0) + 1; return; }
+    (g.exercises || []).forEach((ex: any) => {
+      const m = (EXERCISES_DATA as any)[ex.id]?.muscle;
+      if (m) muscleCounts[m] = (muscleCounts[m] || 0) + 1;
+    });
+  });
+  const hasLegs = ((muscleCounts["Quads"] || 0) + (muscleCounts["Hamstrings"] || 0) + (muscleCounts["Glutes"] || 0) + (muscleCounts["Calves"] || 0)) > 0;
+  const hasBack = (muscleCounts["Back"] || 0) > 0;
+  const hasBiceps = (muscleCounts["Biceps"] || 0) > 0;
+  const hasChest = (muscleCounts["Chest"] || 0) > 0;
+  const hasTriceps = (muscleCounts["Triceps"] || 0) > 0;
+  const hasShoulders = (muscleCounts["Shoulders"] || 0) > 0;
+  const hasCore = (muscleCounts["Core"] || 0) > 0;
+  const upperGroupCount = [hasBack || hasBiceps, hasChest || hasTriceps, hasShoulders].filter(Boolean).length;
+  if (hasLegs && upperGroupCount > 0) return "full-body";
+  if (hasLegs) return "legs";
+  if (upperGroupCount >= 2) return "upper-mixed";
+  if (hasBack || hasBiceps) return "back-biceps";
+  if (hasChest || hasTriceps) return "chest-triceps";
+  if (hasShoulders) return "shoulders";
+  if (hasCore) return "core";
+  return "full-body";
+};
+
 const generateMonth6Program = (profile: any): { programKey: string; generatedDays?: any[] } => {
   const previousPrograms = profile.previousPrograms || [];
   const experience = profile.effectiveLevel || profile.experience || "beginner";
@@ -2339,6 +2373,18 @@ const generateMonth6Program = (profile: any): { programKey: string; generatedDay
       return true;
     }).sort((a, b) => cyclesSinceUsed(b) - cyclesSinceUsed(a));
     return alt[0] || fallbackId;
+  };
+
+  // Average recency across a candidate day's own exercises, used only in
+  // Phase 2 (every whole skeleton already used at least once this rotation)
+  // to pick which eligible template's version of a given day-category is
+  // freshest, rather than always defaulting to whichever skeleton happened
+  // to be selected as this cycle's reference.
+  const scoreCandidateFreshness = (groups: any[]): number => {
+    const ids: string[] = [];
+    (groups || []).forEach((g: any) => (g.exercises || []).forEach((ex: any) => { if (ex.id) ids.push(ex.id); }));
+    if (ids.length === 0) return 0;
+    return ids.reduce((sum, id) => sum + cyclesSinceUsed(id), 0) / ids.length;
   };
 
   // Parse injury flags
@@ -2569,12 +2615,39 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
   // normalized usedBaseKeysM6 list computed above, rather than checking raw
   // previousPrograms directly, so a key already used (as either a genuine
   // pool cycle or a past Month 6+ skeleton) is correctly excluded either way.
-  const baseKey = allPoolPrograms.find(k => !usedBaseKeysM6.includes(k))
-    || allPoolPrograms[0]
-    || Object.keys(PROGRAMS)[0];
+  //
+  // Phase 1 (most of a person's tenure): a genuinely unused skeleton exists,
+  // firstUnusedKey finds it, exactly as before. Phase 2 (every eligible
+  // skeleton has now been used at least once): rather than silently falling
+  // back to repeating the same one forever, isSkeletonPoolExhausted switches
+  // the day-selection loop below into day-level recombination instead -
+  // still using a reference skeleton (baseKey) for the overall day-type
+  // sequence, but filling each individual day from whichever eligible
+  // template's version of that day-category is freshest, not necessarily
+  // the reference skeleton's own.
+  const firstUnusedKey = allPoolPrograms.find(k => !usedBaseKeysM6.includes(k));
+  const isSkeletonPoolExhausted = !firstUnusedKey;
+  const baseKey = firstUnusedKey || allPoolPrograms[0] || Object.keys(PROGRAMS)[0];
 
   const baseProgram = PROGRAMS[baseKey];
   if (!baseProgram) return { programKey: baseKey };
+
+  // Built once per generation call, not per day, and only when actually
+  // needed - every eligible template's real training days, pre-classified
+  // by category, ready for the day-selection loop below to search.
+  const candidateDaysByCategory: Record<string, any[]> = {};
+  if (isSkeletonPoolExhausted) {
+    allPoolPrograms.forEach((pk: string) => {
+      const prog = PROGRAMS[pk];
+      if (!prog?.days) return;
+      prog.days.forEach((d: any) => {
+        if (d.isRest || !d.groups?.length) return;
+        const category = classifyDayCategory(d.groups);
+        if (!candidateDaysByCategory[category]) candidateDaysByCategory[category] = [];
+        candidateDaysByCategory[category].push(d);
+      });
+    });
+  }
 
   // Generate fresh days by swapping 1 exercise per superset
   const usedInProgram: string[] = [];
@@ -2606,7 +2679,27 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
     const workoutDays = baseProgram.days.filter((d: any) => !d.isRest);
     // Use exact index if available — only fall back to modulo if base program has fewer days than needed
     const isReplayDay = !workoutDays[workoutDayIndex];
-    const baseDay = workoutDays[workoutDayIndex] || workoutDays[workoutDayIndex % workoutDays.length];
+    const baseDayReference = workoutDays[workoutDayIndex] || workoutDays[workoutDayIndex % workoutDays.length];
+    let baseDay = baseDayReference;
+    // Phase 2 only (isSkeletonPoolExhausted): don't just keep reusing the
+    // reference skeleton's own version of this day - search every eligible
+    // template's matching-category day instead, and use whichever one has
+    // the freshest (least recently used) exercises on average. This is what
+    // actually extends real variety past the point where whole-skeleton
+    // rotation runs out, rather than silently freezing on whichever
+    // skeleton happened to be picked as this cycle's reference.
+    if (isSkeletonPoolExhausted && baseDayReference?.groups?.length > 0) {
+      const dayCategory = classifyDayCategory(baseDayReference.groups);
+      const candidates = candidateDaysByCategory[dayCategory] || [];
+      if (candidates.length > 0) {
+        const scoredCandidates = candidates.map((c: any) => ({ day: c, score: scoreCandidateFreshness(c.groups) }));
+        scoredCandidates.sort((a, b) => b.score - a.score);
+        const freshestCandidate = scoredCandidates[0]?.day;
+        if (freshestCandidate) {
+          baseDay = { ...baseDayReference, groups: freshestCandidate.groups, notes: freshestCandidate.notes || baseDayReference.notes };
+        }
+      }
+    }
     if (!baseDay) return {
       dayNum,
       title: `Day ${dayNum} — Rest`,
