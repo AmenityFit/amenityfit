@@ -10655,9 +10655,14 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
               {isEligible && (
                 <span style={{ color: isPickedUp ? COLORS.accent : COLORS.textSecondary, fontSize: 14, letterSpacing: 1, flexShrink: 0, opacity: 0.6 }}>≡</span>
               )}
-              <div style={{ width: 36, textAlign: "center" as const }}>
+              <div style={{ width: 42, textAlign: "center" as const }}>
                 <p style={{ color: isSelected ? COLORS.accent : (day.isToday ? COLORS.accent : COLORS.textSecondary), fontSize: 11, fontWeight: 700, textTransform: "uppercase" as const, margin: 0 }}>{day.dayName}</p>
                 <p style={{ color: isSelected ? COLORS.white : (day.isToday ? COLORS.accent : COLORS.white), fontSize: 14, fontWeight: 700, margin: 0 }}>{day.dateNum}</p>
+                {/* Quiet secondary clarifier, not competing with the date above -
+                    only really matters once a swap makes "5th row down" and
+                    "program day 6" mean two different things, so it stays small
+                    and muted rather than a second headline. */}
+                <p style={{ color: COLORS.textSecondary, fontSize: 9, fontWeight: 600, margin: 0, opacity: 0.6 }}>Day {day.programDay}</p>
               </div>
               <div style={{ flex: 1 }}>
                 <p style={{ color: day.isRest ? COLORS.textSecondary : COLORS.white, fontSize: 14, fontWeight: day.isRest ? 400 : 600, margin: "0 0 1px" }}>
