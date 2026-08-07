@@ -2349,32 +2349,6 @@ const generateMonth6Program = (profile: any): { programKey: string; generatedDay
     if (lastUsedCycle == null) return 1000; // never used - treat as maximally fresh
     return currentCycleForRecency - lastUsedCycle;
   };
-  // Last-resort safety net only - every existing fallback tier above this is
-  // completely untouched. This only fires in the narrow case where every
-  // constraint-respecting search already failed and the code is about to
-  // fall back to keeping a slot's original exercise, but that exact exercise
-  // happens to already be placed elsewhere in today's day. Returns a
-  // same-muscle, still equipment/injury/level-safe alternative that hasn't
-  // been used today (preferring whichever such exercise was used longest
-  // ago), so the worst case becomes "a rare exercise repeats a bit sooner
-  // than ideal" rather than "the same exercise appears twice in one workout."
-  // If no such alternative exists either, returns the original unchanged -
-  // identical to today's existing behavior in that scenario.
-  const avoidSameDayDuplicate = (fallbackId: string): string => {
-    if (!usedInDay.includes(fallbackId)) return fallbackId;
-    const targetMuscle = (EXERCISES_DATA as any)[fallbackId]?.muscle;
-    const alt = validExerciseIds.filter(id => {
-      if (usedInDay.includes(id)) return false;
-      const exData = (EXERCISES_DATA as any)[id];
-      if (!exData || exData.muscle !== targetMuscle) return false;
-      if (!isEquipmentCompatible(exData.equipment, id)) return false;
-      if (injuryFlags.length > 0 && exData.injuryFlags?.some((f: string) => injuryFlags.includes(f))) return false;
-      if (!isAppropriateForLevel(exData, id)) return false;
-      return true;
-    }).sort((a, b) => cyclesSinceUsed(b) - cyclesSinceUsed(a));
-    return alt[0] || fallbackId;
-  };
-
   // Average recency across a candidate day's own exercises, used only in
   // Phase 2 (every whole skeleton already used at least once this rotation)
   // to pick which eligible template's version of a given day-category is
@@ -2711,6 +2685,38 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
     };
     const day = { ...baseDay, dayNum, title: baseDay.title.replace(/Day \d+/, `Day ${dayNum}`) };
     const usedInDay: string[] = [];
+    // Last-resort safety net only - every existing fallback tier below this
+    // comment is completely untouched. This only fires in the narrow case
+    // where every constraint-respecting search already failed and the code
+    // is about to fall back to keeping a slot's original exercise, but that
+    // exact exercise happens to already be placed elsewhere in today's day.
+    // Returns a same-muscle, still equipment/injury/level-safe alternative
+    // that hasn't been used today (preferring whichever such exercise was
+    // used longest ago), so the worst case becomes "a rare exercise repeats
+    // a bit sooner than ideal" rather than "the same exercise appears twice
+    // in one workout." If no such alternative exists either, returns the
+    // original unchanged - identical to today's existing behavior in that
+    // scenario. Defined here, inside the per-day loop, specifically because
+    // it depends on usedInDay, which is itself scoped fresh to each day -
+    // defining this at the outer function level (as it originally was)
+    // meant it could never actually see usedInDay at all, silently crashing
+    // with a ReferenceError the one time this fallback path was ever
+    // actually reached, since JS closures only see variables from scopes
+    // that existed at DEFINITION time, not wherever the function is called.
+    const avoidSameDayDuplicate = (fallbackId: string): string => {
+      if (!usedInDay.includes(fallbackId)) return fallbackId;
+      const targetMuscle = (EXERCISES_DATA as any)[fallbackId]?.muscle;
+      const alt = validExerciseIds.filter(id => {
+        if (usedInDay.includes(id)) return false;
+        const exData = (EXERCISES_DATA as any)[id];
+        if (!exData || exData.muscle !== targetMuscle) return false;
+        if (!isEquipmentCompatible(exData.equipment, id)) return false;
+        if (injuryFlags.length > 0 && exData.injuryFlags?.some((f: string) => injuryFlags.includes(f))) return false;
+        if (!isAppropriateForLevel(exData, id)) return false;
+        return true;
+      }).sort((a, b) => cyclesSinceUsed(b) - cyclesSinceUsed(a));
+      return alt[0] || fallbackId;
+    };
     const newGroups = day.groups.map((group: any) => {
       if (group.type === "cardio") return group;
       const exercises = (group.exercises || []).filter((ex: any) => {
