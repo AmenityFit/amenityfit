@@ -2273,21 +2273,53 @@ const generateMonth6Program = (profile: any): { programKey: string; generatedDay
     id => (VIMEO_VIDEOS as any)[id] && (VIMEO_VIDEOS as any)[id].vimeoIds?.length > 0
   );
 
-  // Get all exercises the user has seen across their history
-  const seenExerciseIds: string[] = [];
-  previousPrograms.forEach((pk: string) => {
-    const prog = PROGRAMS[pk];
-    if (!prog) return;
-    prog.days?.forEach((day: any) => {
-      if (!day.isRest && day.groups) {
-        day.groups.forEach((g: any) => {
-          g.exercises?.forEach((e: any) => {
-            if (e.id && !seenExerciseIds.includes(e.id)) seenExerciseIds.push(e.id);
-          });
-        });
-      }
-    });
-  });
+  // Real per-exercise recency, replacing the old permanent seenExerciseIds
+  // blacklist. previousPrograms only stores program KEYS, and a "month6-"
+  // key never exists in the static PROGRAMS table (Month 6+ content is
+  // generated fresh per person, per cycle, and only ever lives on that
+  // person's own profile) - so scanning previousPrograms via PROGRAMS[]
+  // silently missed every exercise from any past Month 6+ cycle, exactly
+  // the population where real long-term variety matters most. exerciseHistory
+  // is now written directly at cycle-completion time from the exercises
+  // actually used that cycle (see handleNewCycle), so it stays accurate for
+  // both pool and Month 6+ cycles. Recency is continuous rather than a hard
+  // seen/unseen flag - something used last cycle scores low, something used
+  // 10+ cycles ago (or never) scores at the cap, so a small-pool muscle like
+  // Calves still gets the best spacing the real content allows instead of
+  // either an artificial hard wall or no preference once "seen" stopped
+  // meaning anything.
+  const exerciseHistory: Record<string, number> = profile.exerciseHistory || {};
+  const currentCycleForRecency = profile.cycleNumber || 1;
+  const cyclesSinceUsed = (id: string): number => {
+    const lastUsedCycle = exerciseHistory[id];
+    if (lastUsedCycle == null) return 1000; // never used - treat as maximally fresh
+    return currentCycleForRecency - lastUsedCycle;
+  };
+  // Last-resort safety net only - every existing fallback tier above this is
+  // completely untouched. This only fires in the narrow case where every
+  // constraint-respecting search already failed and the code is about to
+  // fall back to keeping a slot's original exercise, but that exact exercise
+  // happens to already be placed elsewhere in today's day. Returns a
+  // same-muscle, still equipment/injury/level-safe alternative that hasn't
+  // been used today (preferring whichever such exercise was used longest
+  // ago), so the worst case becomes "a rare exercise repeats a bit sooner
+  // than ideal" rather than "the same exercise appears twice in one workout."
+  // If no such alternative exists either, returns the original unchanged -
+  // identical to today's existing behavior in that scenario.
+  const avoidSameDayDuplicate = (fallbackId: string): string => {
+    if (!usedInDay.includes(fallbackId)) return fallbackId;
+    const targetMuscle = (EXERCISES_DATA as any)[fallbackId]?.muscle;
+    const alt = validExerciseIds.filter(id => {
+      if (usedInDay.includes(id)) return false;
+      const exData = (EXERCISES_DATA as any)[id];
+      if (!exData || exData.muscle !== targetMuscle) return false;
+      if (!isEquipmentCompatible(exData.equipment, id)) return false;
+      if (injuryFlags.length > 0 && exData.injuryFlags?.some((f: string) => injuryFlags.includes(f))) return false;
+      if (!isAppropriateForLevel(exData, id)) return false;
+      return true;
+    }).sort((a, b) => cyclesSinceUsed(b) - cyclesSinceUsed(a));
+    return alt[0] || fallbackId;
+  };
 
   // Parse injury flags
   const injuryFlags: string[] = [];
@@ -2428,8 +2460,9 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
       .map(id => {
         const ex = (EXERCISES_DATA as any)[id];
         let score = 0;
-        // Prefer exercises they haven't seen — this is the whole point
-        if (!seenExerciseIds.includes(id)) score += 50;
+        // Prefer exercises used longer ago (or never) - continuous recency
+        // instead of a binary seen/unseen flag, this is the whole point
+        score += Math.min(cyclesSinceUsed(id) * 10, 100);
        
         // Same equipment
         if (ex.equipment === original.equipment) score += 30;
@@ -2576,6 +2609,11 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
           const equipmentIncompatible = !isEquipmentCompatible((EXERCISES_DATA as any)[ex.id]?.equipment || "", ex.id);
           const alreadyUsedThisWeek = usedInProgram.includes(ex.id);
           const injuryBlocked = injuryFlags.length > 0 && (EXERCISES_DATA as any)[ex.id]?.injuryFlags?.some((f: string) => injuryFlags.includes(f));
+          // Defaults to the original exercise, unchanged - only the genuine
+          // last-resort failure tail below ever reassigns this, and only
+          // when that would otherwise create a same-day duplicate. Every
+          // other path in this block is completely untouched.
+          let primaryFallbackId = ex.id;
           
           if (equipmentIncompatible || alreadyUsedThisWeek || injuryBlocked) {
             const substitute = findSubstitute(ex.id, [...usedInDay, ...(isReplayDay ? [] : usedInProgram)], [], true)
@@ -2618,18 +2656,25 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
               if (!usedInProgram.includes(looseSubstitute)) usedInProgram.push(looseSubstitute);
               return { ...ex, id: looseSubstitute };
             }
-            usedInDay.push(ex.id);
-            if (!usedInProgram.includes(ex.id)) usedInProgram.push(ex.id);
+            // This is the genuine "every attempt failed" tail - relax the
+            // duplicate check only enough to avoid the same exercise
+            // appearing twice in one day, per avoidSameDayDuplicate above.
+            primaryFallbackId = avoidSameDayDuplicate(ex.id);
+            usedInDay.push(primaryFallbackId);
+            if (!usedInProgram.includes(primaryFallbackId)) usedInProgram.push(primaryFallbackId);
           }
-          usedInDay.push(ex.id);
-          if (!usedInProgram.includes(ex.id)) {
-            usedInProgram.push(ex.id);
-            const _exData = (EXERCISES_DATA as any)[ex.id];
+          usedInDay.push(primaryFallbackId);
+          if (!usedInProgram.includes(primaryFallbackId)) {
+            usedInProgram.push(primaryFallbackId);
+            const _exData = (EXERCISES_DATA as any)[primaryFallbackId];
             const _exMvKws = ["pullthrough","pull-through","row","press","curl","fly","raise","extension","pushdown","pulldown","squat","deadlift","lunge","thrust","crunch","plank","twist","bridge","dip","pullup","pushup","swing","kickback","shrug","good-morning","good morning","romanian","rdl","hip hinge","glute bridge","hip thrust","step-up","step up","split squat","bulgarian"];
-            const _exMv = _exData ? _exMvKws.find(kw => (_exData.name+" "+ex.id).toLowerCase().includes(kw)) || null : null;
+            const _exMv = _exData ? _exMvKws.find(kw => (_exData.name+" "+primaryFallbackId).toLowerCase().includes(kw)) || null : null;
             if (_exMv && !usedMovementsInProgram.includes(_exMv)) usedMovementsInProgram.push(_exMv);
           }
-          return ex;
+          // Identical to the original "return ex" when primaryFallbackId was
+          // never reassigned (the normal, overwhelming majority case) - only
+          // differs in the narrow failure case handled above.
+          return primaryFallbackId === ex.id ? ex : { ...ex, id: primaryFallbackId };
         }
         // Only swap 1 per group max — if already swapped one, keep the rest
         const alreadySwappedOne = swappedInGroup;
@@ -2652,8 +2697,13 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
           const newReps = (!subData?.isTime && ex.reps?.toString().includes("secs")) ? "10-12" : ex.reps;
           return { ...ex, id: substitute, reps: newReps, _swapped: true };
         }
-        usedInDay.push(ex.id);
-        return ex;
+        // Every attempt to find a real substitute failed - same last-resort
+        // safety net as the primary-compound case above, only relaxing the
+        // duplicate check far enough to avoid the same exercise appearing
+        // twice in one day.
+        const fallbackId = avoidSameDayDuplicate(ex.id);
+        usedInDay.push(fallbackId);
+        return fallbackId === ex.id ? ex : { ...ex, id: fallbackId };
       });
       return { ...group, exercises: newExercises };
     });
@@ -19494,11 +19544,39 @@ const isInitialLoad = React.useRef(true);
       ? previousPrograms.filter((k: string) => k !== userProfile.programKey)
       : [...previousPrograms, userProfile.programKey];
 
+    // Real exercise-level recency history, extracted from the cycle that
+    // just actually finished - critically, this reads userProfile.generatedDays
+    // for a month6- program rather than looking it up in the static PROGRAMS
+    // table. PROGRAMS never contains a "month6-" entry (Month 6+ content is
+    // generated fresh per person, per cycle, and only ever lives on that
+    // person's own profile) - so a lookup-based approach would silently miss
+    // every exercise ever assigned during any past Month 6+ cycle, exactly
+    // the population where real long-term variety matters most. This is what
+    // generateMonth6Program's own recency scoring now reads from, replacing
+    // the old permanent seenExerciseIds blacklist with something that
+    // actually knows what a person's Month 6+ history really contained.
+    const justCompletedExerciseIds: string[] = [];
+    const isCompletedCycleMonth6 = userProfile.programKey?.startsWith("month6-");
+    const completedCycleDays = isCompletedCycleMonth6
+      ? (userProfile.generatedDays || [])
+      : (PROGRAMS[userProfile.programKey]?.days || []);
+    completedCycleDays.forEach((day: any) => {
+      if (day.isRest || !day.groups) return;
+      day.groups.forEach((g: any) => {
+        g.exercises?.forEach((e: any) => {
+          if (e.id && !justCompletedExerciseIds.includes(e.id)) justCompletedExerciseIds.push(e.id);
+        });
+      });
+    });
+    const updatedExerciseHistory: Record<string, number> = { ...(userProfile.exerciseHistory || {}) };
+    justCompletedExerciseIds.forEach(id => { updatedExerciseHistory[id] = currentCycle; });
+
     const profileForNextCycle = {
       ...userProfile,
       cycleNumber: currentCycle + 1,
       previousPrograms: updatedPreviousPrograms,
       cycleCompletionRates,
+      exerciseHistory: updatedExerciseHistory,
       // If repeating, nudge back to same level — don't let low completion accumulate toward transition
       progressionPhase: shouldRepeatProgram ? "pool-rotation" : userProfile.progressionPhase,
       exposureCyclesCompleted: shouldRepeatProgram ? 0 : userProfile.exposureCyclesCompleted,
@@ -19526,6 +19604,7 @@ const isInitialLoad = React.useRef(true);
       cycleCompletionRates,
       generatedDays: aiResult.generatedDays || null,
       cycleSessionsCompleted: 0,
+      exerciseHistory: updatedExerciseHistory,
       ...safeProgressionUpdates,
     };
 
