@@ -2583,14 +2583,31 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
   // within each level+equipment bucket.
   const usedBaseKeysM6 = getUsedBaseKeys(previousPrograms);
   const recentPrograms = usedBaseKeysM6.slice(-3);
-  const rawPoolList = pools[poolKey] || pools[`${levelKey}-gym-and-bands`] || [];
-  const fullyEligiblePrograms = rawPoolList.filter(key => {
+  // Confirmed via full systematic simulation sweep: checking whether the
+  // RAW pool array exists isn't enough - a real, non-empty array can still
+  // filter down to genuinely zero once gender/goal are applied (bands-only
+  // pools are almost entirely mens-/womens- tagged, leaving nothing for a
+  // nonbinary/prefer-not-to-say user specifically, even though the raw
+  // array itself was never empty). This tries the exact equipment tier
+  // first and only broadens to the same level's gym-and-bands tier if the
+  // exact tier's real, gender/goal-filtered result is genuinely empty - the
+  // exercise-substitution pipeline downstream already re-filters every
+  // exercise for this person's REAL equipment preference regardless of
+  // which skeleton gets borrowed, so broadening the skeleton search here is
+  // safe and can only ever produce exercises their own equipment supports.
+  const filterEligibleBaseKeys = (list: string[]) => list.filter(key => {
     const prog = PROGRAMS[key];
     if (!prog) return false;
     if (!isProgramGenderCompatible(key, profile.gender)) return false;
     if (!isProgramGoalCompatible(key, profile.primaryGoal || "general_fitness")) return false;
     return true;
   });
+  const equipmentFallbackOrder = equipKey === "gym-and-bands" ? [poolKey] : [poolKey, `${levelKey}-gym-and-bands`];
+  let fullyEligiblePrograms: string[] = [];
+  for (const tryKey of equipmentFallbackOrder) {
+    const candidate = filterEligibleBaseKeys(pools[tryKey] || []);
+    if (candidate.length > 0) { fullyEligiblePrograms = candidate; break; }
+  }
   // Confirmed via direct simulation: for a narrow slice like advanced+bands
   // (which can have as few as 1-2 real eligible programs total), avoiding
   // the last 3 cycles unconditionally could empty the pool entirely for
