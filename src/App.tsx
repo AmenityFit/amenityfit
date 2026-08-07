@@ -2123,9 +2123,15 @@ const buildProgramSelectionPrompt = (profile: any) => {
   // ── ROTATION LOGIC ────────────────────────────────────────────────────────
   // Last 3 programs are excluded — prevents back-to-back repeats
   // Programs 3+ cycles ago are fully eligible for reintroduction (feel like returning favorites)
-  const recentPrograms = previousPrograms.slice(-3);
+  // Same normalization used in generateMonth6Program/generateAIProgram - a
+  // completed cycle's key can be "month6-X" for a Month 6+ cycle based on
+  // raw pool key X, and availability checks need to recognize both forms as
+  // the same underlying program so this rare AI-fallback path stays
+  // consistent with the main deterministic path it's a fallback for.
+  const usedBaseKeysPrompt = getUsedBaseKeys(previousPrograms);
+  const recentPrograms = usedBaseKeysPrompt.slice(-3);
   const availableFromPool = currentPool.filter(k => !recentPrograms.includes(k));
-  const neverDone = currentPool.filter(k => !previousPrograms.includes(k));
+  const neverDone = currentPool.filter(k => !usedBaseKeysPrompt.includes(k));
   const eligibleForReturn = previousPrograms.filter(p => !recentPrograms.includes(p) && currentPool.includes(p));
 
   // ── PROGRESSION PHASE DETECTION ───────────────────────────────────────────
@@ -2257,6 +2263,20 @@ const isProgramGoalCompatible = (key: string, goal: string): boolean => {
   if (key.includes("athletic")) return goal === "athletic_performance";
   return true;
 };
+
+// A completed cycle's programKey is either a raw pool key (e.g.
+// "intermediate-hypertrophy-month-1") or a "month6-" prefixed one (e.g.
+// "month6-intermediate-hypertrophy-month-1") for a Month 6+ cycle generated
+// FROM that same skeleton. Every place that checks "has this raw pool key
+// already been used" needs to recognize both forms as the same underlying
+// program, or a key used repeatedly as a Month 6+ skeleton never gets
+// marked "used" for pool-availability purposes - it keeps looking eligible
+// forever, both as a Month 6+ base and, if it's first in array order, even
+// as a genuine pool-rotation pick, defeating rotation on both fronts from
+// the same root cause. Used consistently by generateMonth6Program and
+// generateAIProgram below, rather than each doing its own ad hoc check.
+const stripMonth6Prefix = (key: string): string => key.startsWith("month6-") ? key.slice("month6-".length) : key;
+const getUsedBaseKeys = (previousPrograms: string[]): string[] => previousPrograms.map(stripMonth6Prefix);
 
 const generateMonth6Program = (profile: any): { programKey: string; generatedDays?: any[] } => {
   const previousPrograms = profile.previousPrograms || [];
@@ -2518,7 +2538,8 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
   const poolKey = `${levelKey}-${equipKey}`;
 
   // Find a base program that matches frequency and hasn't been used in last 3 cycles
-  const recentPrograms = previousPrograms.slice(-3);
+  const usedBaseKeysM6 = getUsedBaseKeys(previousPrograms);
+  const recentPrograms = usedBaseKeysM6.slice(-3);
   const allPoolPrograms = Object.keys(PROGRAMS).filter(key => {
     const prog = PROGRAMS[key];
     if (!prog) return false;
@@ -2544,8 +2565,11 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
     return true;
   });
 
-  // Pick the base program — prefer ones done longest ago
-  const baseKey = allPoolPrograms.find(k => !previousPrograms.includes(k))
+  // Pick the base program — prefer ones done longest ago. Reuses the same
+  // normalized usedBaseKeysM6 list computed above, rather than checking raw
+  // previousPrograms directly, so a key already used (as either a genuine
+  // pool cycle or a past Month 6+ skeleton) is correctly excluded either way.
+  const baseKey = allPoolPrograms.find(k => !usedBaseKeysM6.includes(k))
     || allPoolPrograms[0]
     || Object.keys(PROGRAMS)[0];
 
@@ -2972,8 +2996,17 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
   // advanced-hypertrophy-month-1) — never a mens-/womens- named one.
   const isGenderCompatible = (key: string): boolean => isProgramGenderCompatible(key, profile.gender);
 
+  // Same normalization as generateMonth6Program - a key already used, either
+  // as a genuine completed pool cycle OR as a past Month 6+ skeleton, must
+  // be excluded from "still available" either way. Without this, a key only
+  // ever used as a Month 6+ base kept looking available forever, so
+  // poolExhausted could never correctly trigger, and this same key could
+  // keep getting re-picked here too (frequencyMatchedPool[0]/availableFromPool[0]
+  // below), meaning even the real, hand-authored pool-rotation cycles could
+  // get stuck repeating one program rather than truly rotating through it.
+  const usedBaseKeysAI = getUsedBaseKeys(previousPrograms);
   const availableFromPool = currentPool.filter((k: string) =>
-    !previousPrograms.includes(k) && !injuryAvoidKeys.includes(k) && isGenderCompatible(k) && isProgramGoalCompatible(k, profile.primaryGoal || "general_fitness")
+    !usedBaseKeysAI.includes(k) && !injuryAvoidKeys.includes(k) && isGenderCompatible(k) && isProgramGoalCompatible(k, profile.primaryGoal || "general_fitness")
   );
   const poolExhausted = availableFromPool.length === 0;
 
