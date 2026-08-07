@@ -2572,6 +2572,14 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
       ? (experience === "advanced" ? "senior-advanced" : experience === "intermediate" ? "senior-intermediate" : "senior-beginner")
       : experience;
     if (experience === "beginner" && (key.includes("intermediate") || key.includes("advanced"))) return false;
+    // Confirmed via direct simulation: the two rules below alone let a
+    // "beginner-" key stay eligible for intermediate AND advanced users,
+    // since neither rule excludes based on the word "beginner" at all -
+    // only pools[] (used by the separate pool-rotation branch) correctly
+    // kept beginner/intermediate/advanced in genuinely separate arrays.
+    // This function's own independent string-heuristic filter needed the
+    // same real separation, which it never actually had.
+    if ((experience === "intermediate" || experience === "advanced") && key.includes("beginner")) return false;
     if (experience === "intermediate" && key.includes("advanced") && !key.includes("intermediate")) return false;
     if (experience === "advanced" && !key.includes("advanced")) return false;
     // Match equipment preference roughly
