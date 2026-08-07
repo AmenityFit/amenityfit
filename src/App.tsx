@@ -2557,20 +2557,18 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
   const equipKey = equipment === "gym" ? "gym" : equipment === "bands" ? "bands" : "gym-and-bands";
   const poolKey = `${levelKey}-${equipKey}`;
 
-  // Find a base program that matches frequency and hasn't been used in last 3 cycles
+  // Every real constraint EXCEPT recency - level, equipment, gender, and
+  // goal are never negotiable, so they're always applied first, unlike the
+  // "avoid the last 3 cycles" rule below, which only makes sense when the
+  // eligible pool is large enough to support it.
   const usedBaseKeysM6 = getUsedBaseKeys(previousPrograms);
   const recentPrograms = usedBaseKeysM6.slice(-3);
-  const allPoolPrograms = Object.keys(PROGRAMS).filter(key => {
+  const fullyEligiblePrograms = Object.keys(PROGRAMS).filter(key => {
     const prog = PROGRAMS[key];
     if (!prog) return false;
-    if (recentPrograms.includes(key)) return false;
     // Match level
     if (isSenior && !key.includes("senior")) return false;
     if (!isSenior && key.includes("senior")) return false;
-    // Match experience level
-    const levelKey = isSenior
-      ? (experience === "advanced" ? "senior-advanced" : experience === "intermediate" ? "senior-intermediate" : "senior-beginner")
-      : experience;
     if (experience === "beginner" && (key.includes("intermediate") || key.includes("advanced"))) return false;
     // Confirmed via direct simulation: the two rules below alone let a
     // "beginner-" key stay eligible for intermediate AND advanced users,
@@ -2592,6 +2590,18 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
     if (!isProgramGoalCompatible(key, profile.primaryGoal || "general_fitness")) return false;
     return true;
   });
+  // Confirmed via direct simulation: for a narrow slice like advanced+bands
+  // (which can have as few as 1-2 real eligible programs total), avoiding
+  // the last 3 cycles unconditionally could empty the pool entirely for
+  // several cycles straight, forcing the code down to
+  // Object.keys(PROGRAMS)[0] as an absolute last resort - the literal
+  // first key in the whole catalog, with every real constraint (level,
+  // equipment, gender, goal) silently bypassed. Only exclude recent
+  // programs when doing so leaves at least one option; otherwise fall back
+  // to the full eligible set, which still respects every real constraint
+  // even when there isn't enough content to also avoid recent repeats.
+  const recentExcluded = fullyEligiblePrograms.filter(key => !recentPrograms.includes(key));
+  const allPoolPrograms = recentExcluded.length > 0 ? recentExcluded : fullyEligiblePrograms;
 
   // Pick the base program — prefer ones done longest ago. Reuses the same
   // normalized usedBaseKeysM6 list computed above, rather than checking raw
