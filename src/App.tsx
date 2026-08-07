@@ -10404,7 +10404,15 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
           const todayWeekEntry = weekDays.find(d => d.isToday) || todayEntry;
 const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
           if (!selectedDay && todayEntry2 && selectedDay !== todayEntry2) { setTimeout(() => setSelectedDay(todayEntry2), 0); }
-          const viewing = selectedDay || todayEntry2;
+          // Re-resolve by date against the freshly recomputed weekDays array
+          // instead of trusting selectedDay's own captured object directly -
+          // selectedDay is only set once per tap and never automatically
+          // updates its baked-in programDay/groups/label afterward, so a
+          // swap (or any other dayOverrides change) would recompute weekDays
+          // correctly but the hero card would keep showing the old content
+          // until the whole screen remounted. Looking the same date back up
+          // in the current array picks up the change immediately instead.
+          const viewing = (selectedDay && weekDays.find((d: any) => d.date.toDateString() === selectedDay.date.toDateString())) || todayEntry2;
           const isToday = viewing.isToday;
 
           return (
