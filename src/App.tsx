@@ -9150,7 +9150,7 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
   // second lag. It is deliberately NOT awaited here; it now runs in the
   // background after this function returns, so the visible save/advance is
   // no longer gated on it.
-  logWeightHistoryInBackground(weights, profile.uid, profile?.programKey, profile?.programDay, today).catch((e) => {
+  logWeightHistoryInBackground(weights, profile.uid, profile?.programKey, profile?.programDay, today, !!profile?.heightFt).catch((e) => {
     console.error("Background weight history logging failed:", e);
   });
 };
@@ -9160,7 +9160,8 @@ const logWeightHistoryInBackground = async (
   uid: string,
   programKey: string | undefined,
   programDay: number | undefined,
-  today: string
+  today: string,
+  isImperial: boolean
 ) => {
   let allPrevDocs: any[] = [];
   try {
@@ -9173,11 +9174,19 @@ const logWeightHistoryInBackground = async (
   const batch: Promise<any>[] = [];
   for (const [exId, weight] of Object.entries(weights)) {
     if (weight === 0) continue;
+    // Was previously hardcoded "lbs" unconditionally, regardless of the
+    // person's actual unit preference or the exercise itself - kettlebells
+    // are conventionally marked in kg universally (overriding the general
+    // preference), everything else follows the person's real imperial/
+    // metric choice, matching the same logic used for display.
+    const exDataForUnit = (EXERCISES_DATA as any)[exId];
+    const isKettlebellForUnit = exDataForUnit?.equipment?.toLowerCase().includes("kettlebell");
+    const unitForLog = isKettlebellForUnit ? "kg" : (isImperial ? "lbs" : "kg");
     const logRef = doc(db, "users", uid, "weightLog", `${today}_${exId}`);
     batch.push(setDoc(logRef, {
       exerciseId: exId,
       weight,
-      unit: "lbs",
+      unit: unitForLog,
       date: today,
       programKey: programKey || "",
       programDay: programDay || 1,
