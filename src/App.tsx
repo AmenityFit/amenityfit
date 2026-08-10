@@ -11119,18 +11119,35 @@ const WorkoutFlow = ({ profile, onComplete, onBack, onGoHomeSave, onProfileUpdat
     const today = new Date().toISOString().split("T")[0];
     const id = `${profile.uid}_${today}`;
     activeSessionIdRef.current = id;
-    // Note: weightsLogged is deliberately NOT initialized here. If this effect
-    // re-runs on a remount mid-workout (e.g. between exercise groups), writing
-    // weightsLogged as a full object - even an empty one - would replace the
-    // whole map and wipe out anything already saved by an earlier group. The
-    // first real per-exercise save (see saveWeightsToFirestore) creates this
-    // field itself via dot-notation paths, and merge:true creates the
-    // document if it doesn't exist yet, so this isn't needed.
-    setDoc(doc(db, "workoutSessions", id), {
-      uid: profile.uid,
-      date: today,
-      programDay: profile?.programDay || 1,
-    }, { merge: true }).catch(() => {});
+    const currentProgramDay = profile?.programDay || 1;
+    const sessionRef = doc(db, "workoutSessions", id);
+    // Confirmed via direct testing: the session document id is date-based
+    // only ({uid}_{date}), so if a person genuinely completes two different
+    // program days on the same calendar date (a makeup session, re-doing a
+    // day, etc.), both land in the SAME document. Without this check, an
+    // earlier workout's weightsLogged/weightNotes silently persist and get
+    // merged alongside a completely different, later workout's entries -
+    // showing exercises from the WRONG program day mixed into what should
+    // be a clean display of just today's actual workout. This reads the
+    // existing doc first (if any) and only clears weightsLogged/weightNotes
+    // when the programDay genuinely changed since that document was last
+    // written - a normal remount mid-workout (same programDay, e.g.
+    // between exercise groups) never touches them, so in-progress data
+    // from earlier groups in THIS workout is still fully protected exactly
+    // as before.
+    getDoc(sessionRef).then(existingSnap => {
+      const existingProgramDay = existingSnap.exists() ? existingSnap.data()?.programDay : null;
+      const baseWrite: Record<string, any> = {
+        uid: profile.uid,
+        date: today,
+        programDay: currentProgramDay,
+      };
+      if (existingSnap.exists() && existingProgramDay != null && existingProgramDay !== currentProgramDay) {
+        baseWrite.weightsLogged = {};
+        baseWrite.weightNotes = {};
+      }
+      return setDoc(sessionRef, baseWrite, { merge: true });
+    }).catch(() => {});
   }, []);
   const [phase, setPhase] = useState<"list" | "active" | "complete">(savedProgress ? "list" : "list");
   const [currentGroupIndex, setCurrentGroupIndex] = useState(savedProgress?.currentGroupIndex ?? 0);
