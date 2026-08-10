@@ -13549,6 +13549,7 @@ const HistoryScreen = ({ profile, onBack, onNavigate = (s: string) => {} }) => {
           completedDateStr: selectedSession.completedDateStr,
           programLabel: selectedSession.programLabel,
           cycleNumber: selectedSession.cycleNumber,
+          weightsLogged: selectedSession.weightsLogged || null,
         }}
       />
     );
