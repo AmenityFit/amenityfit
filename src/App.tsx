@@ -82,6 +82,7 @@ import {
   Eye,
   EyeOff,
   X,
+  StickyNote,
 } from "lucide-react";
 
 const firebaseConfig = {
@@ -9048,6 +9049,15 @@ const [pendingWeightGroup, setPendingWeightGroup] = useState<any>(null);
 const [sessionWeights, setSessionWeights] = useState<Record<string, number>>({});
 const [wheelValues, setWheelValues] = useState<Record<string, number>>({});
 const [lastWeights, setLastWeights] = useState<Record<string, number>>({});
+// Weight-entry notes - a purely optional, per-exercise free-text field for
+// people who like to record how a specific weight felt (e.g. "felt tired
+// at rep 8"). Deliberately invisible when unused: no input box shows at
+// all unless the person taps the note icon, and the icon itself only
+// stands out (filled) once a note actually exists for that exercise -
+// stored separately from wheelValues since it's independent free text,
+// not a weight value.
+const [noteValues, setNoteValues] = useState<Record<string, string>>({});
+const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
 
   const isMetric = !!(profile?.heightCm || profile?.weightKg);
 
@@ -9171,7 +9181,7 @@ const weightOptions = (() => {
   return opts;
 })();
 
-const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any, sessionId?: string) => {
+const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any, sessionId?: string, notes?: Record<string, string>) => {
   if (!profile?.uid) return;
   const today = new Date().toISOString().split("T")[0];
   // Write weights into today's workoutSession so Progress screen can show them.
@@ -9182,10 +9192,22 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
     for (const [exId, weight] of Object.entries(weights)) {
       if (weight !== 0) validWeights[exId] = weight;
     }
-    if (Object.keys(validWeights).length > 0) {
+    // Notes are a separate, parallel field (weightNotes) rather than folded
+    // into weightsLogged itself - keeps every existing reader of
+    // weightsLogged (Progress screen, workout history, Manager Portal
+    // aggregation) working exactly as-is, completely unaware notes exist,
+    // while still living on the same session document for easy lookup.
+    const validNotes: Record<string, string> = {};
+    for (const [exId, note] of Object.entries(notes || {})) {
+      if (note && note.trim().length > 0) validNotes[exId] = note.trim();
+    }
+    if (Object.keys(validWeights).length > 0 || Object.keys(validNotes).length > 0) {
       const updateMap: Record<string, any> = {};
       for (const [exId, w] of Object.entries(validWeights)) {
         updateMap[`weightsLogged.${exId}`] = w;
+      }
+      for (const [exId, n] of Object.entries(validNotes)) {
+        updateMap[`weightNotes.${exId}`] = n;
       }
       const targetSessionId = sessionId || `${profile.uid}_${today}`;
       await setDoc(doc(db, "workoutSessions", targetSessionId), updateMap, { merge: true });
@@ -9531,17 +9553,49 @@ if (showWeightLogger && pendingWeightGroup) {
             );
           }
 
+          const hasNote = !!noteValues[ex.id];
+          const isNoteOpen = expandedNoteId === ex.id;
           return (
             <div key={ex.id} style={{ marginBottom: 28 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
                 <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: 0 }}>{exData?.name || ex.id}</p>
-                {typeof lastWeight === "number" && (
-                  <span style={{ color: COLORS.accent, fontSize: 12, fontWeight: 700, background: `${COLORS.accent}15`, borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap" }}>
-                    Last: {formatWeightLabel(lastWeight, category)}
-                  </span>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  {typeof lastWeight === "number" && (
+                    <span style={{ color: COLORS.accent, fontSize: 12, fontWeight: 700, background: `${COLORS.accent}15`, borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap" }}>
+                      Last: {formatWeightLabel(lastWeight, category)}
+                    </span>
+                  )}
+                  {/* Purely optional note - stays visually silent (muted,
+                      hollow icon) when unused, only stands out once a note
+                      actually exists for this exercise, so it never adds
+                      clutter for people who don't want it. */}
+                  <button
+                    onClick={() => setExpandedNoteId(isNoteOpen ? null : ex.id)}
+                    style={{ background: "none", border: "none", padding: 4, margin: 0, cursor: "pointer", display: "flex", alignItems: "center" }}
+                    aria-label={hasNote ? "Edit note" : "Add note"}
+                  >
+                    <StickyNote size={16} color={hasNote ? COLORS.accent : COLORS.textSecondary} fill={hasNote ? `${COLORS.accent}30` : "none"} />
+                  </button>
+                </div>
               </div>
               <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 10px" }}>{exData?.muscle} · {exData?.equipment}</p>
+              {isNoteOpen && (
+                <textarea
+                  value={noteValues[ex.id] || ""}
+                  onChange={(e) => setNoteValues(prev => ({ ...prev, [ex.id]: e.target.value }))}
+                  placeholder="e.g. felt tired at rep 8..."
+                  autoFocus
+                  style={{ width: "100%", minHeight: 50, marginBottom: 12, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: "8px 10px", color: COLORS.white, fontSize: 13, fontFamily: "'Inter', sans-serif", resize: "none", boxSizing: "border-box" }}
+                />
+              )}
+              {!isNoteOpen && hasNote && (
+                <p
+                  onClick={() => setExpandedNoteId(ex.id)}
+                  style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 10px", fontStyle: "italic", cursor: "pointer" }}
+                >
+                  "{noteValues[ex.id].length > 50 ? noteValues[ex.id].slice(0, 50) + "…" : noteValues[ex.id]}"
+                </p>
+              )}
               <div style={{ position: "relative", height: itemHeight * 5, borderRadius: 16, overflow: "hidden", background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
                 <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: itemHeight, transform: "translateY(-50%)", background: `${COLORS.accent}18`, borderTop: `1px solid ${COLORS.accent}40`, borderBottom: `1px solid ${COLORS.accent}40`, pointerEvents: "none", zIndex: 2 }} />
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: itemHeight * 2, background: `linear-gradient(to bottom, ${COLORS.card}, transparent)`, pointerEvents: "none", zIndex: 1 }} />
@@ -9579,7 +9633,7 @@ if (showWeightLogger && pendingWeightGroup) {
             onWeightsSaved(toSave);
             setWeightSaved(true);
             try {
-              await saveWeightsToFirestore(toSave, pendingWeightGroup, sessionId || undefined);
+              await saveWeightsToFirestore(toSave, pendingWeightGroup, sessionId || undefined, noteValues);
             } catch (e) {
               // Never let a flaky save block the workout flow - the weights are
               // already reflected locally via onWeightsSaved above regardless.
