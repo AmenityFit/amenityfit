@@ -2645,9 +2645,32 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
   // Built once per generation call, not per day, and only when actually
   // needed - every eligible template's real training days, pre-classified
   // by category, ready for the day-selection loop below to search.
+  //
+  // Deliberately WIDER than allPoolPrograms (which stays scoped to the
+  // person's own equipment tier, correct for reference-skeleton selection
+  // above): pulls candidate DAYS from every equipment tier at this
+  // person's level (gym, bands, gym-and-bands combined), not just their
+  // own preference. The exercise-substitution pipeline downstream already
+  // re-filters every exercise for their REAL equipment regardless of which
+  // day-template it came from (same principle as the difficulty-upgrade
+  // fix), so this is safe. For a narrow slice like advanced+bands (as few
+  // as 1-2 real skeletons total), restricting candidates to bands-only
+  // templates barely gives Phase 2 anything to recombine from - widening
+  // the DAY source while keeping exercise-level equipment filtering intact
+  // gives genuine structural variety without requiring any new content.
+  const allEquipmentTiersForLevel = [`${levelKey}-gym`, `${levelKey}-bands`, `${levelKey}-gym-and-bands`];
+  const widenedCandidateKeys = Array.from(new Set(allEquipmentTiersForLevel.flatMap(k => pools[k] || [])))
+    .filter(key => {
+      const prog = PROGRAMS[key];
+      if (!prog) return false;
+      if (!isProgramGenderCompatible(key, profile.gender)) return false;
+      if (!isProgramGoalCompatible(key, profile.primaryGoal || "general_fitness")) return false;
+      return true;
+    });
+
   const candidateDaysByCategory: Record<string, any[]> = {};
   if (isSkeletonPoolExhausted) {
-    allPoolPrograms.forEach((pk: string) => {
+    widenedCandidateKeys.forEach((pk: string) => {
       const prog = PROGRAMS[pk];
       if (!prog?.days) return;
       prog.days.forEach((d: any) => {
