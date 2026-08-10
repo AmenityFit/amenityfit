@@ -8646,10 +8646,18 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
             {Object.entries(historyMeta.weightsLogged).map(([exId, weight]: [string, any]) => {
               const exData = (EXERCISES_DATA as any)[exId];
               const label = typeof weight === "string" ? weight : `${weight} lbs`;
+              const noteForEx = historyMeta?.weightNotes?.[exId];
               return (
-                <div key={exId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${COLORS.border}` }}>
-                  <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 500 }}>{exData?.name || exId}</span>
-                  <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{label}</span>
+                <div key={exId} style={{ padding: "8px 0", borderBottom: `1px solid ${COLORS.border}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 500 }}>{exData?.name || exId}</span>
+                    <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{label}</span>
+                  </div>
+                  {noteForEx && (
+                    <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "4px 0 0", fontStyle: "italic", display: "flex", alignItems: "center", gap: 4 }}>
+                      <StickyNote size={11} color={COLORS.textSecondary} /> {noteForEx}
+                    </p>
+                  )}
                 </div>
               );
             })}
@@ -10563,11 +10571,12 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
     }
   }, []);
   const [dayWeightLog, setDayWeightLog] = useState<Record<string, number | string>>({});
+  const [dayWeightNotes, setDayWeightNotes] = useState<Record<string, string>>({});
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     const fetchWeightLog = async () => {
-      if (!selectedDay?.isCompleted || !profile?.uid) { setDayWeightLog({}); return; }
+      if (!selectedDay?.isCompleted || !profile?.uid) { setDayWeightLog({}); setDayWeightNotes({}); return; }
       try {
         const logDate = (() => {
           const now = new Date();
@@ -10590,10 +10599,12 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
         // BEFORE showing anything - that fixed the correctness problem but
         // introduced real, sometimes 30+ second waits on a slow connection.
         // This gives both: instant display, and eventual correctness.
-        const parseDayLogs = (snap: any): Record<string, number | string> => {
+        const parseDayLogs = (snap: any): { logs: Record<string, number | string>; notes: Record<string, string> } => {
           const logs: Record<string, number | string> = {};
+          const notes: Record<string, string> = {};
           if (snap.docs.length > 0) {
-            const weightsLogged = snap.docs[0].data().weightsLogged || {};
+            const data = snap.docs[0].data();
+            const weightsLogged = data.weightsLogged || {};
             Object.entries(weightsLogged).forEach(([exId, weight]) => {
               if (typeof weight === "number" && weight > 0) {
                 logs[exId] = weight;
@@ -10601,8 +10612,12 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
                 logs[exId] = weight;
               }
             });
+            const weightNotes = data.weightNotes || {};
+            Object.entries(weightNotes).forEach(([exId, note]) => {
+              if (typeof note === "string" && note.trim().length > 0) notes[exId] = note;
+            });
           }
-          return logs;
+          return { logs, notes };
         };
         // Forces the first read from local cache explicitly - the plain
         // getDocs() default used here previously doesn't reliably guarantee
@@ -10612,12 +10627,18 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
         // remounted after navigating away and back.
         try {
           const cacheSnap = await getDocsFromCache(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)));
-          setDayWeightLog(parseDayLogs(cacheSnap));
+          const cacheResult = parseDayLogs(cacheSnap);
+          setDayWeightLog(cacheResult.logs);
+          setDayWeightNotes(cacheResult.notes);
         } catch {}
         getDocsFromServer(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)))
-          .then(serverSnap => setDayWeightLog(parseDayLogs(serverSnap)))
+          .then(serverSnap => {
+            const serverResult = parseDayLogs(serverSnap);
+            setDayWeightLog(serverResult.logs);
+            setDayWeightNotes(serverResult.notes);
+          })
           .catch(() => {});
-      } catch (e) { setDayWeightLog({}); }
+      } catch (e) { setDayWeightLog({}); setDayWeightNotes({}); }
     };
     fetchWeightLog();
   }, [selectedDay?.programDay, selectedDay?.isCompleted]);
@@ -10871,10 +10892,18 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                             const isKettlebellEx = exData?.equipment?.toLowerCase().includes("kettlebell");
                             const weightUnit = isKettlebellEx ? "kg" : (profile?.heightFt ? "lbs" : "kg");
                             const displayValue = typeof weight === "number" ? `${weight} ${weightUnit}` : weight;
+                            const noteForEx = dayWeightNotes[exId];
                             return (
-                              <div key={exId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${COLORS.border}` }}>
-                                <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 500 }}>{exData?.name || exId}</span>
-                                <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{displayValue}</span>
+                              <div key={exId} style={{ padding: "6px 0", borderBottom: `1px solid ${COLORS.border}` }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                  <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 500 }}>{exData?.name || exId}</span>
+                                  <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{displayValue}</span>
+                                </div>
+                                {noteForEx && (
+                                  <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "4px 0 0", fontStyle: "italic", display: "flex", alignItems: "center", gap: 4 }}>
+                                    <StickyNote size={11} color={COLORS.textSecondary} /> {noteForEx}
+                                  </p>
+                                )}
                               </div>
                             );
                           })}
@@ -10916,10 +10945,18 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                         const isKettlebellEx = exData?.equipment?.toLowerCase().includes("kettlebell");
                         const weightUnit = isKettlebellEx ? "kg" : (profile?.heightFt ? "lbs" : "kg");
                         const displayValue = typeof weight === "number" ? `${weight} ${weightUnit}` : weight;
+                        const noteForEx = dayWeightNotes[exId];
                         return (
-                          <div key={exId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: i < 6 ? `1px solid ${COLORS.border}` : "none" }}>
-                            <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 500 }}>{exData?.name || exId}</span>
-                            <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{displayValue}</span>
+                          <div key={exId} style={{ padding: "6px 0", borderBottom: i < 6 ? `1px solid ${COLORS.border}` : "none" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 500 }}>{exData?.name || exId}</span>
+                              <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>{displayValue}</span>
+                            </div>
+                            {noteForEx && (
+                              <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "4px 0 0", fontStyle: "italic", display: "flex", alignItems: "center", gap: 4 }}>
+                                <StickyNote size={11} color={COLORS.textSecondary} /> {noteForEx}
+                              </p>
+                            )}
                           </div>
                         );
                       })}
@@ -13209,6 +13246,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
           programLabel: selectedSession.programLabel,
           cycleNumber: selectedSession.cycleNumber,
           weightsLogged: selectedSession.weightsLogged || null,
+          weightNotes: selectedSession.weightNotes || null,
         }}
       />
     );
@@ -13668,6 +13706,7 @@ const HistoryScreen = ({ profile, onBack, onNavigate = (s: string) => {} }) => {
           programLabel: selectedSession.programLabel,
           cycleNumber: selectedSession.cycleNumber,
           weightsLogged: selectedSession.weightsLogged || null,
+          weightNotes: selectedSession.weightNotes || null,
         }}
       />
     );
