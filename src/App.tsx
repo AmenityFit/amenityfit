@@ -10748,7 +10748,13 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                           <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 10px" }}>Weights Logged</p>
                           {Object.entries(dayWeightLog).map(([exId, weight]) => {
                             const exData = (EXERCISES_DATA as any)[exId];
-                            const weightUnit = profile?.heightFt ? "lbs" : "kg";
+                            // Kettlebells are conventionally sold and marked
+                            // in kg increments universally, regardless of
+                            // whether the person selected imperial or
+                            // metric units elsewhere - this overrides the
+                            // general unit choice specifically for them.
+                            const isKettlebellEx = exData?.equipment?.toLowerCase().includes("kettlebell");
+                            const weightUnit = isKettlebellEx ? "kg" : (profile?.heightFt ? "lbs" : "kg");
                             const displayValue = typeof weight === "number" ? `${weight} ${weightUnit}` : weight;
                             return (
                               <div key={exId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${COLORS.border}` }}>
@@ -10791,7 +10797,9 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                       <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 10px" }}>Weights Logged</p>
                       {Object.entries(dayWeightLog).map(([exId, weight]) => {
                         const exData = (EXERCISES_DATA as any)[exId];
-                        const weightUnit = profile?.heightFt ? "lbs" : "kg";
+                        // Same kettlebell override as the "today" card above.
+                        const isKettlebellEx = exData?.equipment?.toLowerCase().includes("kettlebell");
+                        const weightUnit = isKettlebellEx ? "kg" : (profile?.heightFt ? "lbs" : "kg");
                         const displayValue = typeof weight === "number" ? `${weight} ${weightUnit}` : weight;
                         return (
                           <div key={exId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: i < 6 ? `1px solid ${COLORS.border}` : "none" }}>
