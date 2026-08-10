@@ -9218,7 +9218,29 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
         updateMap[`weightNotes.${exId}`] = n;
       }
       const targetSessionId = sessionId || `${profile.uid}_${today}`;
-      await setDoc(doc(db, "workoutSessions", targetSessionId), updateMap, { merge: true });
+      // Confirmed via a direct raw-JSON inspection of a real session
+      // document: setDoc(ref, data, {merge:true}) does NOT interpret dots
+      // in a key as a nested field path - it stores "weightsLogged.foo" as
+      // a literal, malformed top-level field name, sitting completely
+      // outside the real weightsLogged map every reader in the app
+      // actually queries. Only updateDoc() correctly treats dot-notation
+      // keys as nested-path merges. This is exactly why entries kept
+      // silently vanishing - they were being written, just never into the
+      // field anything ever read. Falls back to the old setDoc behavior
+      // only in the rare case the session document doesn't exist yet
+      // (updateDoc throws if the doc is missing, unlike setDoc+merge) -
+      // the normal flow already creates this document at workout start,
+      // so this fallback should essentially never fire.
+      const sessionRef = doc(db, "workoutSessions", targetSessionId);
+      try {
+        await updateDoc(sessionRef, updateMap);
+      } catch (updateErr: any) {
+        if (updateErr?.code === "not-found") {
+          await setDoc(sessionRef, updateMap, { merge: true });
+        } else {
+          throw updateErr;
+        }
+      }
     }
   } catch (e) {
     console.error("Failed to write weights to session:", e);
