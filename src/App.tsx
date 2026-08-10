@@ -11584,14 +11584,26 @@ const buildSystemPrompt = (profile: any) => {
               return ex ? `${ex.name} (${e.sets} sets x ${e.reps})` : e.id;
             }) || []);
           if (cardioGroups.length > 0) {
-            const cardioMins = cardioGroups.reduce((sum: number, g: any) => sum + (g.cardioMinutes || 0), 0);
+            // Was summing the raw cardioMinutes field baked into the
+            // program template (e.g. 35), not the actual session-length-
+            // adjusted duration the real workout card computes and shows
+            // (e.g. 55) via this same calculateCardioMinutes function -
+            // meaning the coach could describe a completely different
+            // cardio duration than what the person's own card says.
+            const cardioMins = calculateCardioMinutes(todayDay.groups, profile?.sessionLength || 60);
             if (cardioMins > 0) todayExercises.push(`Cardio Finish — ${cardioMins} minutes (elliptical, stairmaster, bike, treadmill, jump rope, or similar)`);
           }
         }
       }
-      // Calculate exact cardio minutes for coach context
-      const cardioGroups = (todayDay?.groups || []).filter((g: any) => g.type === "cardio");
-      totalCardioMins = cardioGroups.reduce((sum: number, g: any) => sum + (g.cardioMinutes || 0), 0);
+      // Calculate exact cardio minutes for coach context - same fix as
+      // above, using the real session-length-adjusted calculation instead
+      // of summing raw template values. Guarded on an actual cardio group
+      // being present - calculateCardioMinutes has no such guard itself
+      // and always returns at least 10, so calling it unconditionally
+      // would fabricate a nonzero cardio duration even for pure-strength
+      // days with no cardio component at all.
+      const hasCardioToday = !isRestDay && (todayDay?.groups || []).some((g: any) => g.type === "cardio");
+      totalCardioMins = hasCardioToday ? calculateCardioMinutes(todayDay.groups, profile?.sessionLength || 60) : 0;
 
       if (tomorrowDay) {
         tomorrowFocus = tomorrowDay.isRest ? "Rest day" : (tomorrowDay.focus || tomorrowDay.title || "");
