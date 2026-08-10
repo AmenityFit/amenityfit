@@ -2763,7 +2763,24 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
     // actually reached, since JS closures only see variables from scopes
     // that existed at DEFINITION time, not wherever the function is called.
     const avoidSameDayDuplicate = (fallbackId: string): string => {
-      if (!usedInDay.includes(fallbackId)) return fallbackId;
+      // Confirmed via direct simulation: this function was only ever
+      // designed to solve "avoid the same exercise appearing twice in one
+      // day" - its early return let ANY non-duplicate exercise straight
+      // through unchanged, including a genuinely equipment-incompatible
+      // one, whenever findSubstitute had already failed to find a
+      // compatible alternative (a real content gap - e.g. no bands
+      // equivalent exists for that specific muscle target). Since this is
+      // the true last-resort tail before an exercise reaches the final
+      // output, it needs to also require equipment compatibility here, not
+      // just non-duplication - otherwise a widened Phase 2 day-borrow with
+      // no valid substitute for one specific exercise could still leak a
+      // real gym-only exercise (barbell, cable machine) to a bands-only
+      // person. Still falls back to the original at the very end if
+      // truly nothing else qualifies - a genuine content gap has no better
+      // answer than the closest available option.
+      const fallbackData = (EXERCISES_DATA as any)[fallbackId];
+      const fallbackEquipmentOk = fallbackData ? isEquipmentCompatible(fallbackData.equipment, fallbackId) : true;
+      if (!usedInDay.includes(fallbackId) && fallbackEquipmentOk) return fallbackId;
       const targetMuscle = (EXERCISES_DATA as any)[fallbackId]?.muscle;
       const alt = validExerciseIds.filter(id => {
         if (usedInDay.includes(id)) return false;
@@ -2858,8 +2875,20 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
           // differs in the narrow failure case handled above.
           return primaryFallbackId === ex.id ? ex : { ...ex, id: primaryFallbackId };
         }
-        // Only swap 1 per group max — if already swapped one, keep the rest
-        const alreadySwappedOne = swappedInGroup;
+        // Only swap 1 per group max for VARIETY reasons - but never for a
+        // genuine equipment mismatch. Phase 2 day-recombination (widened to
+        // pull day-structures from every equipment tier at this person's
+        // level, not just their own) can hand this loop a group where EVERY
+        // exercise is equipment-incompatible, not just one - the original
+        // "swap 1 per group" limit was designed around borrowing from the
+        // person's own equipment tier, where at most one exercise per group
+        // would ever need correcting. Confirmed via direct simulation that
+        // without this override, real gym-only exercises (barbell, cable
+        // machine, leg curl machine) were reaching bands-only users
+        // whenever they weren't first in their group.
+        const origExDataForSwapCheck = (EXERCISES_DATA as any)[ex.id];
+        const isCurrentlyEquipmentIncompatible = origExDataForSwapCheck && !isEquipmentCompatible(origExDataForSwapCheck.equipment, ex.id);
+        const alreadySwappedOne = swappedInGroup && !isCurrentlyEquipmentIncompatible;
         if (alreadySwappedOne) {
           usedInDay.push(ex.id);
           return ex;
