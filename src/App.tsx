@@ -11522,7 +11522,7 @@ onSaveState={(round: number, exerciseIndex: number, cells?: string[]) => {
       // is the single value this screen already uses for both the visible
       // day badge and the content lookup, so passing it through guarantees
       // the saved label can never disagree with the saved content again.
-      onDone={() => onComplete({ groups: workoutGroups, sessionLength, weightsLogged: workoutFlowWeightsRef.current, completedProgramDay: actualCompletedDay })}
+      onDone={() => onComplete({ groups: workoutGroups, sessionLength, weightsLogged: workoutFlowWeightsRef.current, completedProgramDay: actualCompletedDay, sessionId: activeSessionIdRef.current })}
     />
   );
 };
@@ -20353,7 +20353,24 @@ const isInitialLoad = React.useRef(true);
         const progDay = isMonth4
           ? userProfile.generatedDays?.find((d: any) => d.dayNum === resolvedSessionDay)
           : PROGRAMS[baseProgramKey]?.days?.find((d: any) => d.dayNum === resolvedSessionDay);
-        const sessionId = `${uid}_${Date.now()}`;
+        // Confirmed via a real, raw session document tonight: this
+        // previously always minted a brand NEW, timestamp-based id here at
+        // completion time, and passed nothing to saveWorkoutSession below -
+        // meaning it fell through to that function's OWN internal
+        // existing-doc lookup, which apparently failed to find the
+        // already-correct, date-based document every per-group weight/note
+        // save throughout the workout had been writing to. The result: two
+        // entirely separate documents for one workout - the real one with
+        // every group's weights and notes correctly accumulated, and a
+        // second, mostly-empty one (only ever capturing whatever
+        // workoutFlowWeightsRef happened to hold in-memory at that exact
+        // moment) that the app actually reads and displays. Using the
+        // SAME session id the whole workout already used - threaded
+        // through via snapshot.sessionId - eliminates that lookup
+        // entirely and guarantees this final write lands in the one real
+        // document, merging completion metadata into the data that was
+        // already there instead of creating a competing, mostly-empty one.
+        const sessionId = snapshot.sessionId || `${uid}_${Date.now()}`;
         saveWorkoutSession(uid, {
           uid,
           programKey: userProfile.programKey,
@@ -20397,7 +20414,7 @@ const isInitialLoad = React.useRef(true);
           completedDateStr: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
           cycleNumber: userProfile.cycleNumber || 1,
           weightsLogged: sanitizeForFirestore(snapshot.weightsLogged || {}),
-        });
+        }, sessionId);
         pingPresence(uid, userProfile.buildingId || 'unknown', 'resident');
       })();
     }
