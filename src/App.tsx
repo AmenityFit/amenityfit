@@ -10666,12 +10666,24 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
         // flicker (briefly empty, then repopulated) every time this screen
         // remounted after navigating away and back.
         try {
-          const cacheSnap = await getDocsFromCache(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)));
+          // orderBy(completedAt, desc) added so that if multiple session
+          // documents ever share the same date - each new, genuinely
+          // different workout now correctly gets its own document instead
+          // of merging into one shared per-date doc - this always prefers
+          // the most recently completed one instead of an arbitrary,
+          // possibly stale earlier one. Safe here specifically because
+          // this whole fetch is gated to only run for already-completed
+          // days, so every candidate document is guaranteed to have
+          // completedAt set (Firestore's orderBy excludes documents
+          // missing the ordered field entirely, which would be a problem
+          // for a still-in-progress, not-yet-completed document, but that
+          // case can't reach this code path).
+          const cacheSnap = await getDocsFromCache(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate), orderBy("completedAt", "desc")));
           const cacheResult = parseDayLogs(cacheSnap);
           setDayWeightLog(cacheResult.logs);
           setDayWeightNotes(cacheResult.notes);
         } catch {}
-        getDocsFromServer(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate)))
+        getDocsFromServer(query(collection(db, "workoutSessions"), where("uid", "==", profile.uid), where("date", "==", logDate), orderBy("completedAt", "desc")))
           .then(serverSnap => {
             const serverResult = parseDayLogs(serverSnap);
             setDayWeightLog(serverResult.logs);
