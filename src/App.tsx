@@ -10901,7 +10901,7 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                         <Check size={18} color={COLORS.success} strokeWidth={3} />
                         <span style={{ color: COLORS.success, fontSize: 15, fontWeight: 700 }}>Today's Workout Complete</span>
                       </div>
-                      {Object.keys(dayWeightLog).length > 0 && (
+                      {!viewing.isRest && Object.keys(dayWeightLog).length > 0 && (
                         <div style={{ background: COLORS.background, borderRadius: 14, padding: "14px 16px", border: `1px solid ${COLORS.border}` }}>
                           <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 10px" }}>Weights Logged</p>
                           {Object.entries(dayWeightLog).map(([exId, weight]) => {
@@ -10958,7 +10958,7 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                       {viewing.isCompleted ? "✓ Completed" : `Available ${viewing.dayName}, ${viewing.monthName} ${viewing.dateNum}`}
                     </span>
                   </div>
-                  {viewing.isCompleted && Object.keys(dayWeightLog).length > 0 && (
+                  {viewing.isCompleted && !viewing.isRest && Object.keys(dayWeightLog).length > 0 && (
                     <div style={{ background: COLORS.background, borderRadius: 14, padding: "14px 16px", border: `1px solid ${COLORS.border}` }}>
                       <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 10px" }}>Weights Logged</p>
                       {Object.entries(dayWeightLog).map(([exId, weight]) => {
