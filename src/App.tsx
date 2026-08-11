@@ -20368,9 +20368,17 @@ const isInitialLoad = React.useRef(true);
         const resolvedSessionDay = typeof snapshot.completedProgramDay === "number"
           ? snapshot.completedProgramDay
           : resolveProgramDayForDate(userProfile.programDay || 1, new Date(), userProfile?.dayOverrides);
-        const progDay = isMonth4
-          ? userProfile.generatedDays?.find((d: any) => d.dayNum === resolvedSessionDay)
-          : PROGRAMS[baseProgramKey]?.days?.find((d: any) => d.dayNum === resolvedSessionDay);
+        // Confirmed via real session data tonight: getProgramDay() (the
+        // same shared resolver Dashboard, Weekly View, and the assistant
+        // already use) does MODULAR wrap-around indexing - e.g. day 11 on
+        // a 7-day cycling program correctly resolves to day 4. The direct
+        // .find(d => d.dayNum === X) this used to do has no such wrapping,
+        // so it silently returns undefined for any day past the program's
+        // raw day count, which is exactly why dayTitle/dayFocus kept
+        // falling through to the generic "Day N"/"Workout" text instead
+        // of the real program content, no matter how far into a cycle
+        // someone was.
+        const progDay = getProgramDay(baseProgramKey, resolvedSessionDay, isMonth4 ? userProfile.generatedDays : undefined);
         // Confirmed via a real, raw session document tonight: this
         // previously always minted a brand NEW, timestamp-based id here at
         // completion time, and passed nothing to saveWorkoutSession below -
@@ -20401,7 +20409,13 @@ const isInitialLoad = React.useRef(true);
             actualGroups.forEach((g: any) => {
               if (g.type === "cardio") { if (!muscles.includes("Cardio")) muscles.push("Cardio"); return; }
               (g.exercises || []).forEach((ex: any) => {
-                const m = ex.muscle || (typeof window !== "undefined" && (window as any).EXERCISES_DATA?.[ex.id]?.muscle) || "";
+                // EXERCISES_DATA is a plain module-level const in this
+                // same file, never actually attached to window anywhere -
+                // the window.EXERCISES_DATA lookup this used to do always
+                // silently returned undefined, meaning this muscle-derived
+                // fallback for dayFocus never once actually ran; it always
+                // fell straight through to progDay?.focus regardless.
+                const m = ex.muscle || EXERCISES_DATA[ex.id]?.muscle || "";
                 if (m && !muscles.includes(m)) muscles.push(m);
               });
             });
