@@ -20328,7 +20328,7 @@ const isInitialLoad = React.useRef(true);
   );
   if (screen === "dashboard") return <Dashboard key={"dashboard" + workoutDoneToday + (userProfile?.programDay || 1)} profile={liveProfile} onStartWorkout={() => setScreen("workout")} onCompleteRestDay={handleCompleteRestDay} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString() && (userProfile?.workoutProgress?.currentGroupIndex > 0 || (userProfile?.workoutProgress?.completedCells?.length > 0)))} onNavigate={navigate} onViewWeekly={() => setScreen("weekly")} reEntryMode={userProfile?.reEntryMode} reEntrySessions={userProfile?.reEntrySessions || 0} reEntryTarget={Math.round((userProfile?.frequency || 3) * 2)} wearableModifier={getWorkoutModifier(userProfile)} onWearableOverride={() => setUserProfile((prev: any) => ({ ...prev, wearableOverride: true }))} />;
   if (screen === "cycle-complete") return <CycleCompleteScreen profile={liveProfile} onStartNewCycle={handleNewCycle} />;
-  if (screen === "workout") return <WorkoutFlow profile={liveProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onComplete={async (snapshot) => {
+  if (screen === "workout") return <WorkoutFlow key={"workout" + (userProfile?.programDay || 1)} profile={liveProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onComplete={async (snapshot) => {
     const uid = auth.currentUser?.uid || userProfile?.uid || currentUid || authUid || (await new Promise<string>(resolve => {
       const unsub = auth.onAuthStateChanged(user => { unsub(); resolve(user?.uid || ""); });
     }));
