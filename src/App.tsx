@@ -13916,7 +13916,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "How do I update my profile photo?",
-    a: "Tap your photo at the top of this screen. Your camera roll will open and you can pick any image. It updates instantly.",
+    a: "Tap \"Change photo\" below your name at the top of this screen to pick a new image from your camera roll, or \"Remove photo\" to remove it. It updates instantly.",
   },
   {
     q: "I moved to a new building. What happens to my progress?",
