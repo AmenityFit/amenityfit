@@ -643,8 +643,26 @@ const saveWorkoutSession = async (uid: string, session: any, sessionId?: string)
         existingWeights = sessSnap.docs[0].data()?.weightsLogged || {};
       }
     } catch {}
-    const id = existingId || sessionId || `${uid}_${Date.now()}`;
-    const mergedWeights = { ...existingWeights, ...(session.weightsLogged || {}) };
+    // Confirmed with hard evidence across three separate tests tonight:
+    // this previously let existingId (found purely by matching uid+date)
+    // win over an explicitly-passed sessionId. Since the session document
+    // id is date-based, ANY earlier workout completed on the same
+    // calendar date - even a completely different program day - was
+    // being found and silently reused here, merging that unrelated
+    // workout's data into whatever the CURRENT workout is trying to save.
+    // The caller now always knows and passes the exact session id used
+    // throughout the whole current workout, which is strictly more
+    // trustworthy than a generic "something exists for today" lookup, so
+    // it must win. existingId now only matters as a last-resort fallback
+    // when no sessionId was passed in at all.
+    const id = sessionId || existingId || `${uid}_${Date.now()}`;
+    // Only trust existingWeights as a genuine top-up for THIS session - if
+    // the document the lookup found isn't the same one this call is
+    // actually targeting, it belongs to a different workout entirely and
+    // must never be merged in, regardless of how it was found.
+    const mergedWeights = existingId === id
+      ? { ...existingWeights, ...(session.weightsLogged || {}) }
+      : (session.weightsLogged || {});
     // merge: true here too - previously this was a full-document setDoc with
     // no merge option, meaning any field on the existing document not
     // included in this specific call would be silently wiped, on top of
