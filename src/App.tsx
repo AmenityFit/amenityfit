@@ -11860,6 +11860,24 @@ THEIR PROGRAM RIGHT NOW:
 ${!isRestDay && !workoutDoneToday && todayExercises.length > 0 ? `- Still to do today: ${todayExercises.join(", ")}` : ""}
 ${!isRestDay && workoutDoneToday && todayExercises.length > 0 ? `- What they just completed: ${todayExercises.join(", ")}` : ""}
 ${!isRestDay && todayExercises.length > 0 ? `- Full exercise list for today regardless of completion: ${todayExercises.join(", ")}` : ""}
+${(() => {
+  const loggedWeights = profile?.todayWeightsLogged || {};
+  const loggedNotes = profile?.todayWeightNotes || {};
+  const exIds = new Set([...Object.keys(loggedWeights), ...Object.keys(loggedNotes)]);
+  if (exIds.size === 0) return "";
+  const lines = Array.from(exIds).map((exId: string) => {
+    const exData = (EXERCISES_DATA as any)[exId];
+    const name = exData?.name || exId;
+    const weight = loggedWeights[exId];
+    const note = loggedNotes[exId];
+    const weightPart = typeof weight === "number" ? `${weight} lbs` : (typeof weight === "string" ? weight : null);
+    const parts: string[] = [];
+    if (weightPart) parts.push(weightPart);
+    if (note) parts.push(`note: "${note}"`);
+    return `${name}${parts.length > 0 ? ` — ${parts.join(", ")}` : ""}`;
+  });
+  return `- What they actually logged today (real weights and any notes they typed in mid-workout - reference these specifically if asked, e.g. "how did the bench press feel" or "what weight did I use"): ${lines.join("; ")}`;
+})()}
 ${totalCardioMins > 0 && !isRestDay ? `- Today's time breakdown: ${sessionLength - totalCardioMins} min strength + ${totalCardioMins} min cardio = ${sessionLength} min total — this is exact, matches what's on their workout card` : ""}
 ${tomorrowFocus ? `- Tomorrow: ${tomorrowFocus}` : ""}
 ${weekStructure ? `- Their week: ${weekStructure}` : ""}
@@ -12249,6 +12267,29 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
       setDoc(doc(db, "buildings", profile.buildingId), { fitnessAssistantQuestionsThisMonth: increment(1) }, { merge: true }).catch(() => {});
     }
 
+    // Gives the assistant real visibility into what was actually logged
+    // today - weights and any notes typed in mid-workout - so it can
+    // discuss specifics ("how did the bench press feel") instead of only
+    // ever knowing the program's planned structure. Read once per message
+    // rather than reused across the whole conversation, since a person
+    // could still be logging weights while chatting mid-workout. Never
+    // blocks the actual send if it fails - this is enrichment, not a hard
+    // dependency the chat should ever break over.
+    let todaySessionData: { weightsLogged?: Record<string, any>; weightNotes?: Record<string, any> } = {};
+    try {
+      if (profile?.uid) {
+        const todayStr = new Date().toISOString().split("T")[0];
+        const sessionSnap = await getDoc(doc(db, "workoutSessions", `${profile.uid}_${todayStr}`));
+        if (sessionSnap.exists()) {
+          const sData = sessionSnap.data();
+          todaySessionData = { weightsLogged: sData?.weightsLogged || {}, weightNotes: sData?.weightNotes || {} };
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch today's session for chat context:", e);
+    }
+    const profileWithSession = { ...profile, todayWeightsLogged: todaySessionData.weightsLogged, todayWeightNotes: todaySessionData.weightNotes };
+
     try {
       const response = await fetch(ANTHROPIC_PROXY_URL, {
         method: "POST",
@@ -12276,7 +12317,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
           // the input cost, instead of paying full price to resend the
           // exact same context over and over.
           system: [
-            { type: "text", text: buildSystemPrompt(profile), cache_control: { type: "ephemeral" } },
+            { type: "text", text: buildSystemPrompt(profileWithSession), cache_control: { type: "ephemeral" } },
           ],
           // Marks a cache breakpoint on the last message of the stable
           // conversation history (everything before the question just
