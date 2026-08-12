@@ -9100,7 +9100,28 @@ const WheelPickerScroll = React.memo(({ options, selected, itemHeight, category,
   );
 });
 
-const ActiveExerciseScreen = ({ group, groupIndex, totalGroups, onGroupComplete, onBack, onGoHome, onShowOverview, profile, initialRound = 1, initialExerciseIndex = 0, initialCompletedCells = [], initialWeights = {} as Record<string, number>, onSaveState = (round: number, exerciseIndex: number, cells?: string[]) => {}, onSwap = (swapKey: string, newId: string) => {}, onWeightsSaved = (weights: Record<string, number>) => {}, initialSwaps = {} as Record<string, string>, sessionId = null as string | null }) => {
+const ActiveExerciseScreen = ({ group, groupIndex, totalGroups, onGroupComplete, onBack, onGoHome, onShowOverview, profile, initialRound = 1, initialExerciseIndex = 0, initialCompletedCells = [], initialWeights = {} as Record<string, number>, onSaveState = (round: number, exerciseIndex: number, cells?: string[]) => {}, onSwap = (swapKey: string, newId: string) => {}, onWeightsSaved = (weights: Record<string, number>) => {}, initialSwaps = {} as Record<string, string>, sessionId = null as string | null, startTime = Date.now() }) => {
+  // Live workout clock - same timestamp-anchored pattern as the rest timer
+  // above: always recomputed from real elapsed wall-clock time against the
+  // single startTime the whole session already uses (the same value the
+  // completion screen reads), never a naive tick-counter. This guarantees
+  // the live number and the final total can never disagree, and that
+  // backgrounding, screen lock, or WebView throttling never pauses or
+  // desyncs it - it just recomputes correctly the instant it can render
+  // again, exactly like the rest-between-sets timer already does.
+  const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(() => Math.floor((Date.now() - startTime) / 1000));
+  useEffect(() => {
+    const tick = () => setLiveElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
+    tick();
+    const handleVisibility = () => { if (document.visibilityState === "visible") tick(); };
+    document.addEventListener("visibilitychange", handleVisibility);
+    const interval = setInterval(tick, 1000);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [startTime]);
+
   const [currentRound, setCurrentRound] = useState(initialRound);
 const [currentExerciseIndex, setCurrentExerciseIndex] = useState(initialExerciseIndex);
 const [showRest, setShowRest] = useState(false);
@@ -9816,9 +9837,14 @@ if (showRest) {
           <ArrowLeft size={18} color={COLORS.white} />
         </button>
         <div style={{ flex: 1 }}>
-          <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 4px" }}>
-            Group {groupIndex + 1} of {totalGroups} · {group.label}
-          </p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 0 4px" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", margin: 0 }}>
+              Group {groupIndex + 1} of {totalGroups} · {group.label}
+            </p>
+            <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, margin: 0, fontVariantNumeric: "tabular-nums" }}>
+              {String(Math.floor(liveElapsedSeconds / 60)).padStart(2, "0")}:{String(liveElapsedSeconds % 60).padStart(2, "0")}
+            </p>
+          </div>
           <div style={{ height: 4, background: COLORS.border, borderRadius: 99, overflow: "hidden" }}>
             <div style={{ height: "100%", borderRadius: 99, background: `linear-gradient(90deg, ${COLORS.primary}, ${COLORS.accent})`, width: `${((groupIndex) / totalGroups) * 100}%`, transition: "width 0.4s ease" }} />
           </div>
@@ -11528,6 +11554,7 @@ const workoutGroups = injuryFiltered.map(group => ({
         group={workoutGroups[currentGroupIndex]}
         groupIndex={currentGroupIndex}
         totalGroups={workoutGroups.length}
+        startTime={startTime}
         onGroupComplete={handleGroupComplete}
         onBack={() => {
           saveProgressToFirestore({
