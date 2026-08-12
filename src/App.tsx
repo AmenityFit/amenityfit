@@ -7424,15 +7424,28 @@ const DIFFICULTY_TIER_ORDER = ["beginner", "intermediate", "advanced"];
 const exerciseDifficultyTiers: Record<string, Set<string>> = (() => {
   const map: Record<string, Set<string>> = {};
   for (const programKey of Object.keys(PROGRAMS)) {
-    const tier = DIFFICULTY_TIER_ORDER.find(t => programKey.startsWith(t));
-    if (!tier) continue;
+    // Was previously programKey.startsWith(t) via .find() - a strict
+    // prefix match that only matched "plain" keys like intermediate-6x.
+    // Real program keys are far messier: gender-prefixed (mens-advanced-*),
+    // senior-prefixed (senior-beginner-3x), and hybrid keys that
+    // legitimately span two tiers at once (mens-intermediate-advanced-*).
+    // None of those start with a tier name even though they clearly
+    // contain one, so the vast majority of the real program database was
+    // silently invisible to this scan - explaining why an exercise like
+    // chest-dips only ever showed a single tier despite genuinely
+    // appearing across several. Using .filter() with .includes() instead
+    // catches every tier keyword present anywhere in the key, and credits
+    // a hybrid key's exercises toward every tier it actually represents
+    // rather than picking just one.
+    const tiers = DIFFICULTY_TIER_ORDER.filter(t => programKey.includes(t));
+    if (tiers.length === 0) continue;
     const days = PROGRAMS[programKey]?.days || [];
     for (const day of days) {
       for (const group of day.groups || []) {
         for (const ex of group.exercises || []) {
           if (!ex?.id) continue;
           if (!map[ex.id]) map[ex.id] = new Set();
-          map[ex.id].add(tier);
+          for (const tier of tiers) map[ex.id].add(tier);
         }
       }
     }
