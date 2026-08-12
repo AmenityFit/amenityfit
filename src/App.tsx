@@ -20000,7 +20000,12 @@ const isInitialLoad = React.useRef(true);
             read: false,
             createdAt: serverTimestamp(),
           });
-          incrementBuildingMilestone(buildingIdForMilestone, "streakMilestone");
+          // streakMilestone is no longer incremented from here - a
+          // dedicated Firestore trigger (onResidentStreakUpdated) now
+          // reliably counts this directly off the user document's own
+          // streak write, guaranteed with retries rather than a
+          // fire-and-forget client call that could silently miss if the
+          // app closed or lost connection at exactly the wrong moment.
         }
         if (newCompleted === 1) {
           addDoc(notifBase, {
