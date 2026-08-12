@@ -18647,8 +18647,27 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               onClick={async () => {
                 const resolvedId = buildingId || userProfile?.buildingId;
                 if (!resolvedId) return;
-                const codes = await fetchBuildingCodes(resolvedId);
-                const redeemedCount = codes.filter(c => (c.usedBy || []).length > 0).length;
+                // Confirmed via real data tonight, and confirmed with
+                // Senz directly: this metric means UNIT adoption (how many
+                // of the building's real units have at least one resident
+                // on the app), not distinct codes redeemed and not total
+                // people signed up - inviteCodesGenerated is the building's
+                // unit count, so the numerator has to be bounded the same
+                // way or it can exceed 100% the moment two people (e.g.
+                // roommates) share a unit. The previous "distinct codes
+                // redeemed" logic undercounted the exact same way multiple
+                // residents sharing one invite code always would. Counting
+                // distinct real unit numbers among actual residents - via
+                // the same fetchBuildingResidents already used elsewhere on
+                // this screen - is the only version of this number that
+                // can never exceed the unit count while still correctly
+                // reflecting real adoption. Includes deactivated residents'
+                // units, matching "signed up" as a historical adoption fact
+                // rather than a current-activity count (that's what Active
+                // This Month is for).
+                const residents = await fetchBuildingResidents(resolvedId);
+                const distinctUnits = new Set(residents.map((r: any) => (r.unitNumber || "").trim()).filter((u: string) => u.length > 0));
+                const redeemedCount = distinctUnits.size;
                 await setDoc(doc(db, "buildings", resolvedId), { inviteCodesRedeemed: redeemedCount }, { merge: true });
                 setBuildingData((prev: any) => ({ ...prev, inviteCodesRedeemed: redeemedCount }));
               }}
