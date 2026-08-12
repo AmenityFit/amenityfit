@@ -18692,33 +18692,41 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
             <button
               onClick={async () => {
                 const resolvedId = buildingId || userProfile?.buildingId;
-                if (!resolvedId) return;
-                const residents = await fetchBuildingResidents(resolvedId);
-                const activeResidents = residents.filter((r: any) => !r.deactivated);
-                const now = new Date();
-                const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-                const sessionsPerResident = await Promise.all(
-                  activeResidents.map(async (r: any) => {
-                    const snap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", r.uid)));
-                    const realThisMonth = snap.docs.filter(d => {
-                      const s = d.data();
-                      return s.dayTitle !== "Rest Day" && Array.isArray(s.groups) && s.groups.length > 0 && !!s.completedAt && (s.date || "").slice(0, 7) === currentMonthKey;
-                    });
-                    return { uid: r.uid, count: realThisMonth.length };
-                  })
-                );
-                const totalWorkouts = sessionsPerResident.reduce((sum, r) => sum + r.count, 0);
-                const activeIds = sessionsPerResident.filter(r => r.count > 0).map(r => r.uid);
-                const activeCount = activeIds.length;
-                const elapsedWeeks = Math.max(now.getDate() / 7, 1);
-                const avgPerUserPerWeek = activeCount > 0 ? Math.round((totalWorkouts / activeCount / elapsedWeeks) * 10) / 10 : 0;
-                await setDoc(doc(db, "buildings", resolvedId), {
-                  totalWorkoutsThisMonth: totalWorkouts,
-                  activeUserIdsThisMonth: activeIds,
-                  activeUsersThisMonth: activeCount,
-                  avgSessionsPerUserPerWeek: avgPerUserPerWeek,
-                }, { merge: true });
-                setBuildingData((prev: any) => ({ ...prev, totalWorkoutsThisMonth: totalWorkouts, activeUsersThisMonth: activeCount, avgSessionsPerUserPerWeek: avgPerUserPerWeek }));
+                if (!resolvedId || !auth.currentUser) return;
+                // Confirmed live tonight: querying other residents' own
+                // workoutSessions documents directly from the client threw
+                // an unhandled promise rejection - Firestore security
+                // rules correctly restrict that collection to each
+                // resident's own data. Routed through a Cloud Function with
+                // admin access instead, same pattern
+                // getBuildingResidentsForManager already uses, rather than
+                // trying to work around security rules from the client.
+                try {
+                  const idToken = await auth.currentUser.getIdToken();
+                  const res = await fetch(
+                    "https://us-central1-amenityfit-31276.cloudfunctions.net/recalculateBuildingWorkoutStats",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ idToken, buildingId: resolvedId }),
+                    }
+                  );
+                  const data = await res.json();
+                  if (!res.ok || !data.success) {
+                    console.error("recalculateBuildingWorkoutStats failed:", data.error);
+                    alert("Couldn't recalculate workout stats. Please try again.");
+                    return;
+                  }
+                  setBuildingData((prev: any) => ({
+                    ...prev,
+                    totalWorkoutsThisMonth: data.totalWorkoutsThisMonth,
+                    activeUsersThisMonth: data.activeUsersThisMonth,
+                    avgSessionsPerUserPerWeek: data.avgSessionsPerUserPerWeek,
+                  }));
+                } catch (e) {
+                  console.error("recalculateBuildingWorkoutStats error:", e);
+                  alert("Couldn't recalculate workout stats. Please try again.");
+                }
               }}
               style={{ width: "100%", padding: "10px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: 20 }}
             >
