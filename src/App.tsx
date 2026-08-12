@@ -16846,6 +16846,39 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                             const activating = activatingId === sub.id;
                             if (activating) return;
                             setActivatingId(sub.id);
+                            try {
+                              const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/createInvoiceForSubmission", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ submissionId: sub.id, secret: "amenityfit-activation-2026" }),
+                              });
+                              const data = await res.json();
+                              if (data.success) {
+                                alert(`Invoice sent (${data.tier} tier). Building will activate automatically once paid.`);
+                                const updated = await fetchBuildingSubmissions();
+                                setQueueSubmissions(updated);
+                              } else {
+                                alert("Failed to send invoice: " + (data.error || "Unknown error"));
+                              }
+                            } catch (sendErr: any) {
+                              alert("Failed to send invoice: " + (sendErr?.message || "Unknown error"));
+                            }
+                            setActivatingId(null);
+                          }}
+                          style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: activatingId === sub.id ? COLORS.border : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: activatingId === sub.id ? COLORS.textSecondary : COLORS.white, fontSize: 13, fontWeight: 700, cursor: activatingId === sub.id ? "not-allowed" : "pointer" }}
+                        >
+                          {activatingId === sub.id ? "Sending..." : "Send Invoice"}
+                        </button>
+                      </div>
+                    )}
+                    {(isPending || isInvoiceSent) && (
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <button
+                          onClick={async () => {
+                            if (!sub.managerEmail) { alert("No manager email on this submission."); return; }
+                            const activating = activatingId === sub.id;
+                            if (activating) return;
+                            setActivatingId(sub.id);
                             // Delegates entirely to the same activateBuilding Cloud Function the
                             // Stripe-triggered automatic path already uses, rather than duplicating
                             // account creation, building setup, and email assembly here in the
