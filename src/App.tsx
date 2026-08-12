@@ -4839,6 +4839,8 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
     if (type === "cycle-complete") return "📈";
     if (type === "welcome-back") return "👋";
     if (type === "building") return "🏢";
+    if (type === "workout") return "💪";
+    if (type === "badge-unlocked") return "🏅";
     return "✓";
   };
 
