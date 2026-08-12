@@ -106,6 +106,25 @@ const ANTHROPIC_PROXY_URL = "https://anthropicproxy-ts7bxpsabq-uc.a.run.app";
 const FITBIT_CLIENT_ID = ""; // Fill in when Fitbit app is created at dev.fitbit.com
 const FITBIT_REDIRECT_URI = "https://f6lmn8.csb.app/fitbit-callback"; // Update to your production URL before launch
 
+// Confirmed as a real, systemic bug tonight via a genuine account's raw
+// session data: new Date().toISOString().split("T")[0] is always UTC,
+// which rolls over to the next calendar date at 8pm local time for EDT
+// (4 hours ahead of UTC) - meaning any "today" lookup or write happening
+// after 8pm local time silently used tomorrow's date instead, even though
+// it was still today for the actual person. A workout saved at 6pm local
+// (correctly dated) became invisible to a chat query or week view running
+// after 8pm the same evening, since the read was looking for a date that
+// hadn't arrived locally yet. This affects every resident's completely
+// normal evening use, not just internal testing. Uses the browser's own
+// local getFullYear/getMonth/getDate instead, matching the one place in
+// this file that was already doing this correctly.
+const getLocalDateString = (d: Date = new Date()): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
 const fetchFitbitData = async (accessToken: string): Promise<{ sleepScore: number; steps: number; restingHeartRate: number } | null> => {
   try {
     const today = new Date().toISOString().split("T")[0];
@@ -619,7 +638,7 @@ const sanitizeForFirestore = (obj: any): any => {
 };
 const saveWorkoutSession = async (uid: string, session: any, sessionId?: string) => {
   try {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getLocalDateString();
     // Find today's existing session doc written by per-group saves.
     // This is the same real bug found and fixed twice earlier tonight in two
     // other spots (loadUserProfile, the dayWeightLog fetch): a plain getDocs()
@@ -9221,7 +9240,7 @@ const weightOptions = (() => {
 
 const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any, sessionId?: string, notes?: Record<string, string>) => {
   if (!profile?.uid) return;
-  const today = new Date().toISOString().split("T")[0];
+  const today = getLocalDateString();
   // Write weights into today's workoutSession so Progress screen can show them.
   // This is the only part the caller actually awaits - it drives the "Saved"
   // confirmation and lets the workout flow advance, so it needs to stay fast.
@@ -10632,8 +10651,8 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
       try {
         const logDate = (() => {
           const now = new Date();
-          const todayUTC = now.toISOString().split("T")[0];
-          if (selectedDay.isToday) return todayUTC;
+          const todayLocal = getLocalDateString(now);
+          if (selectedDay.isToday) return todayLocal;
           if (selectedDay.date instanceof Date) {
             const d = selectedDay.date;
             const y = d.getFullYear();
@@ -11158,7 +11177,7 @@ const WorkoutFlow = ({ profile, onComplete, onBack, onGoHomeSave, onProfileUpdat
   // Create session doc at workout start so per-group weight saves always find it
   React.useEffect(() => {
     if (!profile?.uid || isReview) return;
-    const today = new Date().toISOString().split("T")[0];
+    const today = getLocalDateString();
     const id = `${profile.uid}_${today}`;
     activeSessionIdRef.current = id;
     const currentProgramDay = profile?.programDay || 1;
@@ -12320,7 +12339,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     let todaySessionData: { weightsLogged?: Record<string, any>; weightNotes?: Record<string, any> } = {};
     try {
       if (profile?.uid) {
-        const todayStr = new Date().toISOString().split("T")[0];
+        const todayStr = getLocalDateString();
         const sessionSnap = await getDoc(doc(db, "workoutSessions", `${profile.uid}_${todayStr}`));
         if (sessionSnap.exists()) {
           const sData = sessionSnap.data();
