@@ -18652,9 +18652,58 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                 await setDoc(doc(db, "buildings", resolvedId), { inviteCodesRedeemed: redeemedCount }, { merge: true });
                 setBuildingData((prev: any) => ({ ...prev, inviteCodesRedeemed: redeemedCount }));
               }}
-              style={{ width: "100%", padding: "10px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: 20 }}
+              style={{ width: "100%", padding: "10px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}
             >
               ↻ Recalculate Signed Up Count
+            </button>
+
+            {/* Recalculates totalWorkoutsThisMonth, activeUsersThisMonth,
+                and avgSessionsPerUserPerWeek directly from every resident's
+                real workoutSessions documents for the current calendar
+                month - the exact same definition the live
+                onWorkoutSessionCreated trigger uses (not a rest day, has
+                real groups, has completedAt), so this can never disagree
+                with what a fresh completion would produce there. Exists
+                because the trigger-based incremental counters, while
+                correct going forward, can never retroactively fix
+                historical undercounting from before a bug in the
+                underlying session-document logic was fixed - this button
+                gives an always-available way to reconcile with ground
+                truth regardless of what caused any past drift. */}
+            <button
+              onClick={async () => {
+                const resolvedId = buildingId || userProfile?.buildingId;
+                if (!resolvedId) return;
+                const residents = await fetchBuildingResidents(resolvedId);
+                const activeResidents = residents.filter((r: any) => !r.deactivated);
+                const now = new Date();
+                const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+                const sessionsPerResident = await Promise.all(
+                  activeResidents.map(async (r: any) => {
+                    const snap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", r.uid)));
+                    const realThisMonth = snap.docs.filter(d => {
+                      const s = d.data();
+                      return s.dayTitle !== "Rest Day" && Array.isArray(s.groups) && s.groups.length > 0 && !!s.completedAt && (s.date || "").slice(0, 7) === currentMonthKey;
+                    });
+                    return { uid: r.uid, count: realThisMonth.length };
+                  })
+                );
+                const totalWorkouts = sessionsPerResident.reduce((sum, r) => sum + r.count, 0);
+                const activeIds = sessionsPerResident.filter(r => r.count > 0).map(r => r.uid);
+                const activeCount = activeIds.length;
+                const elapsedWeeks = Math.max(now.getDate() / 7, 1);
+                const avgPerUserPerWeek = activeCount > 0 ? Math.round((totalWorkouts / activeCount / elapsedWeeks) * 10) / 10 : 0;
+                await setDoc(doc(db, "buildings", resolvedId), {
+                  totalWorkoutsThisMonth: totalWorkouts,
+                  activeUserIdsThisMonth: activeIds,
+                  activeUsersThisMonth: activeCount,
+                  avgSessionsPerUserPerWeek: avgPerUserPerWeek,
+                }, { merge: true });
+                setBuildingData((prev: any) => ({ ...prev, totalWorkoutsThisMonth: totalWorkouts, activeUsersThisMonth: activeCount, avgSessionsPerUserPerWeek: avgPerUserPerWeek }));
+              }}
+              style={{ width: "100%", padding: "10px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: 20 }}
+            >
+              ↻ Recalculate Workout Stats
             </button>
 
             {/* Engagement */}
