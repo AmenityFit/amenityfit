@@ -18722,6 +18722,13 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                     totalWorkoutsThisMonth: data.totalWorkoutsThisMonth,
                     activeUsersThisMonth: data.activeUsersThisMonth,
                     avgSessionsPerUserPerWeek: data.avgSessionsPerUserPerWeek,
+                    popularTimes: data.popularTimes,
+                    programWeekBreakdown: data.programWeekBreakdown,
+                    milestoneCounts: {
+                      ...(prev?.milestoneCounts || {}),
+                      firstWorkout: data.firstWorkoutCount,
+                      cycleComplete: data.cycleCompleteCount,
+                    },
                   }));
                 } catch (e) {
                   console.error("recalculateBuildingWorkoutStats error:", e);
