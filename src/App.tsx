@@ -9281,15 +9281,21 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
       // the normal flow already creates this document at workout start,
       // so this fallback should essentially never fire.
       const sessionRef = doc(db, "workoutSessions", targetSessionId);
-      try {
-        await updateDoc(sessionRef, updateMap);
-      } catch (updateErr: any) {
-        if (updateErr?.code === "not-found") {
-          await setDoc(sessionRef, updateMap, { merge: true });
-        } else {
-          throw updateErr;
-        }
-      }
+      // Eliminates a real race condition rather than reacting to it after
+      // the fact: updateDoc() throws if the document doesn't exist yet,
+      // and the earlier fallback logic for that case depended on matching
+      // an exact error code string, which is fragile and - worse - falls
+      // back to the exact setDoc+merge dot-notation path that was already
+      // confirmed to silently write malformed, unreadable field names.
+      // Guaranteeing the document exists first, via a plain (non-dotted)
+      // write that's always safe regardless of merge/dot-notation
+      // behavior, removes the entire race condition instead of trying to
+      // catch it - the session-creation effect at workout start should
+      // normally make this a no-op, but this makes the guarantee real
+      // rather than assumed, so an early group's save can never again be
+      // the one to lose this race.
+      await setDoc(sessionRef, { uid: profile.uid, date: today }, { merge: true });
+      await updateDoc(sessionRef, updateMap);
     }
   } catch (e) {
     console.error("Failed to write weights to session:", e);
