@@ -16914,7 +16914,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                               Building ID: <span style={{ color: COLORS.white, fontWeight: 600 }}>{sub.activatedBuildingId}</span>
                             </p>
                             <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 8px" }}>
-                              Invite Codes: <span style={{ color: COLORS.white, fontWeight: 600 }}>{sub.inviteCodesGenerated || 0} of {activationResult?.email === sub.managerEmail ? activationResult.units : sub.units} generated so far — manager creates more from their dashboard as needed</span>
+                              Invite Codes: <span style={{ color: COLORS.white, fontWeight: 600 }}>up to {activationResult?.email === sub.managerEmail ? activationResult.units : sub.units}, generated on demand from the manager's dashboard</span>
                             </p>
                             <button
                               onClick={() => {
@@ -18980,7 +18980,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                     type="email"
                     value={generateEmail}
                     onChange={e => { setGenerateEmail(e.target.value); setGenerateError(""); }}
-                    placeholder="Resident email (optional - sends the code directly)"
+                    placeholder="Email (optional, sends code directly)"
                     style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: `1.5px solid ${COLORS.border}`, background: COLORS.background, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box" as const, marginBottom: 12 }}
                   />
                 </>
@@ -19005,10 +19005,16 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
               )}
 
               {generateSuccessCodes && generateSuccessCodes.length === 1 && (
-                <div style={{ background: `${COLORS.success}15`, border: `1px solid ${COLORS.success}30`, borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+                <div style={{ background: `${COLORS.success}15`, border: `1px solid ${COLORS.success}30`, borderRadius: 12, padding: "12px 16px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                   <p style={{ color: COLORS.success, fontSize: 13, fontWeight: 600, margin: 0 }}>
-                    ✓ Code created: <span style={{ letterSpacing: 1.5, fontWeight: 800 }}>{generateSuccessCodes[0].code}</span>{generateEmail ? " — sent to the email above." : " — copy and hand it over."}
+                    ✓ Code created: <span style={{ letterSpacing: 1.5, fontWeight: 800 }}>{generateSuccessCodes[0].code}</span>{generateEmail ? " - sent to the email above." : ""}
                   </p>
+                  <button
+                    onClick={() => { navigator.clipboard?.writeText(generateSuccessCodes[0].code).catch(() => {}); }}
+                    style={{ background: `${COLORS.success}20`, border: `1px solid ${COLORS.success}40`, borderRadius: 8, padding: "5px 10px", color: COLORS.success, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
+                  >
+                    Copy
+                  </button>
                 </div>
               )}
 
