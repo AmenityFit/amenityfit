@@ -17576,6 +17576,25 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
         setBuildingMilestoneCounts(snap.data().milestoneCounts || null);
       }
     }).catch(e => console.error("Pending program name fetch error:", e));
+    // residentsByLevel was declared here but never actually populated
+    // anywhere in the codebase - this whole section could never render on
+    // this screen, for any building, regardless of real data. Reuses
+    // fetchBuildingResidents (the same function the Building Manager
+    // Portal's Residents tab uses, including its effectiveLevel-falls-
+    // back-to-experience logic) so this can never independently drift out
+    // of sync with what a manager sees on their own portal for the same
+    // building.
+    fetchBuildingResidents(building.id).then(residents => {
+      const active = residents.filter((r: any) => !r.deactivated);
+      const counts = { beginner: 0, intermediate: 0, advanced: 0 };
+      active.forEach((r: any) => {
+        const lvl = (r.effectiveLevel || "").toLowerCase();
+        if (lvl === "beginner") counts.beginner++;
+        else if (lvl === "intermediate") counts.intermediate++;
+        else if (lvl === "advanced") counts.advanced++;
+      });
+      setResidentsByLevel(counts);
+    }).catch(e => console.error("Residents by level fetch error:", e));
   }, [building?.id]);
 
   // Residents by level - queried fresh for the same reason, and computed
