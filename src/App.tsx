@@ -4650,12 +4650,12 @@ const BottomNav = ({ active, onNavigate = (s) => {} }) => {
   return (
     <div style={{
       background: COLORS.card, borderTop: `1px solid ${COLORS.border}`,
-      display: "flex", flexShrink: 0, padding: "6px 0 calc(6px + env(safe-area-inset-bottom, 0px))",
+      display: "flex", flexShrink: 0, padding: "4px 0 calc(4px + env(safe-area-inset-bottom, 0px))",
     }}>
       {tabs.map((t) => {
         const isActive = t.id === active;
         return (
-          <div key={t.id} onClick={() => onNavigate(t.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer" }}>
+          <div key={t.id} onClick={() => onNavigate(t.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer" }}>
             <t.icon size={22} color={isActive ? COLORS.accent : COLORS.textSecondary} strokeWidth={isActive ? 2.2 : 1.6} />
             <span style={{ fontSize: 10, fontWeight: isActive ? 700 : 500, color: isActive ? COLORS.accent : COLORS.textSecondary, letterSpacing: 0.3 }}>{t.label}</span>
           </div>
