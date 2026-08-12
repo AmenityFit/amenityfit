@@ -439,6 +439,33 @@ const fetchCompanyBuildings = async (companyId: string) => {
   }
 };
 
+// Peek-mode counterpart to fetchCompanyBuildings, mirroring how
+// fetchResidentsForThisSession routes through getBuildingResidentsForManager
+// in peek mode. A resident-side portfolio peek never actually re-authenticates
+// as the real property manager, so a direct client query here would be
+// correctly denied by firestore.rules the same way the residents-under-a-
+// building read would be - this instead goes through the Cloud Function,
+// which re-verifies the same credentials server-side via Admin SDK
+// privileges before reading.
+const fetchCompanyBuildingsForPeek = async (email: string, password: string, companyId: string) => {
+  try {
+    const res = await fetch(
+      "https://us-central1-amenityfit-31276.cloudfunctions.net/getCompanyBuildingsForManager",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, companyId }),
+      }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.buildings || [];
+  } catch (e) {
+    console.error("fetchCompanyBuildingsForPeek error:", e);
+    return [];
+  }
+};
+
 // A manager's requested program name is never applied live - it's held as a
 // pending request until Senz reviews and approves it (same spirit as new
 // building submissions), since this is real contractual/brand naming, not a
@@ -539,6 +566,41 @@ const verifyManagerAccessForBuilding = async (email: string, password: string, r
   } catch (e) {
     console.error("verifyManagerAccessForBuilding error:", e);
     return false;
+  }
+};
+
+// Portfolio-level counterpart to verifyManagerAccessForBuilding, for the
+// rare case of a resident who is also the property manager overseeing
+// multiple buildings (a companyId, not a single buildingId) wanting the
+// same mid-workout peek into their full portfolio dashboard. Unlike the
+// building-level check, there is no single buildingId to scope against -
+// a portfolio manager's whole point is not being tied to just one
+// building - so the only real requirement is that the credentials belong
+// to a genuine property_manager account with a companyId attached. Same
+// non-destructive Identity Toolkit REST pattern: never touches the
+// resident's own active Firebase session.
+const verifyManagerAccessForPortfolio = async (email: string, password: string): Promise<{ companyId: string; companyName: string } | null> => {
+  try {
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseConfig.apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, returnSecureToken: true }),
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const uid = data.localId;
+    if (!uid) return null;
+    const profileSnap = await getDoc(doc(db, "users", uid));
+    if (!profileSnap.exists()) return null;
+    const p = profileSnap.data();
+    if (p.role !== "property_manager" || !p.companyId) return null;
+    return { companyId: p.companyId, companyName: p.companyName || p.companyId };
+  } catch (e) {
+    console.error("verifyManagerAccessForPortfolio error:", e);
+    return null;
   }
 };
 
@@ -14243,7 +14305,7 @@ const PhotoLightbox = ({ url, onClose }: { url: string | null; onClose: () => vo
   );
 };
 
-const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, onManagerAccess = (email?: string, password?: string) => {} }) => {
+const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, onManagerAccess = (email?: string, password?: string) => {}, onPortfolioAccess = (companyId: string, companyName: string, email?: string, password?: string) => {} }) => {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState<any>(null);
   const [showExperienceConfirm, setShowExperienceConfirm] = useState(false);
@@ -14299,8 +14361,8 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
     setManagerAccessError("");
     setManagerAccessVerifying(true);
     const granted = await verifyManagerAccessForBuilding(managerAccessEmail.trim(), managerAccessPassword, profile?.buildingId || null);
-    setManagerAccessVerifying(false);
     if (granted) {
+      setManagerAccessVerifying(false);
       setShowManagerAccess(false);
       // Passed through in memory only (never persisted to Firestore or
       // localStorage) so the peek session can re-verify itself server-side
@@ -14311,8 +14373,22 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
       onManagerAccess(managerAccessEmail.trim(), managerAccessPassword);
       setManagerAccessEmail("");
       setManagerAccessPassword("");
+      return;
+    }
+    // Building-level check failed - try the portfolio-level check before
+    // giving up. Same account could plausibly be a property_manager
+    // instead of (or as well as) a single-building manager, so this
+    // covers both real cases with one credentials form rather than
+    // asking the person to pick which kind of manager they are first.
+    const portfolio = await verifyManagerAccessForPortfolio(managerAccessEmail.trim(), managerAccessPassword);
+    setManagerAccessVerifying(false);
+    if (portfolio) {
+      setShowManagerAccess(false);
+      onPortfolioAccess(portfolio.companyId, portfolio.companyName, managerAccessEmail.trim(), managerAccessPassword);
+      setManagerAccessEmail("");
+      setManagerAccessPassword("");
     } else {
-      setManagerAccessError("Incorrect credentials, or this account isn't the manager on file for this building.");
+      setManagerAccessError("Incorrect credentials, or this account isn't a manager on file for this building or portfolio.");
     }
   };
 
@@ -17836,18 +17912,28 @@ const PMBuildingDetail = ({ building, onBack }: { building: any; onBack: () => v
   );
 };
 
-const PropertyManagerDashboard = ({ onSignOut, companyId, companyName }: { onSignOut: () => void; companyId: string; companyName: string }) => {
+const PropertyManagerDashboard = ({ onSignOut, onBackToWorkout = null, companyId, companyName, peekCredentials = null as { email: string; password: string } | null }: { onSignOut: () => void; onBackToWorkout?: (() => void) | null; companyId: string; companyName: string; peekCredentials?: { email: string; password: string } | null }) => {
   const [buildings, setBuildings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedBuilding, setSelectedBuilding] = useState<any>(null);
 
   useEffect(() => {
-    fetchCompanyBuildings(companyId).then(data => {
+    // Peek mode (resident-side portfolio peek) never re-authenticates as
+    // the real property manager, so it must go through the Cloud Function
+    // re-verification path instead of a direct client query - see
+    // fetchCompanyBuildingsForPeek for the full explanation. The real
+    // Manager Login flow has no peekCredentials and keeps using the
+    // original direct query, which already works correctly there since
+    // request.auth really is the manager in that case.
+    const fetchFn = peekCredentials
+      ? fetchCompanyBuildingsForPeek(peekCredentials.email, peekCredentials.password, companyId)
+      : fetchCompanyBuildings(companyId);
+    fetchFn.then(data => {
       setBuildings(data);
       setLoading(false);
     });
-  }, [companyId]);
+  }, [companyId, peekCredentials]);
 
   const filtered = buildings.filter(b =>
     !search || (b.name || b.id || "").toLowerCase().includes(search.toLowerCase()) ||
@@ -17879,7 +17965,12 @@ const PropertyManagerDashboard = ({ onSignOut, companyId, companyName }: { onSig
             <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "0 0 2px", letterSpacing: -0.5 }}>{companyName}</h1>
             <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>{buildings.length} {buildings.length === 1 ? "property" : "properties"}</p>
           </div>
-          <button onClick={onSignOut} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "8px 14px", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign Out</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            {onBackToWorkout && (
+              <button onClick={onBackToWorkout} style={{ background: `${COLORS.primary}20`, border: `1px solid ${COLORS.primary}40`, borderRadius: 12, padding: "8px 14px", color: COLORS.accent, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Back to Workout</button>
+            )}
+            <button onClick={onSignOut} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "8px 14px", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign Out</button>
+          </div>
         </div>
 
         {/* Portfolio summary stats */}
@@ -19842,6 +19933,13 @@ export default function App() {
   // actually swaps the Firebase Auth session itself, so it has no need for
   // this and correctly leaves it null. Cleared on sign-out below.
   const [managerPeekCreds, setManagerPeekCreds] = useState<{ email: string; password: string } | null>(null);
+  // Portfolio-level counterpart to the building-manager peek above - set
+  // when a resident's credentials check out as a real property_manager
+  // via verifyManagerAccessForPortfolio, rather than a single-building
+  // manager. null means no peek in progress. Separate from managerLoggedIn
+  // since a portfolio peek renders PropertyManagerDashboard, not
+  // BuildingManagerDashboard, and needs its own return-to-workout path.
+  const [portfolioPeek, setPortfolioPeek] = useState<{ companyId: string; companyName: string; email: string; password: string } | null>(null);
   const [superAdminLoggedIn, setSuperAdminLoggedIn] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
@@ -20457,6 +20555,20 @@ const isInitialLoad = React.useRef(true);
     buildingId={userProfile?.buildingId || null}
     peekCredentials={managerPeekCreds}
   />;
+  // Portfolio-level peek - mirrors the building-level peek immediately
+  // above, but for a resident who checked out as a real property_manager
+  // instead. onBackToWorkout is always present here (never null) since
+  // this branch, unlike managerLoggedIn, can only ever be reached via the
+  // resident-side peek flow - there is no separate standalone portfolio
+  // peek login screen to distinguish from, the way manager-login is a
+  // real alternate path into managerLoggedIn.
+  if (portfolioPeek) return <PropertyManagerDashboard
+    companyId={portfolioPeek.companyId}
+    companyName={portfolioPeek.companyName}
+    onSignOut={resetToWelcome}
+    onBackToWorkout={() => setPortfolioPeek(null)}
+    peekCredentials={{ email: portfolioPeek.email, password: portfolioPeek.password }}
+  />;
   if (screen === "manager-login") return <ManagerLoginScreen onLogin={(profile) => { setUserProfile(profile); setManagerLoggedIn(true); }} onBack={() => setScreen("welcome")} />;
 
   if (screen === "welcome") return <WelcomeScreen onGetStarted={() => setScreen("onboarding")} onLogin={() => setScreen("login")} onManagerLogin={() => setScreen("manager-login")} />;
@@ -20750,7 +20862,7 @@ const isInitialLoad = React.useRef(true);
       setDoc(doc(db, "users", uid), stripUndefinedDeep(dataToSave), { merge: true })
         .catch(e => console.error("Failed to save profile update:", e));
     }
-  }} onSignOut={resetToWelcome} onNavigate={navigate} onManagerAccess={(email?: string, password?: string) => { setManagerLoggedIn(true); setManagerPeekCreds(email && password ? { email, password } : null); }} />;
+  }} onSignOut={resetToWelcome} onNavigate={navigate} onManagerAccess={(email?: string, password?: string) => { setManagerLoggedIn(true); setManagerPeekCreds(email && password ? { email, password } : null); }} onPortfolioAccess={(companyId: string, companyName: string, email?: string, password?: string) => { if (email && password) setPortfolioPeek({ companyId, companyName, email, password }); }} />;
   if (screen === "privacy") return <PrivacyPolicyScreen onBack={() => setScreen("profile")} />;
   if (screen === "terms") return <TermsOfServiceScreen onBack={() => setScreen("profile")} />;
 
