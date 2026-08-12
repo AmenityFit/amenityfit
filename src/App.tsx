@@ -419,6 +419,37 @@ const fetchBuildingData = async (buildingId: string) => {
   }
 };
 
+// Generates one or more invite codes on demand for specific units, as a
+// real signed-in manager (not a resident-side peek). Requires the
+// manager's live Firebase ID token so the Cloud Function can independently
+// verify who is really asking, rather than trusting anything the client
+// claims - see generateInviteCodeForManager for the full server-side
+// explanation, including the atomic transaction that guarantees this can
+// never generate more codes than the building's contracted unit count,
+// even across simultaneous requests. residentEmail is only honored when
+// generating exactly one code - a batch has no way to know which email
+// belongs to which unit.
+const generateInviteCodeAsManager = async (unitNumbers: string[], residentEmail?: string): Promise<{ success: boolean; codes?: { code: string; unit: string }[]; inviteCodesGenerated?: number; error?: string }> => {
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) return { success: false, error: "Your session has expired. Please sign in again." };
+    const res = await fetch(
+      "https://us-central1-amenityfit-31276.cloudfunctions.net/generateInviteCodeForManager",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken, unitNumbers, residentEmail: residentEmail || undefined }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok || !data.success) return { success: false, error: data.error || "Something went wrong. Please try again." };
+    return { success: true, codes: data.codes, inviteCodesGenerated: data.inviteCodesGenerated };
+  } catch (e) {
+    console.error("generateInviteCodeAsManager error:", e);
+    return { success: false, error: "Something went wrong. Please try again." };
+  }
+};
+
 const fetchAllBuildings = async () => {
   try {
     const snap = await getDocs(collection(db, "buildings"));
@@ -16812,224 +16843,33 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                         <button
                           onClick={async () => {
                             if (!sub.managerEmail) { alert("No manager email on this submission."); return; }
-                            if (activatingId === sub.id) return;
+                            const activating = activatingId === sub.id;
+                            if (activating) return;
                             setActivatingId(sub.id);
+                            // Delegates entirely to the same activateBuilding Cloud Function the
+                            // Stripe-triggered automatic path already uses, rather than duplicating
+                            // account creation, building setup, and email assembly here in the
+                            // client. One authoritative activation implementation server-side
+                            // means the manual and automatic paths can never quietly drift apart -
+                            // whatever gets fixed or changed there is correct everywhere at once.
                             try {
-                              const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/createInvoiceForSubmission", {
+                              const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/activateBuilding", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ submissionId: sub.id, secret: "amenityfit-activation-2026" }),
                               });
                               const data = await res.json();
-                              if (data.success) {
-                                alert(`Invoice sent (${data.tier} tier). Building will activate automatically once paid.`);
-                                const updated = await fetchBuildingSubmissions();
-                                setQueueSubmissions(updated);
-                              } else {
-                                alert("Failed to send invoice: " + (data.error || "Unknown error"));
+                              if (!data.success) {
+                                alert("Activation failed: " + (data.error || "Unknown error"));
+                                setActivatingId(null);
+                                return;
                               }
-                            } catch (sendErr: any) {
-                              alert("Failed to send invoice: " + (sendErr?.message || "Unknown error"));
-                            }
-                            setActivatingId(null);
-                          }}
-                          style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: activatingId === sub.id ? COLORS.border : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: activatingId === sub.id ? COLORS.textSecondary : COLORS.white, fontSize: 13, fontWeight: 700, cursor: activatingId === sub.id ? "not-allowed" : "pointer" }}
-                        >
-                          {activatingId === sub.id ? "Sending..." : "Send Invoice"}
-                        </button>
-                      </div>
-                    )}
-                    {(isPending || isInvoiceSent) && (
-                      <div style={{ display: "flex", gap: 10 }}>
-                        <button
-                          onClick={async () => {
-                            if (!sub.managerEmail) { alert("No manager email on this submission."); return; }
-                            const activating = activatingId === sub.id;
-                            if (activating) return;
-                            setActivatingId(sub.id);
-
-                            try {
-                              // 1. Generate buildingId slug from building name
-                              const slug = (sub.buildingName || "building")
-                                .toLowerCase()
-                                .replace(/[^a-z0-9]+/g, "-")
-                                .replace(/^-|-$/g, "")
-                                + "-" + Math.random().toString(36).slice(2, 6);
-
-                              // 2. Generate temp password
-                              const tempPassword = "AmenityFit" + Math.floor(1000 + Math.random() * 9000) + "!";
-
-                              // 3. Create Firebase Auth account via REST API
-                              const userCredential = await createUserWithEmailAndPassword(auth, sub.managerEmail, tempPassword);
-                              const uid = userCredential.user.uid;
-
-                              // 4. Create /users/{uid} doc
-                              await setDoc(doc(db, "users", uid), {
-                                role: "manager",
-                                buildingId: slug,
-                                email: sub.managerEmail,
-                                name: sub.contactName || "",
-                                passwordChangeRequired: true,
-                                createdAt: serverTimestamp(),
-                              });
-
-                              // 5. Create /buildings/{slug} doc
-                              await setDoc(doc(db, "buildings", slug), {
-                                name: sub.buildingName || "",
-                                programName: sub.buildingName || "",
-                                location: sub.location || "",
-                                units: sub.units || 0,
-                                managerEmail: sub.managerEmail,
-                                equipment: sub.equipment || [],
-                                equipmentProfile: sub.equipmentProfile || "",
-                                subscription: "active",
-                                subscriptionTier: "Standard",
-                                tier: "Standard",
-                                renewalDate: "",
-                                subscriptionRenewal: "",
-                                inviteCodesGenerated: sub.units || 0,
-                                inviteCodesRedeemed: 0,
-                                activeUsersThisMonth: 0,
-                                totalWorkoutsThisMonth: 0,
-                                avgSessionsPerUserPerWeek: 0,
-                                fitnessAssistantQuestionsThisMonth: 0,
-                                weeksSinceLastActivity: 0,
-                                popularTimes: [],
-                                programWeekBreakdown: [],
-                                retentionCurve: [],
-                                milestones: [],
-                                createdAt: serverTimestamp(),
-                              });
-
-                              // 6. Generate invite codes — sequential with collision check
-                              const units = sub.units || 0;
-                              const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-                              const genCode = () => {
-                                let c = "AF-";
-                                for (let i = 0; i < 6; i++) c += CHARS[Math.floor(Math.random() * CHARS.length)];
-                                return c;
-                              };
-                              const generatedCodes: {code: string, unit: string}[] = [];
-                              const usedCodes = new Set<string>(
-                                (await getDocs(collection(db, "inviteCodes"))).docs.map(d => d.id)
-                              );
-                              for (let i = 1; i <= units; i++) {
-                                let code = genCode();
-                                let attempts = 0;
-                                while (usedCodes.has(code) && attempts < 20) {
-                                  code = genCode();
-                                  attempts++;
-                                }
-                                usedCodes.add(code);
-                                await setDoc(doc(db, "inviteCodes", code), {
-                                  code,
-                                  buildingId: slug,
-                                  buildingName: sub.buildingName || "",
-                                  unitNumber: String(i),
-                                  status: "active",
-                                  createdAt: serverTimestamp(),
-                                  usedBy: [],
-                                });
-                                generatedCodes.push({ code, unit: String(i) });
-                              }
-
-                              // 7. Update submission status
-                              await updateStatus(sub.id, "activated");
-
-                              // 8. Store activation record — no plain-text password in Firestore
-                              await setDoc(doc(db, "buildingSubmissions", sub.id), {
-                                activatedBuildingId: slug,
-                                activatedUid: uid,
-                                activatedAt: serverTimestamp(),
-                              }, { merge: true });
-
-                              // 8b. Add managerUid to building doc for report lookups
-                              await setDoc(doc(db, "buildings", slug), { managerUid: uid }, { merge: true });
-
-                              // 8c. Send activation email via Resend Cloud Function
-                              const codeListHtml = generatedCodes.map(c =>
-                                `<tr><td style="padding:8px 16px;font-size:13px;color:#555;border-bottom:1px solid #f0f0f0;">${formatUnitLabel(c.unit)}</td><td style="padding:8px 16px;font-size:14px;font-weight:700;color:#111;letter-spacing:2px;border-bottom:1px solid #f0f0f0;">${c.code}</td></tr>`
-                              ).join("");
-
-                              const activationEmailHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;">
-<div style="max-width:620px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.10);">
-  <div style="background:linear-gradient(135deg,#1E5FBE,#6C63FF);padding:36px 40px 32px;">
-    <p style="color:rgba(255,255,255,0.7);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:0 0 10px;">AmenityFit Setup</p>
-    <h1 style="color:#fff;font-size:26px;font-weight:900;margin:0 0 6px;letter-spacing:-0.5px;">${sub.buildingName} is Live</h1>
-    <p style="color:rgba(255,255,255,0.75);font-size:14px;margin:0;">${sub.location || ""}</p>
-  </div>
-  <div style="padding:32px 40px;">
-    <p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 28px;">Hi ${sub.contactName || "there"},<br><br>Your building is activated and ready. Everything you need to get your residents started is below.</p>
-
-    <p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin:0 0 12px;">Manager Login</p>
-    <div style="border:1px solid #eee;border-radius:12px;overflow:hidden;margin-bottom:28px;">
-      <table style="width:100%;border-collapse:collapse;">
-        <tr style="background:#fafafa;"><td style="padding:13px 16px;font-size:13px;color:#555;border-bottom:1px solid #eee;">Login URL</td><td style="padding:13px 16px;font-size:13px;font-weight:700;color:#1E5FBE;border-bottom:1px solid #eee;"><a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a> then tap "Building Manager"</td></tr>
-        <tr><td style="padding:13px 16px;font-size:13px;color:#555;border-bottom:1px solid #eee;">Email</td><td style="padding:13px 16px;font-size:13px;font-weight:700;color:#111;border-bottom:1px solid #eee;">${sub.managerEmail}</td></tr>
-        <tr style="background:#fafafa;"><td style="padding:13px 16px;font-size:13px;color:#555;">Temporary Password</td><td style="padding:13px 16px;font-size:15px;font-weight:900;color:#111;letter-spacing:2px;">${tempPassword}</td></tr>
-      </table>
-    </div>
-    <p style="font-size:12px;color:#aaa;margin:-20px 0 28px;padding:0 4px;">Change your password after your first login.</p>
-
-    <p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin:0 0 12px;">Resident Invite Codes (${generatedCodes.length} codes)</p>
-    <p style="font-size:13px;color:#555;margin:0 0 12px;line-height:1.6;">One code per unit. Share the code with the resident in that unit. Multiple residents in the same unit can each create their own profile using the same code.</p>
-    <div style="border:1px solid #eee;border-radius:12px;overflow:hidden;margin-bottom:28px;">
-      <table style="width:100%;border-collapse:collapse;">${codeListHtml}</table>
-    </div>
-
-    <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 28px;">Your residents can download the AmenityFit app at <a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a> and sign up using their invite code.</p>
-
-    <p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin:0 0 12px;">Your Manager Dashboard</p>
-    <div style="background:#f5f5f7;border-radius:12px;padding:16px 20px;margin-bottom:28px;">
-      <p style="font-size:13px;color:#333;margin:0 0 10px;line-height:1.6;">You have access to a building manager portal where you can track resident activity, workout completions, adoption rates, and monthly reports.</p>
-      <p style="font-size:13px;color:#333;margin:0;line-height:1.6;">Log in at <a href="https://amenityfit.app" style="color:#1E5FBE;">amenityfit.app</a> using your credentials above, then tap <strong>Building Manager</strong> on the welcome screen.</p>
-    </div>
-
-    <div style="background:#f5f5f7;border-radius:12px;padding:16px 20px;">
-      <p style="font-size:13px;color:#333;margin:0;">Questions? Contact <a href="mailto:support@fitmakesenz.com" style="color:#1E5FBE;">support@fitmakesenz.com</a></p>
-    </div>
-  </div>
-  <div style="background:#fafafa;border-top:1px solid #eee;padding:20px 40px;">
-    <p style="font-size:11px;color:#aaa;margin:0;">Senz · AmenityFit · <a href="https://amenityfit.app" style="color:#aaa;">amenityfit.app</a></p>
-  </div>
-</div>
-</body></html>`;
-
-                              try {
-                                await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/sendActivationEmail", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    to: sub.managerEmail,
-                                    subject: `Your AmenityFit Dashboard is Ready - ${sub.buildingName}`,
-                                    html: activationEmailHtml,
-                                    secret: "amenityfit-activation-2026",
-                                  }),
-                                });
-                              } catch (emailErr) {
-                                console.error("Activation email failed:", emailErr);
-                              }
-
-                              setActivationResult({ slug, uid, tempPassword, email: sub.managerEmail, units });
-
-                              // Reload queue to get updated submission with credentials
+                              setActivationResult({ slug: data.slug, uid: data.uid, tempPassword: data.tempPassword, email: sub.managerEmail, units: sub.units || 0 });
                               const updated = await fetchBuildingSubmissions();
                               setQueueSubmissions(updated);
-
                             } catch (e: any) {
                               console.error("Activation error:", e);
-                              let userMessage = "Activation failed. ";
-                              if (e?.code === "auth/email-already-in-use") {
-                                userMessage += `The manager email "${sub.managerEmail}" already has an account. Use a different email, or delete the existing account in Firebase Authentication first.`;
-                              } else if (e?.code === "auth/invalid-email") {
-                                userMessage += `The manager email "${sub.managerEmail}" is not a valid email address.`;
-                              } else if (e?.code === "auth/weak-password") {
-                                userMessage += "The generated temporary password was rejected as too weak. Try activating again.";
-                              } else {
-                                userMessage += e?.message || "An unknown error occurred. Check the browser console or Firebase Functions logs for details.";
-                              }
-                              alert(userMessage);
+                              alert("Activation failed. " + (e?.message || "Check the browser console or Firebase Functions logs for details."));
                             }
                             setActivatingId(null);
                           }}
@@ -17074,7 +16914,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                               Building ID: <span style={{ color: COLORS.white, fontWeight: 600 }}>{sub.activatedBuildingId}</span>
                             </p>
                             <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 8px" }}>
-                              Invite Codes: <span style={{ color: COLORS.white, fontWeight: 600 }}>{activationResult?.email === sub.managerEmail ? activationResult.units : sub.inviteCodesGenerated || sub.units} codes generated</span>
+                              Invite Codes: <span style={{ color: COLORS.white, fontWeight: 600 }}>{sub.inviteCodesGenerated || 0} of {activationResult?.email === sub.managerEmail ? activationResult.units : sub.units} generated so far — manager creates more from their dashboard as needed</span>
                             </p>
                             <button
                               onClick={() => {
@@ -18595,6 +18435,22 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
   const [codesLoaded, setCodesLoaded] = useState(false);
   const [codeSearch, setCodeSearch] = useState("");
   const [codeActionLoading, setCodeActionLoading] = useState<string | null>(null);
+  // On-demand code generation - a real signed-in manager can create one
+  // code at a time for a specific unit, right from this tab, instead of
+  // every unit getting a code automatically at building activation. See
+  // generateInviteCodeAsManager and its server-side counterpart for the
+  // full reasoning, including why this keeps adoption numbers meaningful.
+  const [generateMode, setGenerateMode] = useState<"single" | "batch">("single");
+  const [generateUnitNumber, setGenerateUnitNumber] = useState("");
+  const [generateEmail, setGenerateEmail] = useState("");
+  const [generateBatchText, setGenerateBatchText] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState("");
+  const [generateSuccessCodes, setGenerateSuccessCodes] = useState<{ code: string; unit: string }[] | null>(null);
+  // Tracks the live generated count locally so the progress display and cap
+  // update instantly after each generation, without needing to refetch the
+  // whole building document. Seeded from the real value once it loads.
+  const [liveCodesGenerated, setLiveCodesGenerated] = useState<number | null>(null);
   const [buildingResidents, setBuildingResidents] = useState<any[]>([]);
   const [residentsLoading, setResidentsLoading] = useState(false);
   const [residentsLoaded, setResidentsLoaded] = useState(false);
@@ -18612,6 +18468,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
     fetchBuildingData(resolvedId).then(data => {
       if (data) {
         setBuildingData(data);
+        setLiveCodesGenerated(data.inviteCodesGenerated || 0);
         setBuildingName(data.programName || data.name || "");
         setTempName(data.programName || data.name || "");
         setBuildingLogoUrl(data.logoUrl || null);
@@ -19078,8 +18935,152 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
             <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}30`, borderRadius: 14, padding: "12px 16px", marginBottom: 20 }}>
               <p style={{ color: COLORS.accent, fontSize: 13, fontWeight: 600, margin: "0 0 4px" }}>Unit Invite Codes</p>
               <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
-                Each unit has one unique code in AF-XXXXXX format. Drop the code under their door, slip it in their welcome packet, or have front desk hand it out. Multiple residents in the same unit share one code and each creates their own profile. When a tenant moves out, deactivate their code here to block new signups.
+                Generate a code below for a specific unit as interest comes in, then hand it over or send it straight to their email. Each code is in AF-XXXXXX format and tied to one unit. Multiple residents in the same unit share one code and each creates their own profile. When a tenant moves out, deactivate their code here to block new signups.
               </p>
+            </div>
+
+            {/* Generate a code */}
+            <div style={{ background: COLORS.card, borderRadius: 18, padding: "18px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: 0 }}>Generate Codes</p>
+                {liveCodesGenerated !== null && (
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{liveCodesGenerated} / {b.units || 0} generated</p>
+                )}
+              </div>
+
+              {/* Mode toggle - explicit two-choice segmented control rather
+                  than one field that silently behaves differently based on
+                  how much text is in it, since this is meant to be obvious
+                  to someone who has never used this screen before. */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                <button
+                  onClick={() => { setGenerateMode("single"); setGenerateError(""); setGenerateSuccessCodes(null); }}
+                  style={{ flex: 1, padding: "10px", borderRadius: 10, border: `1.5px solid ${generateMode === "single" ? COLORS.accent : COLORS.border}`, background: generateMode === "single" ? `${COLORS.primary}20` : "transparent", color: generateMode === "single" ? COLORS.accent : COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}
+                >
+                  One Resident
+                </button>
+                <button
+                  onClick={() => { setGenerateMode("batch"); setGenerateError(""); setGenerateSuccessCodes(null); }}
+                  style={{ flex: 1, padding: "10px", borderRadius: 10, border: `1.5px solid ${generateMode === "batch" ? COLORS.accent : COLORS.border}`, background: generateMode === "batch" ? `${COLORS.primary}20` : "transparent", color: generateMode === "batch" ? COLORS.accent : COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}
+                >
+                  Multiple Units
+                </button>
+              </div>
+
+              {generateMode === "single" ? (
+                <>
+                  <input
+                    type="text"
+                    value={generateUnitNumber}
+                    onChange={e => { setGenerateUnitNumber(e.target.value); setGenerateError(""); }}
+                    placeholder="Unit number (e.g. 25A)"
+                    style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: `1.5px solid ${COLORS.border}`, background: COLORS.background, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box" as const, marginBottom: 10 }}
+                  />
+                  <input
+                    type="email"
+                    value={generateEmail}
+                    onChange={e => { setGenerateEmail(e.target.value); setGenerateError(""); }}
+                    placeholder="Resident email (optional - sends the code directly)"
+                    style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: `1.5px solid ${COLORS.border}`, background: COLORS.background, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box" as const, marginBottom: 12 }}
+                  />
+                </>
+              ) : (
+                <>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 8px", lineHeight: 1.5 }}>One unit number per line. A code is generated for each.</p>
+                  <textarea
+                    value={generateBatchText}
+                    onChange={e => { setGenerateBatchText(e.target.value); setGenerateError(""); }}
+                    placeholder={"25A\n6E\n12B"}
+                    rows={5}
+                    style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: `1.5px solid ${COLORS.border}`, background: COLORS.background, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box" as const, marginBottom: 6, resize: "vertical" as const }}
+                  />
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 12px" }}>
+                    {generateBatchText.split("\n").map(l => l.trim()).filter(Boolean).length} unit{generateBatchText.split("\n").map(l => l.trim()).filter(Boolean).length === 1 ? "" : "s"} entered
+                  </p>
+                </>
+              )}
+
+              {generateError && (
+                <p style={{ color: "#FF6B6B", fontSize: 13, margin: "0 0 12px" }}>⚠️ {generateError}</p>
+              )}
+
+              {generateSuccessCodes && generateSuccessCodes.length === 1 && (
+                <div style={{ background: `${COLORS.success}15`, border: `1px solid ${COLORS.success}30`, borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+                  <p style={{ color: COLORS.success, fontSize: 13, fontWeight: 600, margin: 0 }}>
+                    ✓ Code created: <span style={{ letterSpacing: 1.5, fontWeight: 800 }}>{generateSuccessCodes[0].code}</span>{generateEmail ? " — sent to the email above." : " — copy and hand it over."}
+                  </p>
+                </div>
+              )}
+
+              {generateSuccessCodes && generateSuccessCodes.length > 1 && (
+                <div style={{ background: `${COLORS.success}15`, border: `1px solid ${COLORS.success}30`, borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <p style={{ color: COLORS.success, fontSize: 13, fontWeight: 700, margin: 0 }}>✓ {generateSuccessCodes.length} codes created</p>
+                    <button
+                      onClick={() => {
+                        const text = generateSuccessCodes.map(c => `${c.unit}\t${c.code}`).join("\n");
+                        navigator.clipboard?.writeText(text).catch(() => {});
+                      }}
+                      style={{ background: `${COLORS.success}20`, border: `1px solid ${COLORS.success}40`, borderRadius: 8, padding: "5px 10px", color: COLORS.success, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                    >
+                      Copy All
+                    </button>
+                  </div>
+                  {generateSuccessCodes.map((c, i) => (
+                    <p key={i} style={{ color: COLORS.white, fontSize: 12, margin: "2px 0", fontFamily: "monospace" }}>
+                      {c.unit}: <span style={{ fontWeight: 800, letterSpacing: 1 }}>{c.code}</span>
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={async () => {
+                  const cap = b.units || 0;
+                  const unitsToCreate = generateMode === "single"
+                    ? (generateUnitNumber.trim() ? [generateUnitNumber.trim()] : [])
+                    : generateBatchText.split("\n").map(l => l.trim()).filter(Boolean);
+
+                  if (unitsToCreate.length === 0) { setGenerateError(generateMode === "single" ? "Enter a unit number." : "Enter at least one unit number."); return; }
+                  if (liveCodesGenerated !== null && liveCodesGenerated + unitsToCreate.length > cap) {
+                    const remaining = Math.max(cap - liveCodesGenerated, 0);
+                    setGenerateError(remaining === 0
+                      ? `You've already generated all ${cap} codes for this building's unit count.`
+                      : `Only ${remaining} more code${remaining === 1 ? "" : "s"} can be generated (${liveCodesGenerated} of ${cap} already generated).`);
+                    return;
+                  }
+
+                  setGenerating(true);
+                  setGenerateError("");
+                  setGenerateSuccessCodes(null);
+                  const result = await generateInviteCodeAsManager(unitsToCreate, generateMode === "single" ? generateEmail.trim() : undefined);
+                  setGenerating(false);
+                  if (!result.success || !result.codes) { setGenerateError(result.error || "Something went wrong."); return; }
+
+                  setGenerateSuccessCodes(result.codes);
+                  if (typeof result.inviteCodesGenerated === "number") setLiveCodesGenerated(result.inviteCodesGenerated);
+                  // Keep the already-loaded code list in sync too, so a
+                  // manager who has the list open sees the new codes appear
+                  // immediately without needing to reload the tab.
+                  if (codesLoaded) {
+                    setBuildingCodes(prev => [
+                      ...result.codes!.map(c => ({ id: c.code, unitNumber: c.unit, status: "active", usedBy: [] })),
+                      ...prev,
+                    ]);
+                  }
+                  setGenerateUnitNumber("");
+                  setGenerateEmail("");
+                  setGenerateBatchText("");
+                }}
+                disabled={generating}
+                style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none", background: generating ? COLORS.border : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: generating ? COLORS.textSecondary : COLORS.white, fontSize: 14, fontWeight: 700, cursor: generating ? "not-allowed" : "pointer", fontFamily: "'Inter', sans-serif" }}
+              >
+                {generating
+                  ? "Generating..."
+                  : generateMode === "batch"
+                    ? `Generate ${generateBatchText.split("\n").map(l => l.trim()).filter(Boolean).length || ""} Code${generateBatchText.split("\n").map(l => l.trim()).filter(Boolean).length === 1 ? "" : "s"}`
+                    : "Generate Code"}
+              </button>
             </div>
 
             {/* Load button */}
@@ -19119,7 +19120,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                 {buildingCodes.length === 0 ? (
                   <div style={{ background: COLORS.card, borderRadius: 16, padding: "32px 24px", border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
                     <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 8px" }}>No codes generated yet</p>
-                    <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>AmenityFit generates codes for your building during setup. Contact support if you need codes added.</p>
+                    <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>Use Generate a Code above whenever a resident wants access.</p>
                   </div>
                 ) : (
                   <div style={{ background: COLORS.card, borderRadius: 18, padding: "4px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 16 }}>
