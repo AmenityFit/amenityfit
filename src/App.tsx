@@ -953,7 +953,19 @@ const fetchBuildingResidents = async (buildingId: string): Promise<any[]> => {
   try {
     const snap = await getDocs(query(collection(db, "users"), where("buildingId", "==", buildingId)));
     return snap.docs
-      .map(d => ({ uid: d.id, ...d.data() }))
+      .map(d => {
+        const data = d.data();
+        // Confirmed via a real resident tonight: this used to spread raw
+        // Firestore data with no transformation at all, so a resident with
+        // no effectiveLevel field ever set on their profile (only the raw
+        // experience field from onboarding) was silently excluded from
+        // every fitness-level breakdown, despite being a real, active
+        // resident with a real level on file. getBuildingResidentsForManager
+        // (the separate "peek as manager" code path) already had this exact
+        // fallback - this is the direct-login path everyone actually uses,
+        // and it never did.
+        return { uid: d.id, ...data, effectiveLevel: data.effectiveLevel || data.experience || "" };
+      })
       .filter(u => u.role !== "manager");
   } catch (e) {
     console.error("fetchBuildingResidents error:", e);
