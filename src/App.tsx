@@ -12103,6 +12103,15 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
   // Derive workout completion status from profile — same logic as main App
   const workoutDoneToday = profile?.lastSessionDate === new Date().toDateString();
   const isRestDay = (() => {
+    // Mirrors the exact same override getWeekSchedule already applies:
+    // if today's real workout was already completed, today can never be
+    // treated as a rest day for display purposes, no matter what the raw
+    // program sequence says right now. Without this, a Reset Week that
+    // happens to remap today onto a natural rest day in the base sequence
+    // would have chat announce "today's a rest day" for a day the person
+    // just finished a real workout on - exactly the kind of same-moment
+    // disagreement between screens this pattern exists to prevent.
+    if (workoutDoneToday) return false;
     if (!programKey || !PROGRAMS[programKey]) return false;
     const days = PROGRAMS[programKey].days || [];
     const resolvedDay = resolveProgramDayForDate(programDay, new Date(), profile?.dayOverrides);
@@ -15022,7 +15031,7 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
           <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "16px 0 4px" }}>App</p>
           <div style={{ padding: "14px 0", borderBottom: `1px solid ${COLORS.border}`, display: "flex", justifyContent: "space-between" }}>
             <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>Version</span>
-            <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 600 }}>1.4.2</span>
+            <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 600 }}>1.4.3</span>
           </div>
           <div style={{ padding: "14px 0", borderBottom: `1px solid ${COLORS.border}`, display: "flex", justifyContent: "space-between" }}>
             <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>Program</span>
