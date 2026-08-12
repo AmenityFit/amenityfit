@@ -15636,6 +15636,27 @@ const SuperAdminDashboard = ({ onSignOut }) => {
     });
   }, []);
 
+  // liveUsers was declared, read in three separate places (the
+  // portfolio-wide "active right now" banner, per-building live counts on
+  // the building list, and the resident/manager breakdown on a selected
+  // building), but never once actually populated - fetchLivePresence
+  // already existed, purpose-built for exactly this, and was simply never
+  // called. Every "live" indicator across this whole dashboard has
+  // therefore always shown zero, regardless of real activity. Polls every
+  // 30 seconds while this screen is open, rather than fetching once on
+  // mount, since a stale one-time snapshot of "who's live" becomes
+  // actively misleading within minutes - by definition, this is meant to
+  // reflect what's happening right now, not what was happening when the
+  // page first loaded.
+  useEffect(() => {
+    const refreshLivePresence = () => {
+      fetchLivePresence().then(data => setLiveUsers(data));
+    };
+    refreshLivePresence();
+    const interval = setInterval(refreshLivePresence, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Runs once per Command Center visit - no button to remember, just a
   // quiet background cleanup of accounts deactivated over a year ago.
   useEffect(() => {
