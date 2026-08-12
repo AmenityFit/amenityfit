@@ -9332,7 +9332,18 @@ const logWeightHistoryInBackground = async (
     const exDataForUnit = (EXERCISES_DATA as any)[exId];
     const isKettlebellForUnit = exDataForUnit?.equipment?.toLowerCase().includes("kettlebell");
     const unitForLog = isKettlebellForUnit ? "kg" : (isImperial ? "lbs" : "kg");
-    const logRef = doc(db, "users", uid, "weightLog", `${today}_${exId}`);
+    // Previously keyed by `${today}_${exId}` - a second log of the same
+    // exercise on the same calendar date silently overwrote the first
+    // instead of creating a new entry, and the prevBest filter below
+    // (meant only to exclude the row this exact call is about to write,
+    // to avoid comparing a value against itself) excluded ANY earlier
+    // same-day entry too, since they shared that same id. A same-day
+    // earlier weight for an exercise was therefore invisible to the PR
+    // check, and no personal-best notification could ever fire for it.
+    // An auto-generated id makes every log its own permanent, distinct
+    // entry regardless of date, so multiple sessions in one day (or any
+    // other legitimate re-log) can never collide or overwrite each other.
+    const logRef = doc(collection(db, "users", uid, "weightLog"));
     batch.push(setDoc(logRef, {
       exerciseId: exId,
       weight,
@@ -9343,8 +9354,12 @@ const logWeightHistoryInBackground = async (
       loggedAt: serverTimestamp(),
     }, { merge: true }));
     try {
+      // allPrevDocs was fetched before this new doc was created, so it can
+      // never contain the entry this call is about to write - no id-based
+      // self-exclusion filter is needed anymore, and none of a real
+      // earlier same-day entry gets excluded by accident either.
       const prevBest = allPrevDocs
-        .filter(d => d.data().exerciseId === exId && d.id !== `${today}_${exId}`)
+        .filter(d => d.data().exerciseId === exId)
         .reduce((best, d) => Math.max(best, d.data().weight || 0), 0);
       if (weight > prevBest && prevBest > 0) {
         batch.push(addDoc(collection(db, "users", uid, "notifications"), {
