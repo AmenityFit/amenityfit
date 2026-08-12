@@ -18465,7 +18465,25 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
   const [buildingName, setBuildingName] = useState("");
   const [editingBranding, setEditingBranding] = useState(false);
   const [tempName, setTempName] = useState("");
-  const [buildingLogoUrl, setBuildingLogoUrl] = useState<string | null>(null);
+  // Same stale-while-revalidate pattern as the resident-side listener:
+  // this screen's own building-data fetch always starts blank and only
+  // fills in once fetchBuildingData resolves, which is exactly what made
+  // the logo visibly pop in on every visit to this screen. Seeding from
+  // the last-cached value (written by either this screen or the resident
+  // listener, whichever ran more recently) means a manager who was just
+  // shown the resident-side experience, or who revisits this screen,
+  // sees the logo immediately while the real fetch quietly confirms or
+  // corrects it in the background.
+  const [buildingLogoUrl, setBuildingLogoUrl] = useState<string | null>(() => {
+    const resolvedId = buildingId || userProfile?.buildingId;
+    if (!resolvedId) return null;
+    try {
+      const cached = localStorage.getItem(`buildingBranding:${resolvedId}`);
+      return cached ? (JSON.parse(cached).logoUrl ?? null) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [pendingProgramName, setPendingProgramName] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoLightboxUrl, setLogoLightboxUrl] = useState<string | null>(null);
@@ -18498,6 +18516,12 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
         setTempName(data.programName || data.name || "");
         setBuildingLogoUrl(data.logoUrl || null);
         setPendingProgramName(data.pendingProgramName || null);
+        try {
+          localStorage.setItem(`buildingBranding:${resolvedId}`, JSON.stringify({ logoUrl: data.logoUrl || null, programName: data.programName || null }));
+        } catch (e) {
+          // Storage can legitimately fail (private browsing, full quota) -
+          // never let a caching optimization break the real data flow.
+        }
         // Starts the actual image download in parallel with this data
         // fetch resolving, instead of waiting for the img tag to mount
         // and only then request it.
@@ -19844,7 +19868,25 @@ export default function App() {
   // time that screen remounted on a tab switch. Living here means it's
   // fetched once per session and never refetched on navigation, exactly like
   // the resident's own profile photo already behaves.
-  const [liveBuildingBranding, setLiveBuildingBranding] = useState<{ logoUrl?: string | null; programName?: string | null } | null>(null);
+  // Building branding requires its own separate document fetch (unlike
+  // profile photo, which rides along on the single forced-server profile
+  // read in loadUserProfile), so it structurally can never be quite as
+  // instant. To stop that extra round-trip from being visible as a blank
+  // logo on every fresh session, the last-seen value is cached in
+  // localStorage per building and used as the initial state - a real
+  // stale-while-revalidate: the previously-seen logo renders immediately,
+  // then this same listener silently corrects it the moment the live
+  // value comes back, exactly the same as before, just no longer starting
+  // from a visible blank.
+  const [liveBuildingBranding, setLiveBuildingBranding] = useState<{ logoUrl?: string | null; programName?: string | null } | null>(() => {
+    if (!userProfile?.buildingId) return null;
+    try {
+      const cached = localStorage.getItem(`buildingBranding:${userProfile.buildingId}`);
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
 
   useEffect(() => {
     if (!userProfile?.buildingId) { setLiveBuildingEquipment(null); setLiveBuildingBranding(null); return; }
@@ -19854,7 +19896,14 @@ export default function App() {
         if (snap.exists()) {
           const d = snap.data();
           setLiveBuildingEquipment(d.equipment || []);
-          setLiveBuildingBranding({ logoUrl: d.logoUrl || null, programName: d.programName || null });
+          const branding = { logoUrl: d.logoUrl || null, programName: d.programName || null };
+          setLiveBuildingBranding(branding);
+          try {
+            localStorage.setItem(`buildingBranding:${userProfile.buildingId}`, JSON.stringify(branding));
+          } catch (e) {
+            // Storage can legitimately fail (private browsing, full quota) -
+            // never let a caching optimization break the real data flow.
+          }
           // Preloads the actual image bytes into the browser's cache the
           // instant the URL is known, well before Profile ever gets opened -
           // the data itself was already made instantly available session-
