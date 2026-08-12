@@ -4837,8 +4837,11 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
     if (type === "streak") return "🔥";
     if (type === "level-up") return "⚡";
     if (type === "cycle-complete") return "📈";
-    if (type === "welcome-back") return "👋";
-    if (type === "building") return "🏢";
+    // welcome-back and building intentionally removed - neither type is
+    // ever actually written anywhere. welcome-back already has its own
+    // dedicated full-screen moment at login (screen === "welcome-back"),
+    // same pattern as level-up, so a notification-center entry for it
+    // would be pure redundancy. building was speculative and never built.
     if (type === "workout") return "💪";
     if (type === "badge-unlocked") return "🏅";
     return "✓";
