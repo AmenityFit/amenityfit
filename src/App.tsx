@@ -649,7 +649,6 @@ const saveWorkoutSession = async (uid: string, session: any, sessionId?: string)
     // time, in the one place that matters most - this is the final write for
     // the whole workout.
     let existingId: string | null = null;
-    let existingWeights: Record<string, any> = {};
     try {
       let sessSnap;
       try {
@@ -657,39 +656,31 @@ const saveWorkoutSession = async (uid: string, session: any, sessionId?: string)
       } catch (serverErr) {
         sessSnap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", uid), where("date", "==", today)));
       }
-      if (!sessSnap.empty) {
-        existingId = sessSnap.docs[0].id;
-        existingWeights = sessSnap.docs[0].data()?.weightsLogged || {};
-      }
+      if (!sessSnap.empty) existingId = sessSnap.docs[0].id;
     } catch {}
-    // Confirmed with hard evidence across three separate tests tonight:
-    // this previously let existingId (found purely by matching uid+date)
-    // win over an explicitly-passed sessionId. Since the session document
-    // id is date-based, ANY earlier workout completed on the same
-    // calendar date - even a completely different program day - was
-    // being found and silently reused here, merging that unrelated
-    // workout's data into whatever the CURRENT workout is trying to save.
-    // The caller now always knows and passes the exact session id used
-    // throughout the whole current workout, which is strictly more
-    // trustworthy than a generic "something exists for today" lookup, so
-    // it must win. existingId now only matters as a last-resort fallback
-    // when no sessionId was passed in at all.
     const id = sessionId || existingId || `${uid}_${Date.now()}`;
-    // Only trust existingWeights as a genuine top-up for THIS session - if
-    // the document the lookup found isn't the same one this call is
-    // actually targeting, it belongs to a different workout entirely and
-    // must never be merged in, regardless of how it was found.
-    const mergedWeights = existingId === id
-      ? { ...existingWeights, ...(session.weightsLogged || {}) }
-      : (session.weightsLogged || {});
-    // merge: true here too - previously this was a full-document setDoc with
-    // no merge option, meaning any field on the existing document not
-    // included in this specific call would be silently wiped, on top of
-    // whatever the stale read above already got wrong.
+    // weightsLogged and weightNotes are deliberately never written by this
+    // final completion call. Both are already saved reliably, per group,
+    // in real time, by saveWeightsToFirestore as the workout is played -
+    // that is the single source of truth for both fields. This function
+    // used to also write its own copy of weightsLogged here, built from an
+    // in-memory snapshot (workoutFlowWeightsRef) that resets to empty on
+    // every mount of the workout screen - meaning any group completed
+    // before a resume/remount was silently missing from that snapshot.
+    // Because this write used setDoc with a merge, a plain (non-dotted)
+    // weightsLogged key doesn't merge at the per-exercise level - it
+    // replaces the entire map - so an incomplete snapshot at completion
+    // time didn't just fail to add new data, it overwrote and destroyed
+    // whichever earlier groups' weights were already correctly saved.
+    // weightNotes had it worse: it was never included in this write's
+    // in-memory snapshot at all, end to end, so it had zero protection.
+    // Explicitly omitting both fields here, rather than trying to
+    // reconstruct and merge them from a fragile in-memory source, removes
+    // this entire class of bug instead of patching around it again.
+    const { weightsLogged: _omitWeightsLogged, weightNotes: _omitWeightNotes, ...sessionWithoutLoggedData } = session;
     await setDoc(doc(db, "workoutSessions", id), {
       uid,
-      ...session,
-      weightsLogged: mergedWeights,
+      ...sessionWithoutLoggedData,
       sessionId: id,
       date: today,
       completedAt: serverTimestamp(),
