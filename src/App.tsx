@@ -10014,7 +10014,7 @@ if (showRest) {
           {currentEx?.difficulty && (
             <div style={{ flex: 1, background: COLORS.card, borderRadius: 14, padding: "14px 16px", border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
               <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, margin: "0 0 4px" }}>Level</p>
-              <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: 0 }}>{getExerciseDifficultyLabel(currentEx.id, currentEx.difficulty)}</p>
+              <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: 0 }}>{getExerciseDifficultyLabel(currentExSlot?.id || "", currentEx.difficulty)}</p>
             </div>
           )}
         </div>
