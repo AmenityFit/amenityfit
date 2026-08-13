@@ -17231,7 +17231,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
             {batchInvoiceMode && !batchComplete && (
               <div>
                 <p style={{ color: COLORS.white, fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>Batch Submitted</p>
-                <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px", lineHeight: 1.6 }}>{batchCompanyName} and its {batchParsed.filter(b => b.valid).length} buildings are saved and waiting on an invoice. Once it is paid, every building activates automatically — each with its own manager login and codes — and {batchPmEmail} gets one combined summary organized by building.</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px", lineHeight: 1.6 }}>{batchCompanyName} and its {batchParsed.filter(b => b.valid).length} buildings are saved and waiting on an invoice. Once it is paid, every building activates automatically with its own manager login - each manager then generates their own resident invite codes on demand, exactly like a single building does. {batchPmEmail} gets one combined summary organized by building.</p>
 
                 <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Negotiated Monthly Amount</p>
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -18520,6 +18520,14 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
   // update instantly after each generation, without needing to refetch the
   // whole building document. Seeded from the real value once it loads.
   const [liveCodesGenerated, setLiveCodesGenerated] = useState<number | null>(null);
+  // Accepts newlines, commas, or both as separators between unit numbers -
+  // a pasted list can arrive as one single line (e.g. copied from a chat
+  // message, a spreadsheet row, or an email) instead of true separate
+  // lines, and the person has no way to know which format the field
+  // expects just by looking at it. Splitting on either character means it
+  // works correctly regardless of how the list actually got here.
+  const parseBatchUnits = (text: string): string[] =>
+    text.split(/[\n,]/).map(l => l.trim()).filter(Boolean);
   const [buildingResidents, setBuildingResidents] = useState<any[]>([]);
   const [residentsLoading, setResidentsLoading] = useState(false);
   const [residentsLoaded, setResidentsLoaded] = useState(false);
@@ -19055,7 +19063,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                 </>
               ) : (
                 <>
-                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 8px", lineHeight: 1.5 }}>One unit number per line. A code is generated for each.</p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 8px", lineHeight: 1.5 }}>One unit per line, or separated by commas - either works. A code is generated for each.</p>
                   <textarea
                     value={generateBatchText}
                     onChange={e => { setGenerateBatchText(e.target.value); setGenerateError(""); }}
@@ -19064,7 +19072,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                     style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: `1.5px solid ${COLORS.border}`, background: COLORS.background, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none", boxSizing: "border-box" as const, marginBottom: 6, resize: "vertical" as const }}
                   />
                   <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 12px" }}>
-                    {generateBatchText.split("\n").map(l => l.trim()).filter(Boolean).length} unit{generateBatchText.split("\n").map(l => l.trim()).filter(Boolean).length === 1 ? "" : "s"} entered
+                    {parseBatchUnits(generateBatchText).length} unit{parseBatchUnits(generateBatchText).length === 1 ? "" : "s"} entered
                   </p>
                 </>
               )}
@@ -19114,7 +19122,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                   const cap = b.units || 0;
                   const unitsToCreate = generateMode === "single"
                     ? (generateUnitNumber.trim() ? [generateUnitNumber.trim()] : [])
-                    : generateBatchText.split("\n").map(l => l.trim()).filter(Boolean);
+                    : parseBatchUnits(generateBatchText);
 
                   if (unitsToCreate.length === 0) { setGenerateError(generateMode === "single" ? "Enter a unit number." : "Enter at least one unit number."); return; }
                   if (liveCodesGenerated !== null && liveCodesGenerated + unitsToCreate.length > cap) {
@@ -19153,7 +19161,7 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                 {generating
                   ? "Generating..."
                   : generateMode === "batch"
-                    ? `Generate ${generateBatchText.split("\n").map(l => l.trim()).filter(Boolean).length || ""} Code${generateBatchText.split("\n").map(l => l.trim()).filter(Boolean).length === 1 ? "" : "s"}`
+                    ? `Generate ${parseBatchUnits(generateBatchText).length || ""} Code${parseBatchUnits(generateBatchText).length === 1 ? "" : "s"}`
                     : "Generate Code"}
               </button>
             </div>
