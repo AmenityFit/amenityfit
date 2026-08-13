@@ -16876,6 +16876,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                         <button
                           onClick={async () => {
                             if (!sub.managerEmail) { alert("No manager email on this submission."); return; }
+                            if (!window.confirm(`Activate ${sub.buildingName || "this building"}? This creates the manager account and sends the welcome email immediately - it cannot be undone from here.`)) return;
                             const activating = activatingId === sub.id;
                             if (activating) return;
                             setActivatingId(sub.id);
