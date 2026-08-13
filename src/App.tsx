@@ -13890,7 +13890,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
                                 <Check size={14} color={COLORS.success} strokeWidth={3} />
                               </div>
                               <div style={{ flex: 1 }}>
-                                <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 600, margin: "0 0 1px", lineHeight: 1.3 }}>{session.programName || session.dayFocus || session.dayTitle || "Workout"}</p>
+                                <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 600, margin: "0 0 1px", lineHeight: 1.3 }}>{deriveWorkoutTitle(session.groups || [], undefined, session.dayFocus) || session.programName || session.dayTitle || "Workout"}</p>
                                 <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "0 0 4px" }}>{session.completedAt?.toDate ? session.completedAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : `Day ${session.programDay || "—"}`}</p>
 
                               </div>
@@ -14104,7 +14104,7 @@ const HistoryScreen = ({ profile, onBack, onNavigate = (s: string) => {} }) => {
                               <Check size={14} color={COLORS.success} strokeWidth={3} />
                             </div>
                             <div style={{ flex: 1 }}>
-                              <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 600, margin: "0 0 1px", lineHeight: 1.3 }}>{session.programName || session.dayFocus || session.dayTitle || "Workout"}</p>
+                              <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 600, margin: "0 0 1px", lineHeight: 1.3 }}>{deriveWorkoutTitle(session.groups || [], undefined, session.dayFocus) || session.programName || session.dayTitle || "Workout"}</p>
                               <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>{session.completedAt?.toDate ? session.completedAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : `Day ${session.programDay || "—"}`}</p>
                             </div>
                             <ChevronRight size={15} color={COLORS.border} />
