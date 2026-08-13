@@ -13859,7 +13859,18 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
 
               {historyLoaded && cycleKeys.map(cycle => {
                 const weeks = groupedHistory[cycle];
-                const weekKeys = Object.keys(weeks).map(Number).sort((a, b) => b - a);
+                // Sorted by each group's most recent real session date, not
+                // by the raw week number itself. A level change or any other
+                // program restart resets programDay (and so this derived
+                // week number) back down, but doesn't undo time - without
+                // this, a brand new Week 1 right after a restart could sort
+                // below an older Week 2 from before it, making the list read
+                // as if time had gone backwards.
+                const getLatestInWeek = (wk: number) => Math.max(...weeks[wk].map((s: any) => {
+                  const d = s.completedAt?.toDate ? s.completedAt.toDate() : new Date(s.completedAt);
+                  return d.getTime();
+                }));
+                const weekKeys = Object.keys(weeks).map(Number).sort((a, b) => getLatestInWeek(b) - getLatestInWeek(a));
                 return (
                   <div key={cycle} style={{ marginBottom: 20 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -14072,7 +14083,18 @@ const HistoryScreen = ({ profile, onBack, onNavigate = (s: string) => {} }) => {
                     <ChevronRight size={15} color={COLORS.textSecondary} style={{ transform: expandedMonths[monthKey] ? "rotate(90deg)" : "none", transition: "transform 0.2s" }} />
                   </button>
 
-                  {expandedMonths[monthKey] && Object.keys(grouped[year][cycle]).map(Number).sort((a, b) => b - a).map(week => (
+                  {/* Sorted by each group's most recent real session date,
+                      not by the raw week number itself - see the matching
+                      comment in ProgressScreen's identical grouping logic
+                      for the full reasoning (a program restart resets this
+                      derived week number, but not time). */}
+                  {expandedMonths[monthKey] && Object.keys(grouped[year][cycle]).map(Number).sort((a, b) => {
+                    const getLatestInWeek = (wk: number) => Math.max(...grouped[year][cycle][wk].map((s: any) => {
+                      const d = s.completedAt?.toDate ? s.completedAt.toDate() : new Date(s.completedAt);
+                      return d.getTime();
+                    }));
+                    return getLatestInWeek(b) - getLatestInWeek(a);
+                  }).map(week => (
                     <div key={week} style={{ marginLeft: 8, marginBottom: 8 }}>
                       <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px", paddingLeft: 4 }}>Week {week}</p>
                       <div style={{ background: COLORS.background, borderRadius: 12, border: `1px solid ${COLORS.border}`, overflow: "hidden" }}>
