@@ -14406,21 +14406,16 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
       setManagerAccessPassword("");
       return;
     }
-    // Building-level check failed - try the portfolio-level check before
-    // giving up. Same account could plausibly be a property_manager
-    // instead of (or as well as) a single-building manager, so this
-    // covers both real cases with one credentials form rather than
-    // asking the person to pick which kind of manager they are first.
-    const portfolio = await verifyManagerAccessForPortfolio(managerAccessEmail.trim(), managerAccessPassword);
+    // The portfolio-level peek (verifyManagerAccessForPortfolio,
+    // onPortfolioAccess, portfolioPeek) is deliberately not attempted
+    // here anymore - it shipped tonight untested and turned out not to
+    // work correctly on first real use. Building-level peek already
+    // covers the common case, so this is disabled rather than risk
+    // showing residents a broken flow. The underlying code is still in
+    // place, just unreachable, for whenever this gets properly debugged
+    // and re-enabled.
     setManagerAccessVerifying(false);
-    if (portfolio) {
-      setShowManagerAccess(false);
-      onPortfolioAccess(portfolio.companyId, portfolio.companyName, managerAccessEmail.trim(), managerAccessPassword);
-      setManagerAccessEmail("");
-      setManagerAccessPassword("");
-    } else {
-      setManagerAccessError("Incorrect credentials, or this account isn't a manager on file for this building or portfolio.");
-    }
+    setManagerAccessError("Incorrect credentials, or this account isn't the manager on file for this building.");
   };
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
