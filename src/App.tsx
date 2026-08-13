@@ -14436,6 +14436,16 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
       if (resultUrl !== null) {
         setPhotoPreview(resultUrl);
         onUpdate({ ...profile, profilePhoto: resultUrl });
+        // Dedicated, narrow write for just this one field - the shared
+        // top-level save intentionally never touches profilePhoto anymore
+        // (see the comment there), since a stale local profile object at
+        // save time could otherwise silently overwrite a real photo with
+        // null. This is now the only path that ever persists this field.
+        try {
+          await setDoc(doc(db, "users", uid), { profilePhoto: resultUrl }, { merge: true });
+        } catch (e) {
+          console.error("Failed to save profile photo:", e);
+        }
       }
       setPhotoUploading(false);
     };
@@ -14455,6 +14465,14 @@ const ProfileScreen = ({ profile, onUpdate, onSignOut, onNavigate = (s) => {}, o
     if (resultUrl !== null) {
       setPhotoPreview(null);
       onUpdate({ ...profile, profilePhoto: null });
+      // Dedicated, narrow write for just this one field - see the matching
+      // comment in handlePhotoSelect for why the shared top-level save no
+      // longer touches profilePhoto at all.
+      try {
+        await setDoc(doc(db, "users", uid), { profilePhoto: null }, { merge: true });
+      } catch (e) {
+        console.error("Failed to save profile photo deletion:", e);
+      }
     }
     setPhotoUploading(false);
   };
@@ -20899,7 +20917,18 @@ const isInitialLoad = React.useRef(true);
     setUserProfile(updated);
     const uid = updated?.uid || currentUid || auth.currentUser?.uid;
     if (uid) {
-      const { uid: _uid, ...dataToSave } = updated;
+      // profilePhoto is deliberately excluded from this shared, general-
+      // purpose save. This handler fires for every unrelated field edit
+      // in Profile, and the local profile object it receives is not
+      // guaranteed to have the real photo URL loaded yet (e.g. right
+      // after a forced re-login following an app update) - if it doesn't,
+      // this spread would silently write profilePhoto: null over top of
+      // a real, already-saved photo, even though nothing about that edit
+      // had anything to do with the photo. handlePhotoSelect and
+      // handlePhotoDelete now perform their own dedicated, narrow writes
+      // for just this one field, so it can never be touched as a side
+      // effect of saving something else.
+      const { uid: _uid, profilePhoto: _profilePhoto, ...dataToSave } = updated;
       setDoc(doc(db, "users", uid), stripUndefinedDeep(dataToSave), { merge: true })
         .catch(e => console.error("Failed to save profile update:", e));
     }
