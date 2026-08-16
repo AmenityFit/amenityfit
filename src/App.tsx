@@ -16826,6 +16826,8 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                 const reviewedDate = sub.reviewedAt?.toDate ? sub.reviewedAt.toDate().toLocaleDateString() : null;
                 const isPending = sub.status === "pending";
                 const isInvoiceSent = sub.status === "invoice_sent";
+                const isAgreementSent = sub.agreementStatus === "sent";
+                const isAgreementCompleted = sub.agreementStatus === "completed";
                 const isRejected = sub.status === "rejected";
                 const isActivated = sub.status === "activated";
                 const statusColor = isActivated ? COLORS.success : isRejected ? "#FF4D4D" : "#F59E0B";
@@ -16868,13 +16870,52 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     </div>
 
                     {/* Pending actions */}
+                    {isAgreementSent && (
+                      <div style={{ background: `${COLORS.accent}10`, borderRadius: 10, padding: "10px 14px", border: `1px solid ${COLORS.accent}30`, marginBottom: 10 }}>
+                        <p style={{ color: COLORS.accent, fontSize: 12, fontWeight: 700, margin: 0 }}>Agreement sent - awaiting signature. Invoice sends automatically once fully signed.</p>
+                      </div>
+                    )}
+                    {isAgreementCompleted && (
+                      <div style={{ background: `${COLORS.success}10`, borderRadius: 10, padding: "10px 14px", border: `1px solid ${COLORS.success}30`, marginBottom: 10 }}>
+                        <p style={{ color: COLORS.success, fontSize: 12, fontWeight: 700, margin: 0 }}>Agreement signed. {isInvoiceSent ? "Invoice sent automatically." : "Invoicing..."}</p>
+                      </div>
+                    )}
                     {isInvoiceSent && (
                       <div style={{ background: `${COLORS.primary}10`, borderRadius: 10, padding: "10px 14px", border: `1px solid ${COLORS.primary}30`, marginBottom: 10 }}>
                         <p style={{ color: COLORS.primary, fontSize: 12, fontWeight: 700, margin: 0 }}>Invoice sent - awaiting payment. Activation happens automatically once paid, or activate manually below.</p>
                       </div>
                     )}
-                    {isPending && (
+                    {isPending && !isAgreementSent && !isAgreementCompleted && (
                       <div style={{ marginBottom: 10 }}>
+                        <button
+                          onClick={async () => {
+                            if (!sub.managerEmail) { alert("No manager email on this submission."); return; }
+                            const sending = activatingId === sub.id;
+                            if (sending) return;
+                            setActivatingId(sub.id);
+                            try {
+                              const res = await fetch("https://sendagreementforsigning-ts7bxpsabq-uc.a.run.app", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ submissionId: sub.id, secret: "amenityfit-activation-2026" }),
+                              });
+                              const data = await res.json();
+                              if (data.success) {
+                                alert("Agreement sent for signature. Invoice will send automatically once both parties sign.");
+                                const updated = await fetchBuildingSubmissions();
+                                setQueueSubmissions(updated);
+                              } else {
+                                alert("Failed to send agreement: " + (data.error || "Unknown error"));
+                              }
+                            } catch (sendErr: any) {
+                              alert("Failed to send agreement: " + (sendErr?.message || "Unknown error"));
+                            }
+                            setActivatingId(null);
+                          }}
+                          style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: activatingId === sub.id ? COLORS.border : `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.primary})`, color: activatingId === sub.id ? COLORS.textSecondary : COLORS.white, fontSize: 13, fontWeight: 700, cursor: activatingId === sub.id ? "not-allowed" : "pointer", marginBottom: 8 }}
+                        >
+                          {activatingId === sub.id ? "Sending..." : "Send Agreement"}
+                        </button>
                         <button
                           onClick={async () => {
                             if (!sub.managerEmail) { alert("No manager email on this submission."); return; }
@@ -16900,9 +16941,9 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                             }
                             setActivatingId(null);
                           }}
-                          style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: activatingId === sub.id ? COLORS.border : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: activatingId === sub.id ? COLORS.textSecondary : COLORS.white, fontSize: 13, fontWeight: 700, cursor: activatingId === sub.id ? "not-allowed" : "pointer" }}
+                          style={{ width: "100%", padding: "13px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: activatingId === sub.id ? "not-allowed" : "pointer" }}
                         >
-                          {activatingId === sub.id ? "Sending..." : "Send Invoice"}
+                          {activatingId === sub.id ? "Sending..." : "Skip agreement, send invoice directly"}
                         </button>
                       </div>
                     )}
