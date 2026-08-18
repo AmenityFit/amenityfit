@@ -11976,6 +11976,36 @@ const buildSystemPrompt = (profile: any) => {
               const ex = EXERCISES_DATA[e.id];
               return ex ? `${ex.name} (${e.sets} sets x ${e.reps})` : e.id;
             }) || []);
+          // Recompute todayFocus from what's ACTUALLY in strengthGroups
+          // after session-length truncation, instead of the day's static
+          // focus/title label - which still describes the untruncated
+          // program day (e.g. "Legs & Abs") even when a shorter session
+          // length has already dropped some of those muscle groups from
+          // what's really being shown/exercised today. Falls back to the
+          // static label only if truncation somehow left no strength
+          // exercises at all.
+          const todayMuscles: string[] = [];
+          strengthGroups.forEach((g: any) => {
+            (g.exercises || []).forEach((e: any) => {
+              const m = EXERCISES_DATA[e.id]?.muscle;
+              if (m && !todayMuscles.includes(m)) todayMuscles.push(m);
+            });
+          });
+          const muscleToCoachLabel: Record<string, string> = {
+            "Chest": "Chest", "Back": "Back", "Shoulders": "Shoulders",
+            "Triceps": "Triceps", "Biceps": "Biceps", "Quads": "Legs",
+            "Hamstrings": "Legs", "Glutes": "Glutes", "Core": "Abs",
+            "Full Body": "Full Body", "Calves": "Calves",
+          };
+          const todayLabels = [...new Set(todayMuscles.map(m => muscleToCoachLabel[m] || m))];
+          if (todayLabels.length > 0) {
+            todayFocus = todayLabels.join(" & ");
+          } else if (cardioGroups.length > 0) {
+            // Truncation dropped every strength group, leaving only cardio -
+            // the muscle-derived label above has nothing to work with here,
+            // so fall through to "Cardio" instead of the stale static label.
+            todayFocus = "Cardio";
+          }
           if (cardioGroups.length > 0) {
             // Was summing the raw cardioMinutes field baked into the
             // program template (e.g. 35), not the actual session-length-
