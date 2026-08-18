@@ -12247,7 +12247,19 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     if (!programKey || !PROGRAMS[programKey]) return null;
     const resolvedDisplayDay = resolveProgramDayForDate(displayProgramDay, new Date(), profile?.dayOverrides);
     const dayData = getProgramDay(programKey, resolvedDisplayDay, profile?.generatedDays);
-    return deriveWorkoutTitle(dayData?.groups || [], undefined, dayData?.focus) || dayData?.title || null;
+    // Same real bug as the system-prompt todayFocus fix above, but in this
+    // separate greeting-text computation: dayData.groups is the RAW,
+    // untruncated day data. Without filtering by session length first (as
+    // getWeekSchedule and the actual workout card both correctly do), the
+    // greeting could name a muscle group (e.g. "Abs") that a shorter
+    // session has already dropped entirely, exactly like the coach context
+    // bug this whole fix started from.
+    const truncatedGroups = filterGroupsForSessionLength(
+      dayData?.groups || [],
+      profile?.sessionLength || 60,
+      profile?.effectiveLevel || profile?.experience || "intermediate"
+    );
+    return deriveWorkoutTitle(truncatedGroups, undefined, dayData?.focus) || dayData?.title || null;
   })();
 
   // Detects a real level-up exactly once, then permanently records it so it
