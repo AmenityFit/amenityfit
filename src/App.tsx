@@ -4971,6 +4971,34 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
+      {/* TEMPORARY DEBUG BUTTON - remove after native-capability test */}
+      <button
+        onClick={() => {
+          const bridges = [
+            "median", "gonative", "GoNative", "Capacitor", "cordova",
+            "webkit", "AppInterface", "PWABuilder", "Median",
+          ].filter((k) => (window as any)[k] !== undefined);
+          const bridgeMsg = bridges.length > 0 ? `Detected: ${bridges.join(", ")}` : "No known wrapper bridge detected on window";
+
+          if (!navigator.geolocation) {
+            alert(`No navigator.geolocation at all.\n\n${bridgeMsg}`);
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(
+            (pos) => alert(`Location granted!\nLat: ${pos.coords.latitude.toFixed(4)}, Lng: ${pos.coords.longitude.toFixed(4)}\n\n${bridgeMsg}`),
+            (err) => alert(`Location error: ${err.message} (code ${err.code})\n\n${bridgeMsg}`),
+            { timeout: 8000 }
+          );
+        }}
+        style={{
+          position: "fixed", top: 8, right: 8, zIndex: 99999,
+          background: "red", color: "white", fontSize: 10, fontWeight: 700,
+          padding: "4px 8px", borderRadius: 6, border: "none",
+        }}
+      >
+        GPS TEST
+      </button>
+
       {/* Header */}
       <div style={{ padding: "calc(16px + env(safe-area-inset-top, 0px)) 24px 8px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
