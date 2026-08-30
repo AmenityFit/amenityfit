@@ -12317,23 +12317,20 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     { role: "assistant", content: openingMessage, createdAt: Date.now() }
   ]);
 
-  // Resets on the calendar day, not a rolling 24 hours - opening the app
-  // at 7pm and coming back at 9pm the same day keeps the conversation, but
-  // the moment midnight passes it starts fresh, no matter how few hours
-  // have actually elapsed. This also guards against the browser keeping
-  // this screen's state alive in memory across backgrounding/relocking
-  // (iOS can suspend rather than fully destroy a page, so a simple
-  // unmount-based reset isn't reliable on its own). Stores only a date
-  // string locally, never conversation content, so this adds no real
-  // storage weight and involves zero Firestore or API cost.
-  useEffect(() => {
-    const lastActiveDate = sessionStorage.getItem("assistantLastActiveDate");
-    const todayStr = new Date().toDateString();
-    if (!lastActiveDate || lastActiveDate !== todayStr) {
-      setMessages([{ role: "assistant", content: openingMessage, createdAt: Date.now() }]);
-    }
-    sessionStorage.setItem("assistantLastActiveDate", todayStr);
-  }, []);
+  // Removed the old sessionStorage-based "new day" reset here - it was
+  // racing with the Firestore load effect below and often losing. iOS can
+  // fully terminate a backgrounded tab under memory pressure (not just
+  // suspend it), which wipes sessionStorage even on the SAME calendar day.
+  // That made this effect wrongly conclude "new day" and synchronously
+  // wipe messages back to the opening line, every time, before the async
+  // Firestore load below had a chance to restore the real conversation -
+  // this is what was actually causing the chat to appear to reset on
+  // every reopen, not just at a genuine midnight rollover. The Firestore
+  // load effect already does its own, more reliable same-day check
+  // (comparing the saved doc's own `date` field against today) before
+  // restoring anything, so a separate local-storage-based check here was
+  // both redundant and the actual source of the bug - removing it fixes
+  // the reset without needing to replace it with anything.
   const [input, setInput] = useState(() => sessionStorage.getItem("assistantDraft") || "");
 
   useEffect(() => {
