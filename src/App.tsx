@@ -20293,7 +20293,21 @@ const isInitialLoad = React.useRef(true);
       if (Date.now() - lastCompletionWrite.current < 3000) return;
       // Don't auto-save if this is the initial profile load from Firestore
       if (isInitialLoad.current) { isInitialLoad.current = false; return; }
-      saveUserProfile(userProfile.uid, profileToSave);
+      // profilePhoto is deliberately excluded here, same reasoning already
+      // applied to the other general-purpose profile save further down in
+      // this file: this effect fires on EVERY userProfile state change,
+      // app-wide - including transitional states right after a fresh login,
+      // before the full Firestore profile (with the real photo URL) has
+      // finished merging into local state. Firing this auto-save on one of
+      // those transitional renders would silently write over the real saved
+      // photo with whatever userProfile.profilePhoto happened to be at that
+      // exact moment (missing or null), erasing it - exactly matching "sign
+      // back in after being logged out and the photo is gone". Excluding it
+      // from every save except the dedicated upload/remove-photo flows
+      // (which explicitly manage this field on their own) removes that
+      // entire class of accidental overwrite.
+      const { profilePhoto: _profilePhoto, ...profileToSaveSansPhoto } = profileToSave;
+      saveUserProfile(userProfile.uid, profileToSaveSansPhoto);
     }
   }, [userProfile]);
 
