@@ -20327,7 +20327,7 @@ const isInitialLoad = React.useRef(true);
     }
   }, [userProfile?.programDay]);
 
-  const handleWorkoutComplete = (snapshot?: { groups: any[]; sessionLength: number; completedProgramDay?: number }, resolvedUid?: string) => {
+  const handleWorkoutComplete = async (snapshot?: { groups: any[]; sessionLength: number; completedProgramDay?: number }, resolvedUid?: string) => {
     const completedGroups = snapshot?.groups || [];
     const completedSessionLength = snapshot?.sessionLength || userProfile.sessionLength || 45;
     let cycleFinished = false;
@@ -20402,6 +20402,65 @@ const isInitialLoad = React.useRef(true);
       lastCompletionWrite.current = Date.now();
       setDoc(doc(db, "users", uid), stripUndefinedDeep(completionData), { merge: true })
         .catch(e => console.error("Completion write failed:", e.message));
+
+      // Write workout completion notifications BEFORE navigating to
+      // Dashboard below, and genuinely awaited this time. This used to be
+      // fire-and-forget AND placed after the screen change - Dashboard's
+      // notification fetch only runs once on mount (not a live listener),
+      // so it could reach Firestore and finish before this write had even
+      // landed server-side, silently missing the brand-new notification
+      // until some unrelated later remount happened to refetch. That race
+      // is what actually caused the long delay before a milestone
+      // notification appeared, not a slow write.
+      const notifBase = collection(db, "users", uid, "notifications");
+      const streakMilestones = [3, 7, 14, 30, 60, 90];
+      const buildingIdForMilestone = userProfile?.buildingId;
+      const notifWrites: Promise<any>[] = [];
+      if (streakMilestones.includes(newStreak)) {
+        notifWrites.push(addDoc(notifBase, {
+          type: "streak",
+          message: `${newStreak}-day streak. You're building something real.`,
+          read: false,
+          createdAt: serverTimestamp(),
+        }));
+        // streakMilestone is no longer incremented from here - a
+        // dedicated Firestore trigger (onResidentStreakUpdated) now
+        // reliably counts this directly off the user document's own
+        // streak write, guaranteed with retries rather than a
+        // fire-and-forget client call that could silently miss if the
+        // app closed or lost connection at exactly the wrong moment.
+      }
+      if (newCompleted === 1) {
+        notifWrites.push(addDoc(notifBase, {
+          type: "workout",
+          message: `First session complete! The hardest one is always the first.`,
+          read: false,
+          createdAt: serverTimestamp(),
+        }));
+        incrementBuildingMilestone(buildingIdForMilestone, "firstWorkout");
+      } else if (newCompleted % 10 === 0) {
+        notifWrites.push(addDoc(notifBase, {
+          type: "workout",
+          message: `${newCompleted} sessions complete. Consistency is the whole game.`,
+          read: false,
+          createdAt: serverTimestamp(),
+        }));
+      }
+      if (cycleFinished) {
+        notifWrites.push(addDoc(notifBase, {
+          type: "cycle-complete",
+          message: `30-day program complete. Your next program is ready.`,
+          read: false,
+          createdAt: serverTimestamp(),
+        }));
+        incrementBuildingMilestone(buildingIdForMilestone, "cycleComplete");
+      }
+      try {
+        await Promise.all(notifWrites);
+      } catch (e) {
+        // Non-fatal - worst case a badge is missing this one time, never
+        // something that should block workout completion itself.
+      }
     }
 
     if (cycleFinished) {
@@ -20411,53 +20470,6 @@ const isInitialLoad = React.useRef(true);
     }
 
     if (uid) {
-
-      // Write workout completion notifications
-      (() => {
-        const notifBase = collection(db, "users", uid, "notifications");
-        const streakMilestones = [3, 7, 14, 30, 60, 90];
-        const buildingIdForMilestone = userProfile?.buildingId;
-        if (streakMilestones.includes(newStreak)) {
-          addDoc(notifBase, {
-            type: "streak",
-            message: `${newStreak}-day streak. You're building something real.`,
-            read: false,
-            createdAt: serverTimestamp(),
-          });
-          // streakMilestone is no longer incremented from here - a
-          // dedicated Firestore trigger (onResidentStreakUpdated) now
-          // reliably counts this directly off the user document's own
-          // streak write, guaranteed with retries rather than a
-          // fire-and-forget client call that could silently miss if the
-          // app closed or lost connection at exactly the wrong moment.
-        }
-        if (newCompleted === 1) {
-          addDoc(notifBase, {
-            type: "workout",
-            message: `First session complete! The hardest one is always the first.`,
-            read: false,
-            createdAt: serverTimestamp(),
-          });
-          incrementBuildingMilestone(buildingIdForMilestone, "firstWorkout");
-        } else if (newCompleted % 10 === 0) {
-          addDoc(notifBase, {
-            type: "workout",
-            message: `${newCompleted} sessions complete. Consistency is the whole game.`,
-            read: false,
-            createdAt: serverTimestamp(),
-          });
-        }
-        if (cycleFinished) {
-          addDoc(notifBase, {
-            type: "cycle-complete",
-            message: `30-day program complete. Your next program is ready.`,
-            read: false,
-            createdAt: serverTimestamp(),
-          });
-          incrementBuildingMilestone(buildingIdForMilestone, "cycleComplete");
-        }
-      })();
-
       // Re-entry exit check — 6 sessions completed in re-entry mode
       if (userProfile.reEntryMode) {
         const newReEntrySessions = (userProfile.reEntrySessions || 0) + 1;
