@@ -12750,8 +12750,17 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
                     border: msg.role === "assistant" ? `1px solid ${COLORS.border}` : "none",
                     boxShadow: msg.role === "user" ? `0 4px 16px ${COLORS.primary}40` : "none",
                     cursor: "pointer",
-                    userSelect: "none" as any,
-                    WebkitUserSelect: "none" as any,
+                    // userSelect was previously "none" unconditionally here,
+                    // directly contradicting this comment's own stated intent
+                    // below - it fully disabled the drag-to-select gesture on
+                    // EVERY message (not just suppressing the native popup),
+                    // meaning window.getSelection() could never capture any
+                    // text on assistant messages and the "select text -> Save
+                    // to Notes" flow was silently dead. Only user's own
+                    // messages need selection disabled; assistant messages
+                    // need it left on so the blue drag handles keep working.
+                    userSelect: msg.role === "user" ? "none" as any : "text" as any,
+                    WebkitUserSelect: msg.role === "user" ? "none" as any : "text" as any,
                     // Keeps selection itself (the blue drag handles) working
                     // for assistant messages, while suppressing iOS's own
                     // system Copy/Translate bubble so only our own custom
