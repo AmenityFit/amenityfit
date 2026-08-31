@@ -15292,26 +15292,26 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           </div>
         )}
 
-        <div style={{ padding: "24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
-            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Time</p>
-            <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0, fontVariantNumeric: "tabular-nums" }}>{formatTime(elapsedSeconds)}</p>
+        <div style={{ padding: "24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div style={{ background: `linear-gradient(160deg, ${COLORS.card}, ${COLORS.background})`, border: `1px solid ${COLORS.border}`, borderRadius: 18, padding: "20px 16px", textAlign: "center" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Time</p>
+            <p style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.5, fontVariantNumeric: "tabular-nums" }}>{formatTime(elapsedSeconds)}</p>
           </div>
           {!isIndoorActivity && (
             <>
-              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
-                <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Distance</p>
-                <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0 }}>{(distanceMeters / 1000).toFixed(2)} km</p>
+              <div style={{ background: `linear-gradient(160deg, ${COLORS.card}, ${COLORS.background})`, border: `1px solid ${COLORS.border}`, borderRadius: 18, padding: "20px 16px", textAlign: "center" }}>
+                <p style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Distance</p>
+                <p style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{(distanceMeters / 1000).toFixed(2)}<span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textSecondary, marginLeft: 3 }}>km</span></p>
               </div>
-              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
-                <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Pace</p>
-                <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0 }}>{paceLabel}</p>
+              <div style={{ background: `linear-gradient(160deg, ${COLORS.card}, ${COLORS.background})`, border: `1px solid ${COLORS.border}`, borderRadius: 18, padding: "20px 16px", textAlign: "center" }}>
+                <p style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Pace</p>
+                <p style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{paceLabel}</p>
               </div>
             </>
           )}
-          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
-            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Calories</p>
-            <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0 }}>{finalCalories ? `~${finalCalories}` : "—"}</p>
+          <div style={{ background: `linear-gradient(160deg, ${COLORS.card}, ${COLORS.background})`, border: `1px solid ${COLORS.border}`, borderRadius: 18, padding: "20px 16px", textAlign: "center" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Calories</p>
+            <p style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{finalCalories ? `~${finalCalories}` : "—"}</p>
           </div>
         </div>
 
@@ -15448,20 +15448,26 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         </div>
       )}
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 32 }}>
-        <div style={{ textAlign: "center" }}>
-          <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 4px", fontWeight: 600, letterSpacing: 1 }}>TIME</p>
-          <h1 style={{ color: COLORS.white, fontSize: 56, fontWeight: 900, margin: 0, fontVariantNumeric: "tabular-nums" }}>{formatTime(elapsedSeconds)}</h1>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 36 }}>
+        <div style={{ textAlign: "center", position: "relative" }}>
+          <div style={{
+            position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+            width: 280, height: 160, borderRadius: "50%",
+            background: `radial-gradient(circle, ${COLORS.primary}30 0%, transparent 70%)`,
+            pointerEvents: "none",
+          }} />
+          <p style={{ position: "relative", color: COLORS.textSecondary, fontSize: 13, margin: "0 0 6px", fontWeight: 700, letterSpacing: 2 }}>TIME</p>
+          <h1 style={{ position: "relative", color: COLORS.white, fontSize: 76, fontWeight: 900, margin: 0, letterSpacing: -2, fontVariantNumeric: "tabular-nums", textShadow: `0 0 50px ${COLORS.primary}50` }}>{formatTime(elapsedSeconds)}</h1>
         </div>
         {!isIndoorActivity && (
-          <div style={{ display: "flex", gap: 40 }}>
+          <div style={{ display: "flex", gap: 48 }}>
             <div style={{ textAlign: "center" }}>
-              <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 4px", fontWeight: 600 }}>DISTANCE</p>
-              <h2 style={{ color: COLORS.white, fontSize: 24, fontWeight: 800, margin: 0 }}>{(distanceMeters / 1000).toFixed(2)} km</h2>
+              <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 6px", fontWeight: 700, letterSpacing: 1 }}>DISTANCE</p>
+              <h2 style={{ color: COLORS.white, fontSize: 36, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{(distanceMeters / 1000).toFixed(2)}<span style={{ fontSize: 18, fontWeight: 700, color: COLORS.textSecondary, marginLeft: 4 }}>km</span></h2>
             </div>
             <div style={{ textAlign: "center" }}>
-              <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 4px", fontWeight: 600 }}>PACE</p>
-              <h2 style={{ color: COLORS.white, fontSize: 24, fontWeight: 800, margin: 0 }}>{paceLabel}</h2>
+              <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 6px", fontWeight: 700, letterSpacing: 1 }}>PACE</p>
+              <h2 style={{ color: COLORS.white, fontSize: 36, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{paceLabel}</h2>
             </div>
           </div>
         )}
