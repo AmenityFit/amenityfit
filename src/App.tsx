@@ -14590,6 +14590,54 @@ const estimateCardioCalories = (activityType: string, durationSeconds: number, w
   const hours = durationSeconds / 3600;
   return Math.round(met * weightKg * hours);
 };
+
+// Free-tier public token - Mapbox's Static Images API only renders a
+// finished route (never live navigation), which comfortably fits their
+// free monthly allowance for an app this size. Only ever used to build a
+// read-only image URL, never for anything requiring a secret/private token.
+// Read from an env var (set in .env.local, gitignored) rather than
+// hardcoded - GitHub's push protection correctly flags any Mapbox token
+// literal in source, even this public-token type, so this avoids that
+// entirely and matches standard practice for any embedded API key.
+const MAPBOX_ACCESS_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
+
+// Downsamples a route to at most maxPoints, taking evenly-spaced points -
+// keeps the Static Images API's URL length well within safe limits (a
+// tracked run/hike can accumulate hundreds of GPS points, and a static
+// map image doesn't need every single ping's precision to look right,
+// just a faithful approximation of the path's actual shape).
+const simplifyRoute = (route: { lat: number; lng: number }[], maxPoints: number): { lat: number; lng: number }[] => {
+  if (route.length <= maxPoints) return route;
+  const step = route.length / maxPoints;
+  const simplified: { lat: number; lng: number }[] = [];
+  for (let i = 0; i < maxPoints; i++) {
+    simplified.push(route[Math.floor(i * step)]);
+  }
+  simplified.push(route[route.length - 1]);
+  return simplified;
+};
+
+// Builds a Mapbox Static Images API URL rendering the given route as a
+// glowing accent-colored path over Mapbox's own dark style, matching the
+// app's dark theme rather than a generic default map look. Uses "auto"
+// center/zoom so Mapbox itself fits the frame to the route's real bounding
+// box with padding, rather than us having to compute that ourselves.
+const buildRouteMapUrl = (route: { lat: number; lng: number }[], width: number, height: number): string | null => {
+  if (!route || route.length < 2) return null;
+  const simplified = simplifyRoute(route, 120);
+  const coordinates = simplified.map((p) => [p.lng, p.lat]);
+  const geojson = {
+    type: "Feature",
+    geometry: { type: "LineString", coordinates },
+    properties: {},
+  };
+  const encodedGeojson = encodeURIComponent(JSON.stringify(geojson));
+  // Accent color, no leading # per the Static API's path-color syntax.
+  const strokeColor = (COLORS.accent || "#22D3EE").replace("#", "");
+  const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+  const retina = dpr > 1 ? "@2x" : "";
+  return `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/geojson(${encodedGeojson})/auto/${width}x${height}${retina}?padding=40&path-color=${strokeColor}&path-width=4&path-opacity=0.9&access_token=${MAPBOX_ACCESS_TOKEN}`;
+};
 // A GPS fix implying faster than this is almost certainly a bad reading
 // (satellite jump, urban canyon reflection) rather than real movement -
 // discarded entirely rather than added to the distance total, since a
@@ -14616,6 +14664,11 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   const [isAutoPaused, setIsAutoPaused] = useState(false);
   const [goalHitPromptShown, setGoalHitPromptShown] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  // Set once, right before showing the completion summary - the estimate
+  // is computed inside finishActivity using elapsedSeconds/activityType at
+  // that exact moment, so it's captured here rather than recomputed at
+  // render time from state that keeps changing during the summary screen.
+  const [finalCalories, setFinalCalories] = useState<number | undefined>(undefined);
 
   const watchIdRef = React.useRef<number | null>(null);
   const timerIntervalRef = React.useRef<any>(null);
@@ -14733,8 +14786,8 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
 
   const finishActivity = async () => {
     stopTrackingInternals();
-    setStatus("finished");
     const uid = profile?.uid;
+    let estimatedCalories: number | undefined;
     if (uid && activityType) {
       const distanceKm = distanceMeters / 1000;
       const avgPace = distanceKm > 0 ? elapsedSeconds / distanceKm : undefined;
@@ -14743,7 +14796,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
       // when a weight is on file; left undefined otherwise rather than
       // guessing with a default weight.
       const weightLbs = parseFloat(String(profile?.weightLbs || "")) || undefined;
-      const estimatedCalories = estimateCardioCalories(activityType, elapsedSeconds, weightLbs);
+      estimatedCalories = estimateCardioCalories(activityType, elapsedSeconds, weightLbs);
       await saveCardioActivity(uid, {
         type: activityType,
         durationSeconds: elapsedSeconds,
@@ -14755,7 +14808,12 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         goalDurationSeconds: goalDurationSeconds,
       });
     }
-    onBack();
+    // Show a real completion summary (stats + route map) instead of
+    // immediately returning to whatever screen launched tracking - people
+    // finishing a tracked run/ride want to see what they just did, the
+    // same expectation Strava and every other real tracker sets.
+    setFinalCalories(estimatedCalories);
+    setStatus("finished");
   };
 
   // Goal-linked cardio (started from a programmed workout day): prompt once
@@ -14789,6 +14847,55 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     const s = Math.round(paceSecondsPerKm % 60);
     return `${m}:${String(s).padStart(2, "0")} /km`;
   })();
+
+  // Real completion summary - shown once finishActivity has saved the
+  // activity, before returning to whatever screen launched tracking.
+  // Distance/time/pace/calories mirror the live tracking display exactly
+  // (same underlying state, just frozen at the finish moment), plus the
+  // route map when there's a real route to show.
+  if (status === "finished") {
+    const mapUrl = buildRouteMapUrl(routeRef.current, 640, 360);
+    const activityMeta = ACTIVITY_TYPES.find((a) => a.key === activityType);
+    return (
+      <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
+        <div style={{ padding: "52px 24px 8px", textAlign: "center" }}>
+          <span style={{ fontSize: 40 }}>{activityMeta?.emoji}</span>
+          <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "8px 0 0", textTransform: "capitalize" }}>{activityType} Complete</h1>
+        </div>
+
+        {mapUrl && (
+          <div style={{ margin: "16px 24px 0", borderRadius: 20, overflow: "hidden", border: `1px solid ${COLORS.border}`, boxShadow: "0 8px 30px rgba(0,0,0,0.3)" }}>
+            <img src={mapUrl} alt="Route map" style={{ width: "100%", display: "block" }} />
+          </div>
+        )}
+
+        <div style={{ padding: "24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Time</p>
+            <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0, fontVariantNumeric: "tabular-nums" }}>{formatTime(elapsedSeconds)}</p>
+          </div>
+          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Distance</p>
+            <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0 }}>{(distanceMeters / 1000).toFixed(2)} km</p>
+          </div>
+          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Pace</p>
+            <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0 }}>{paceLabel}</p>
+          </div>
+          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Calories</p>
+            <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0 }}>{finalCalories ? `~${finalCalories}` : "—"}</p>
+          </div>
+        </div>
+
+        <div style={{ padding: "0 24px 40px", marginTop: "auto" }}>
+          <button onClick={onBack} style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 17, fontWeight: 800, cursor: "pointer", boxShadow: `0 8px 30px ${COLORS.primary}40` }}>
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!activityType) {
     return (
