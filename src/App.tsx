@@ -14856,78 +14856,92 @@ const MAX_PLAUSIBLE_SPEED_MPS = 12.5; // ~45 km/h, well above realistic run/bike
 // images before drawing, not approximated from memory alone.
 type IconProps = { size?: number; color?: string; strokeWidth?: number };
 
-const BasketballIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 3 L12 21" />
-    <path d="M3 12 L21 12" />
-    <path d="M12 3 Q5 12 12 21" />
-    <path d="M12 3 Q19 12 12 21" />
+// Real Font Awesome Free paths (CC BY 4.0 - needs credit on an app
+// credits/licenses page), used verbatim rather than hand-approximated,
+// after two straight misses trying to freehand a basketball's seam curves
+// and a soccer ball's pentagon tiling from imagined coordinates - shapes
+// like these are exactly where guessed coordinates read as "wrong" even
+// when the general idea is right (a globe instead of a basketball, a star
+// instead of a pentagon). Filled, not stroked, matching how these are
+// actually designed - forcing a seam/tile pattern into pure line art loses
+// the readability that makes them recognizable at a glance.
+const BasketballIcon = ({ size = 24, color = "currentColor" }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 512 512" fill={color}>
+    <path d="M86.6 64C119 35.5 158.6 15 202.3 5.6C206 19.1 208 33.3 208 48c0 38.4-13.5 73.7-36.1 101.3L86.6 64zM64 86.6l85.2 85.2C121.7 194.5 86.4 208 48 208c-14.7 0-28.9-2-42.4-5.7C15 158.6 35.5 119 64 86.6zM256 0c64.9 0 124.2 24.2 169.4 64L256 233.4 194.6 172C222.9 138.5 240 95.3 240 48c0-16.2-2-32-5.8-47.1C241.4 .3 248.7 0 256 0zM48 240c47.3 0 90.5-17.1 124-45.4L233.4 256 64 425.4C24.2 380.2 0 320.9 0 256c0-7.3 .3-14.6 .9-21.8C16 238 31.8 240 48 240zm463.1 37.8C496 274 480.2 272 464 272c-47.3 0-90.5 17.1-124 45.4L278.6 256 448 86.6c39.8 45.1 64 104.4 64 169.4c0 7.3-.3 14.6-.9 21.8zm-4.7 31.9C497 353.4 476.5 393 448 425.4l-85.2-85.2C390.3 317.5 425.6 304 464 304c14.7 0 28.9 2 42.4 5.7zM340.1 362.7L425.4 448C393 476.5 353.4 497 309.7 506.4C306 492.9 304 478.7 304 464c0-38.4 13.5-73.7 36.1-101.3zM317.4 340C289.1 373.5 272 416.7 272 464c0 16.2 2 32 5.8 47.1c-7.2 .6-14.5 .9-21.8 .9c-64.9 0-124.2-24.2-169.4-64L256 278.6 317.4 340z"/>
   </svg>
 );
 
-const SoccerBallIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 8 L15.8 10.8 L14.4 15.2 L9.6 15.2 L8.2 10.8 Z" fill={color} stroke="none" />
-    <path d="M12 8 L12 3.5" />
-    <path d="M15.8 10.8 L19.7 9.5" />
-    <path d="M14.4 15.2 L17.1 18.6" />
-    <path d="M9.6 15.2 L6.9 18.6" />
-    <path d="M8.2 10.8 L4.3 9.5" />
+const SoccerBallIcon = ({ size = 24, color = "currentColor" }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 256 256" fill={color}>
+    <path d="M231.8,134.8a4.8,4.8,0,0,0,0-1.2c.1-1.9.2-3.7.2-5.6a103.2,103.2,0,0,0-23-65.1,5.5,5.5,0,0,0-1.4-1.7,103.9,103.9,0,0,0-41.1-29.8l-1.1-.4a103.4,103.4,0,0,0-74.8,0l-1.1.4A103.9,103.9,0,0,0,48.4,61.2,5.5,5.5,0,0,0,47,62.9,103.2,103.2,0,0,0,24,128c0,1.9.1,3.7.2,5.6a4.8,4.8,0,0,0,0,1.2,104.2,104.2,0,0,0,15.7,48.4,9.9,9.9,0,0,0,1.1,1.7,104.3,104.3,0,0,0,60.3,43.6h.3a104.2,104.2,0,0,0,52.8,0h.3A104.3,104.3,0,0,0,215,184.9a9.9,9.9,0,0,0,1.1-1.7A104.2,104.2,0,0,0,231.8,134.8ZM68.5,117.1l13.2,4.3,12.7,39.2-8.1,11.2H51.7a86.2,86.2,0,0,1-11.2-34.3Zm119,0,28,20.4a86.2,86.2,0,0,1-11.2,34.3H169.7l-8.1-11.2,12.7-39.2ZM193.2,69l-10.7,32.9-13.2,4.3L136,81.9V68.1l28-20.4A87,87,0,0,1,193.2,69ZM92,47.7l28,20.4V81.9L86.7,106.2l-13.2-4.3L62.8,69A87,87,0,0,1,92,47.7Zm18,166.4L99.3,181.2l8.1-11.2h41.2l8.1,11.2L146,214.1a86.2,86.2,0,0,1-36,0Z"/>
   </svg>
 );
 
-const PadelRacketIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
+// Padel racket, hand-drawn to match the actual reference image directly:
+// a rounded teardrop paddle head (wider at top, tapering toward a short
+// neck), a dense grid of perforation holes across the face, and a short
+// ribbed handle - not a generic table-tennis-paddle substitute, which is
+// too circular and misses padel's distinctive elongated shape entirely.
+const PadelRacketIcon = ({ size = 24, color = "currentColor", strokeWidth = 1.6 }: IconProps) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-    <ellipse cx="13" cy="9" rx="6" ry="7.5" transform="rotate(25 13 9)" />
-    <circle cx="11" cy="6" r="0.6" fill={color} stroke="none" />
-    <circle cx="15" cy="7" r="0.6" fill={color} stroke="none" />
-    <circle cx="9.5" cy="10" r="0.6" fill={color} stroke="none" />
-    <circle cx="13.5" cy="11" r="0.6" fill={color} stroke="none" />
-    <circle cx="17" cy="10.5" r="0.6" fill={color} stroke="none" />
-    <path d="M8.5 15 L4 20" />
-    <path d="M4 20 L6 22" />
+    <path d="M14.5 2.5 C18.5 3.5 20.5 8 19.5 12 C18.5 16 14.5 18 11 17 C8 16 6.5 13 7 10 C7.5 6.5 10.5 1.5 14.5 2.5 Z" />
+    {[
+      [10.5, 6.5], [13, 6], [15.5, 6.8],
+      [9.5, 9], [12, 8.7], [14.5, 9.3], [17, 9.5],
+      [9, 11.5], [11.5, 11.5], [14, 11.8], [16.5, 12.3],
+      [10, 14], [12.5, 14.3], [15, 14.8],
+    ].map(([cx, cy], i) => (
+      <circle key={i} cx={cx} cy={cy} r="0.55" fill={color} stroke="none" />
+    ))}
+    <path d="M8.5 16.5 L4.5 21.5" strokeWidth={strokeWidth + 0.6} />
+    <path d="M5.3 19.3 L7.3 17.9 M4.7 20.6 L6.7 19.2" strokeWidth="1" />
   </svg>
 );
 
-// Rowing MACHINE specifically - a seated figure pulling a handle cabled to
-// a flywheel, not crossed oars, which would actually suggest open-water
-// rowing and be wrong for this activity. Matches reference images of real
-// rowing-machine icons/pictograms rather than the boat-oar convention.
+// Rowing MACHINE, redesigned as the apparatus itself (rail, seat, flywheel,
+// handle, cable) rather than a human figure - a human pose in pure line art
+// is exactly where freehand coordinate guessing keeps reading as "off" (two
+// straight misses). A machine made of straight lines and circles is far
+// more reliable to get looking clean and correctly proportioned.
 const RowingIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="18.5" cy="12.5" r="2.2" />
-    <path d="M4 20 L16.3 20" />
-    <circle cx="14" cy="7.5" r="1.7" />
-    <path d="M14.7 9 L12 14 L15.5 20" />
-    <path d="M12 14 L7 16.5" />
-    <path d="M15.5 15 L18.5 12.5" />
+    <circle cx="19" cy="17" r="2.5" />
+    <path d="M3 19 L16.5 19" />
+    <rect x="7" y="16.5" width="3.5" height="2" rx="0.5" />
+    <path d="M11 17.5 L15 12" />
+    <path d="M15 12 L19 14.7" />
+    <path d="M6 12.5 L9 8" />
+    <path d="M9 8 L13 9.5" />
   </svg>
 );
 
-// Walking - mid-stride pose (front leg planted, back leg pushing off),
-// distinguished from RunningIcon by a upright torso and lower knee lift.
+// Walking, rebuilt to match the crosswalk-sign reference pictogram
+// directly: upright torso, one foot always flat and weight-bearing on the
+// ground - the defining biomechanical difference from running, which is
+// exactly what makes them distinct rather than looking like the same pose.
 const WalkingIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="14" cy="4" r="2" />
-    <path d="M14 6 L12 14" />
-    <path d="M13 8 L17 10" />
-    <path d="M13 8 L9 7" />
-    <path d="M12 14 L16 18 L18 21" />
-    <path d="M12 14 L8 17 L5 15" />
+    <circle cx="13" cy="3.5" r="2" />
+    <path d="M13 5.5 L12.5 13" />
+    <path d="M12.7 8 L17 9.5" />
+    <path d="M12.7 8 L9.5 6" />
+    <path d="M12.5 13 L16.5 15.5 L18 20" />
+    <path d="M12.5 13 L9 16 L5 16" />
   </svg>
 );
 
-// Running - forward-leaning torso, higher knee lift, bent pumping arms.
+// Running, rebuilt to match the dynamic runner-silhouette reference
+// directly: forward-leaning torso, sharply bent high-knee-lift front leg,
+// fully extended airborne back leg, tightly bent pumping arms - both feet
+// off the ground at once, unlike walking's grounded stride.
 const RunningIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="15" cy="3" r="2" />
-    <path d="M15 5 L11 13" />
-    <path d="M12 7 L16 6 L18 9" />
-    <path d="M12 7 L8 9 L6 6" />
-    <path d="M11 13 L15 15 L14 20" />
-    <path d="M11 13 L7 16 L4 14" />
+    <circle cx="16" cy="3" r="2" />
+    <path d="M15.3 5 L10.5 12" />
+    <path d="M12.2 6.5 L16 4.5 L17.5 7.5" />
+    <path d="M12.2 6.5 L8 8 L7 5" />
+    <path d="M10.5 12 L14.5 13 L13.5 19" />
+    <path d="M10.5 12 L6 15.5 L3 14" />
   </svg>
 );
 
@@ -14939,7 +14953,8 @@ const SwimmingIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: Ic
     <path d="M15.5 8 L9 10 L3 8" />
     <path d="M11 9.3 L13 13" />
     <path d="M13 13 L17 15" />
-    <path d="M3 18 Q5 16 7 18 T11 18 T15 18 T19 18 T21 18" />
+    <path d="M3 17 Q5 15 7 17 T11 17 T15 17 T19 17 T21 17" />
+    <path d="M3 20 Q5 18 7 20 T11 20 T15 20 T19 20 T21 20" />
   </svg>
 );
 
@@ -15308,15 +15323,29 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // Confirms before discarding once real tracking data exists (elapsed
   // time > 0) - silently losing a genuinely in-progress GPS activity would
   // be worse than the missing exit itself. Before that point there's
-  // nothing to lose, so it exits immediately.
+  // nothing to lose.
+  // Where "back" goes also depends on how this screen was reached: with no
+  // presetActivityType, the person came from the standalone picker, so back
+  // should return to that picker (setActivityType(null)) rather than skip
+  // past it straight to whatever launched this whole screen. With a
+  // presetActivityType (the workout-linked "Track This Cardio" flow), there
+  // never was a picker to return to, so onBack() straight to the caller is
+  // correct there.
   const handleExitTracking = () => {
+    const goBack = () => {
+      if (presetActivityType) {
+        onBack();
+      } else {
+        setActivityType(null);
+      }
+    };
     if (elapsedSeconds > 0) {
       if (window.confirm("Discard this activity? Your progress so far won't be saved.")) {
         stopTrackingInternals();
-        onBack();
+        goBack();
       }
     } else {
-      onBack();
+      goBack();
     }
   };
 
