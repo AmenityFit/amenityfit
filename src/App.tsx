@@ -84,6 +84,12 @@ import {
   EyeOff,
   X,
   StickyNote,
+  Footprints,
+  Bike,
+  Mountain,
+  PersonStanding,
+  Sailboat,
+  Waves,
 } from "lucide-react";
 
 const firebaseConfig = {
@@ -5292,7 +5298,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
               <ShareableStatCard
                 title="AmenityFit Activity"
                 subtitle={activityStatsRange === "today" ? "Today" : "This Week"}
-                emoji="🔥"
+                icon={Flame}
                 stats={[
                   { label: "Active Minutes", value: String(activityStats.activeMinutes) },
                   ...(activityStats.cardioCalories > 0 ? [{ label: "Calories (est.)", value: `~${activityStats.cardioCalories}` }] : []),
@@ -11249,11 +11255,15 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
               }
             }} style={{
               flexShrink: 0, width: 56, borderRadius: 16, padding: "10px 0",
-              background: selectedDay?.programDay === day.programDay
+              // Compares actual calendar date, not programDay number - two
+              // different days in a week can legitimately share the same
+              // programDay (seen with re-entry mode's day-numbering), which
+              // was highlighting both at once. Date is unique per day.
+              background: (selectedDay?.date instanceof Date && day.date instanceof Date && selectedDay.date.getTime() === day.date.getTime())
                 ? `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`
                 : COLORS.card,
               border: `1.5px solid ${
-                selectedDay?.programDay === day.programDay ? "transparent" :
+                (selectedDay?.date instanceof Date && day.date instanceof Date && selectedDay.date.getTime() === day.date.getTime()) ? "transparent" :
                 (!selectedDay && day.isToday) ? COLORS.accent : COLORS.border
               }`,
               cursor: "pointer", textAlign: "center" as const,
@@ -12757,6 +12767,11 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
       x: rect.left + rect.width / 2,
       y: rect.top - 48,
     });
+    // Clears the native selection right after pulling what we need from it
+    // (text + position), so iOS's own Copy/Look Up/Translate toolbar never
+    // gets a chance to render alongside our own custom bar - previously
+    // both stayed on screen at once, which is what looked broken.
+    selection.removeAllRanges();
   };
 
   const handleScroll = (e: any) => {
@@ -14672,6 +14687,9 @@ const CARDIO_MET_VALUES: Record<string, number> = {
   walk: 3.5,
   row: 7.0,
   swim: 6.0,
+  elliptical: 5.0,
+  treadmill: 8.3,
+  "indoor-bike": 7.0,
   other: 5.0,
 };
 
@@ -14736,14 +14754,23 @@ const buildRouteMapUrl = (route: { lat: number; lng: number }[], width: number, 
 // single bad jump can otherwise add hundreds of meters of phantom distance.
 const MAX_PLAUSIBLE_SPEED_MPS = 12.5; // ~45 km/h, well above realistic run/bike-commute speed
 
+// icon: a lucide-react component reference, not platform emoji - matches
+// Strava's own minimal line-icon treatment rather than colorful, inconsistently-
+// rendered iOS/Android glyphs. indoor: true means no meaningful GPS movement
+// (rowing machine, elliptical, treadmill, stationary bike) - CardioTrackingScreen
+// skips requesting location, hides distance/pace, and the completion summary
+// skips the route map for these, tracking only time + estimated calories.
 const ACTIVITY_TYPES = [
-  { key: "run", label: "Run", emoji: "🏃" },
-  { key: "bike", label: "Bike", emoji: "🚴" },
-  { key: "hike", label: "Hike", emoji: "🥾" },
-  { key: "walk", label: "Walk", emoji: "🚶" },
-  { key: "row", label: "Row", emoji: "🚣" },
-  { key: "swim", label: "Swim", emoji: "🏊" },
-  { key: "other", label: "Other", emoji: "⚡" },
+  { key: "run", label: "Run", icon: Footprints, indoor: false },
+  { key: "bike", label: "Bike", icon: Bike, indoor: false },
+  { key: "hike", label: "Hike", icon: Mountain, indoor: false },
+  { key: "walk", label: "Walk", icon: PersonStanding, indoor: false },
+  { key: "swim", label: "Swim", icon: Waves, indoor: false },
+  { key: "row", label: "Row (machine)", icon: Sailboat, indoor: true },
+  { key: "elliptical", label: "Elliptical", icon: Activity, indoor: true },
+  { key: "treadmill", label: "Treadmill", icon: Footprints, indoor: true },
+  { key: "indoor-bike", label: "Indoor Bike", icon: Bike, indoor: true },
+  { key: "other", label: "Other", icon: Zap, indoor: false },
 ];
 
 const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSeconds, presetActivityType }:
@@ -14820,8 +14847,14 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     lastAcceptedPointRef.current = { lat: latitude, lng: longitude, timestamp: now };
   };
 
+  // Indoor activities (rowing machine, elliptical, treadmill, indoor bike)
+  // have no meaningful GPS movement - requesting location for them would
+  // both be pointless and prompt for a permission the activity doesn't
+  // need. Time and estimated calories still track normally.
+  const isIndoorActivity = !!ACTIVITY_TYPES.find((a) => a.key === activityType)?.indoor;
+
   const startTracking = () => {
-    if (!navigator.geolocation) {
+    if (!isIndoorActivity && !navigator.geolocation) {
       setLocationError("Location isn't available on this device.");
       return;
     }
@@ -14837,11 +14870,13 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     setDistanceMeters(0);
     setElapsedSeconds(0);
 
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      handlePosition,
-      (err) => setLocationError(err.message),
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
-    );
+    if (!isIndoorActivity) {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        handlePosition,
+        (err) => setLocationError(err.message),
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+      );
+    }
 
     timerIntervalRef.current = setInterval(() => {
       if (!startTimeRef.current) return;
@@ -14952,7 +14987,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
         <div style={{ padding: "52px 24px 8px", textAlign: "center" }}>
-          <span style={{ fontSize: 40 }}>{activityMeta?.emoji}</span>
+          {activityMeta?.icon && <activityMeta.icon size={40} color={COLORS.white} strokeWidth={1.75} />}
           <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "8px 0 0", textTransform: "capitalize" }}>{activityType} Complete</h1>
         </div>
 
@@ -14967,14 +15002,18 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Time</p>
             <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0, fontVariantNumeric: "tabular-nums" }}>{formatTime(elapsedSeconds)}</p>
           </div>
-          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
-            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Distance</p>
-            <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0 }}>{(distanceMeters / 1000).toFixed(2)} km</p>
-          </div>
-          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
-            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Pace</p>
-            <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0 }}>{paceLabel}</p>
-          </div>
+          {!isIndoorActivity && (
+            <>
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
+                <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Distance</p>
+                <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0 }}>{(distanceMeters / 1000).toFixed(2)} km</p>
+              </div>
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
+                <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Pace</p>
+                <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0 }}>{paceLabel}</p>
+              </div>
+            </>
+          )}
           <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", textAlign: "center" }}>
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Calories</p>
             <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0 }}>{finalCalories ? `~${finalCalories}` : "—"}</p>
@@ -14994,7 +15033,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           <ShareableStatCard
             title={`${activityType} on AmenityFit`}
             subtitle={new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-            emoji={activityMeta?.emoji}
+            icon={activityMeta?.icon}
             mapUrl={mapUrl}
             stats={[
               distanceMeters > 0
@@ -15031,7 +15070,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
                 cursor: "pointer",
               }}
             >
-              <span style={{ fontSize: 32 }}>{a.emoji}</span>
+              <a.icon size={28} color={COLORS.white} strokeWidth={1.75} />
               <span style={{ color: COLORS.white, fontSize: 15, fontWeight: 700 }}>{a.label}</span>
             </button>
           ))}
@@ -15062,8 +15101,9 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           <button onClick={handleExitTracking} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <ArrowLeft size={16} color={COLORS.white} />
           </button>
-          <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, textTransform: "capitalize" }}>
-            {ACTIVITY_TYPES.find((a) => a.key === activityType)?.emoji} {activityType}
+          <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, textTransform: "capitalize", display: "flex", alignItems: "center", gap: 6 }}>
+            {(() => { const HeaderIcon = ACTIVITY_TYPES.find((a) => a.key === activityType)?.icon; return HeaderIcon ? <HeaderIcon size={15} color={COLORS.textSecondary} strokeWidth={2} /> : null; })()}
+            {activityType}
           </span>
         </div>
         {isAutoPaused && status === "tracking" && (
@@ -15082,16 +15122,18 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 4px", fontWeight: 600, letterSpacing: 1 }}>TIME</p>
           <h1 style={{ color: COLORS.white, fontSize: 56, fontWeight: 900, margin: 0, fontVariantNumeric: "tabular-nums" }}>{formatTime(elapsedSeconds)}</h1>
         </div>
-        <div style={{ display: "flex", gap: 40 }}>
-          <div style={{ textAlign: "center" }}>
-            <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 4px", fontWeight: 600 }}>DISTANCE</p>
-            <h2 style={{ color: COLORS.white, fontSize: 24, fontWeight: 800, margin: 0 }}>{(distanceMeters / 1000).toFixed(2)} km</h2>
+        {!isIndoorActivity && (
+          <div style={{ display: "flex", gap: 40 }}>
+            <div style={{ textAlign: "center" }}>
+              <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 4px", fontWeight: 600 }}>DISTANCE</p>
+              <h2 style={{ color: COLORS.white, fontSize: 24, fontWeight: 800, margin: 0 }}>{(distanceMeters / 1000).toFixed(2)} km</h2>
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 4px", fontWeight: 600 }}>PACE</p>
+              <h2 style={{ color: COLORS.white, fontSize: 24, fontWeight: 800, margin: 0 }}>{paceLabel}</h2>
+            </div>
           </div>
-          <div style={{ textAlign: "center" }}>
-            <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 4px", fontWeight: 600 }}>PACE</p>
-            <h2 style={{ color: COLORS.white, fontSize: 24, fontWeight: 800, margin: 0 }}>{paceLabel}</h2>
-          </div>
-        </div>
+        )}
       </div>
 
       {goalDurationSeconds && goalHitPromptShown && status === "tracking" && (
@@ -15136,14 +15178,14 @@ const ShareableStatCard = ({
   subtitle,
   stats,
   mapUrl,
-  emoji,
+  icon: Icon,
   onClose,
 }: {
   title: string;
   subtitle: string;
   stats: { label: string; value: string }[];
   mapUrl?: string | null;
-  emoji?: string;
+  icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   onClose: () => void;
 }) => {
   const cardRef = React.useRef<HTMLDivElement>(null);
@@ -15190,7 +15232,7 @@ const ShareableStatCard = ({
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", padding: "72px 24px 24px", overflowY: "auto" }}>
       <button onClick={onClose} style={{ position: "absolute", top: 24, right: 24, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer" }}>×</button>
 
       <div
@@ -15215,7 +15257,11 @@ const ShareableStatCard = ({
         }} />
 
         <div style={{ position: "relative", padding: "32px 24px 8px", textAlign: "center" }}>
-          {emoji && <span style={{ fontSize: 40, display: "block", marginBottom: 4 }}>{emoji}</span>}
+          {Icon && (
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: `${COLORS.white}10`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px" }}>
+              <Icon size={26} color={COLORS.white} strokeWidth={2} />
+            </div>
+          )}
           <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 4px" }}>{subtitle}</p>
         </div>
 
