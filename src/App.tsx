@@ -885,6 +885,41 @@ const fetchWorkoutHistory = async (uid: string, onFastResult?: (sessions: any[])
   }
 };
 
+// Aggregates real Active Minutes (gym + all cardio, no estimation needed -
+// duration is always exactly known for both) and estimated cardio-only
+// Calories (see estimateCardioCalories - deliberately never computed for
+// gym sessions, where a duration-only estimate would be dishonest given
+// how much effort varies session to session) across a window of days
+// ending today. Pass sessions from fetchWorkoutHistory - this function is
+// pure aggregation, no Firestore access of its own, so it can be reused
+// for "today" (days=1) and "this week" (days=7) from the same fetched list
+// without two separate queries.
+const computeActivityStats = (sessions: any[], days: number): { activeMinutes: number; cardioCalories: number } => {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - (days - 1));
+  cutoff.setHours(0, 0, 0, 0);
+
+  let activeMinutes = 0;
+  let cardioCalories = 0;
+
+  for (const s of sessions) {
+    const sessionDate = new Date(s.date);
+    if (isNaN(sessionDate.getTime()) || sessionDate < cutoff) continue;
+
+    const isCardio = !!s.type && s.type !== "gym";
+    if (isCardio) {
+      activeMinutes += Math.round((s.durationSeconds || 0) / 60);
+      if (typeof s.calories === "number") cardioCalories += s.calories;
+    } else {
+      // Gym session - no `type` field on any pre-this-feature document,
+      // matching the backward-compatibility note on saveCardioActivity.
+      activeMinutes += s.sessionLength || 0;
+    }
+  }
+
+  return { activeMinutes, cardioCalories: Math.round(cardioCalories) };
+};
+
 // ─── Invite Code System ───────────────────────────────────────────────────────
 
 // Generate a cryptographically opaque invite code — AF-XXXXXX format
@@ -4923,6 +4958,19 @@ const getWorkoutImage = (type: string, programDay: number = 1): string => {
 };
 
 const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, workoutDoneToday = false, isInProgress = false, onNavigate = (s) => {}, onViewWeekly = () => {}, reEntryMode = false, reEntrySessions = 0, reEntryTarget = 6, wearableModifier = null, onWearableOverride = () => {} }) => {
+  // Weekly Active Minutes + cardio-only estimated Calories - see
+  // computeActivityStats for what is and isn't estimated and why. Fetched
+  // once per Dashboard mount alongside notifications below; workoutDoneToday
+  // changing (passed in the key from the top-level render) already forces a
+  // fresh Dashboard mount after any completion, so this naturally refreshes
+  // right after a workout or tracked activity finishes.
+  const [activityStats, setActivityStats] = useState<{ activeMinutes: number; cardioCalories: number } | null>(null);
+  useEffect(() => {
+    if (!profile?.uid) return;
+    fetchWorkoutHistory(profile.uid).then((sessions) => {
+      setActivityStats(computeActivityStats(sessions, 7));
+    });
+  }, [profile?.uid]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
@@ -5164,6 +5212,24 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
           <StatCard label="Completed" value={String(profile.cycleSessionsCompleted || 0)} sub="sessions" icon={Trophy} color={COLORS.success} />
           <StatCard label="This Week" value={`${profile.sessionsThisWeek || 0}/${frequency}`} sub="workouts" icon={Calendar} color={COLORS.accent} />
         </div>
+
+        {/* Combined gym + cardio weekly summary - Active Minutes is always
+            real (exact duration known for both types); cardio calories is
+            a clearly-estimated secondary line, never blended into one
+            falsely-precise number, and only shown once there's genuinely
+            something to report so a fresh week stays uncluttered. */}
+        {activityStats && activityStats.activeMinutes > 0 && (
+          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 20 }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 10px" }}>This Week's Activity</p>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ color: COLORS.white, fontSize: 28, fontWeight: 900 }}>{activityStats.activeMinutes}</span>
+              <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600 }}>active minutes</span>
+            </div>
+            {activityStats.cardioCalories > 0 && (
+              <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "6px 0 0" }}>+ ~{activityStats.cardioCalories} cal from cardio (estimated)</p>
+            )}
+          </div>
+        )}
 
         {/* Program Progress */}
         <ProgramProgress goal={goal} experience={experience} frequency={frequency} day={programDay} total={30} />
@@ -14498,6 +14564,32 @@ const haversineDistanceMeters = (lat1: number, lng1: number, lat2: number, lng2:
 // or GPS jitter while running normally) shouldn't flicker the state.
 const AUTO_PAUSE_SPEED_THRESHOLD_MPS = 0.6;
 const AUTO_PAUSE_TRIGGER_SECONDS = 12;
+
+// Standard MET (metabolic equivalent) values per activity type - widely
+// used, defensible reference numbers for estimating calorie burn from
+// duration and body weight alone, when no real wearable data is available.
+// Deliberately only applied to cardio activities (where a reasonable
+// single MET value per activity type is a fair approximation) - NEVER to
+// gym/strength sessions, where effort varies far too much session to
+// session for a duration-only estimate to be honest. Calories = MET x
+// weight(kg) x duration(hours), the standard formula.
+const CARDIO_MET_VALUES: Record<string, number> = {
+  run: 9.8,
+  bike: 7.5,
+  hike: 6.0,
+  walk: 3.5,
+  row: 7.0,
+  swim: 6.0,
+  other: 5.0,
+};
+
+const estimateCardioCalories = (activityType: string, durationSeconds: number, weightLbs?: number): number | undefined => {
+  if (!weightLbs || weightLbs <= 0) return undefined;
+  const met = CARDIO_MET_VALUES[activityType] ?? CARDIO_MET_VALUES.other;
+  const weightKg = weightLbs * 0.453592;
+  const hours = durationSeconds / 3600;
+  return Math.round(met * weightKg * hours);
+};
 // A GPS fix implying faster than this is almost certainly a bad reading
 // (satellite jump, urban canyon reflection) rather than real movement -
 // discarded entirely rather than added to the distance total, since a
@@ -14646,12 +14738,19 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     if (uid && activityType) {
       const distanceKm = distanceMeters / 1000;
       const avgPace = distanceKm > 0 ? elapsedSeconds / distanceKm : undefined;
+      // Estimated (MET-based), not from a real device - clearly distinct
+      // from any future real wearable-sourced calorie value. Only computed
+      // when a weight is on file; left undefined otherwise rather than
+      // guessing with a default weight.
+      const weightLbs = parseFloat(String(profile?.weightLbs || "")) || undefined;
+      const estimatedCalories = estimateCardioCalories(activityType, elapsedSeconds, weightLbs);
       await saveCardioActivity(uid, {
         type: activityType,
         durationSeconds: elapsedSeconds,
         distanceMeters: distanceMeters > 0 ? distanceMeters : undefined,
         route: routeRef.current.length > 1 ? routeRef.current : undefined,
         avgPaceSecondsPerKm: avgPace,
+        calories: estimatedCalories,
         linkedWorkoutId: linkedWorkoutId,
         goalDurationSeconds: goalDurationSeconds,
       });
