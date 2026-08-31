@@ -15514,15 +15514,136 @@ const StickerShareScreen = ({
     setSharing(false);
   };
 
-  if (!photoUrl) {
+  // Sticker-only export: a plain transparent PNG of just the stats panel,
+  // no photo/video baked in at all. This is the actual mechanism Strava and
+  // every other app use for the "stats over my own video" look you see on
+  // Instagram - they never touch video. They export a sticker, the person
+  // drops it into Instagram/TikTok's own story editor over whatever video
+  // or photo they recorded there, and that app's own native tools handle
+  // the real-time overlay. Doing it this way sidesteps in-webview video
+  // recording entirely (genuinely fragile on iOS) while matching exactly
+  // how the real apps work.
+  const [mode, setMode] = useState<"choose" | "sticker-only" | "overlay">("choose");
+  const stickerOnlyRef = React.useRef<HTMLDivElement>(null);
+  const [stickerOnlyLight, setStickerOnlyLight] = useState(false);
+
+  const handleShareStickerOnly = async () => {
+    if (!stickerOnlyRef.current) return;
+    setSharing(true);
+    setShareError(null);
+    try {
+      const canvas = await html2canvas(stickerOnlyRef.current, { scale: 3, backgroundColor: null });
+      const blob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"));
+      if (!blob) throw new Error("Could not generate image");
+      const file = new File([blob], "amenityfit-sticker.png", { type: "image/png" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "My AmenityFit Stats" });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "amenityfit-sticker.png";
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e: any) {
+      if (e?.name !== "AbortError") setShareError("Couldn't share right now. Try again.");
+    }
+    setSharing(false);
+  };
+
+  if (mode === "choose") {
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 500, background: COLORS.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', sans-serif" }}>
         <button onClick={onClose} style={{ position: "absolute", top: 24, right: 24, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer" }}>×</button>
         <div style={{ width: 72, height: 72, borderRadius: 20, background: `${COLORS.white}10`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
           <Camera size={30} color={COLORS.white} strokeWidth={1.75} />
         </div>
+        <h2 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: "0 0 8px", textAlign: "center" }}>Share Your Stats</h2>
+        <p style={{ color: COLORS.textSecondary, fontSize: 14, textAlign: "center", margin: "0 0 28px", maxWidth: 300 }}>Export a sticker to drop over any video or photo in Instagram/TikTok, or place it over a photo right here.</p>
+        <button onClick={() => setMode("sticker-only")} style={{ width: "100%", maxWidth: 300, padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: "pointer", marginBottom: 12 }}>
+          Export Sticker (for Video or Photo)
+        </button>
+        <button onClick={() => setMode("overlay")} style={{ width: "100%", maxWidth: 300, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+          Place Over a Photo Here
+        </button>
+      </div>
+    );
+  }
+
+  if (mode === "sticker-only") {
+    const soStyle: React.CSSProperties = stickerOnlyLight
+      ? { background: "rgba(255,255,255,0.82)", color: "#0A0A0A", border: "1px solid rgba(255,255,255,0.9)" }
+      : { background: "rgba(10,10,10,0.72)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.18)" };
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 500, background: COLORS.background, display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
+        <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <button onClick={() => setMode("choose")} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <ArrowLeft size={16} color={COLORS.white} />
+          </button>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+        </div>
+
+        {/* Checkerboard preview background - purely a visual cue that the
+            exported PNG is transparent, never part of the actual capture
+            (only stickerOnlyRef's own contents get captured below). */}
+        <div style={{
+          flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+          backgroundImage: "linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)",
+          backgroundSize: "20px 20px", backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
+        }}>
+          <div ref={stickerOnlyRef} style={{
+            borderRadius: 20, padding: "18px 22px",
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+            minWidth: 160,
+            ...soStyle,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              {Icon && <Icon size={16} color={soStyle.color as string} strokeWidth={2.25} />}
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.75 }}>{title}</span>
+            </div>
+            {stats.map((s, i) => (
+              <div key={i} style={{ marginBottom: i < stats.length - 1 ? 6 : 0 }}>
+                <span style={{ fontSize: i === 0 ? 30 : 16, fontWeight: 900, lineHeight: 1.1 }}>{s.value}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.65, marginLeft: 6 }}>{s.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ padding: "16px 24px 40px", display: "flex", flexDirection: "column", gap: 12 }}>
+          {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: 0 }}>{shareError}</p>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+            {(["dark", "light"] as const).map((m) => (
+              <button key={m} onClick={() => setStickerOnlyLight(m === "light")} style={{
+                padding: "8px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", textTransform: "capitalize",
+                background: (stickerOnlyLight === (m === "light")) ? COLORS.white : COLORS.card,
+                color: (stickerOnlyLight === (m === "light")) ? "#0A0A0A" : COLORS.textSecondary,
+                border: `1px solid ${COLORS.border}`,
+              }}>{m}</button>
+            ))}
+          </div>
+          <button onClick={handleShareStickerOnly} disabled={sharing} style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: sharing ? "default" : "pointer", opacity: sharing ? 0.7 : 1 }}>
+            {sharing ? "Preparing..." : "Share Sticker"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!photoUrl) {
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 500, background: COLORS.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', sans-serif" }}>
+        <button onClick={() => setMode("choose")} style={{ position: "absolute", top: 24, left: 24, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <ArrowLeft size={18} color={COLORS.white} />
+        </button>
+        <button onClick={onClose} style={{ position: "absolute", top: 24, right: 24, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer" }}>×</button>
+        <div style={{ width: 72, height: 72, borderRadius: 20, background: `${COLORS.white}10`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+          <Camera size={30} color={COLORS.white} strokeWidth={1.75} />
+        </div>
         <h2 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: "0 0 8px", textAlign: "center" }}>Choose a Photo</h2>
-        <p style={{ color: COLORS.textSecondary, fontSize: 14, textAlign: "center", margin: "0 0 28px", maxWidth: 280 }}>Pick a photo or video still to place your stats sticker over.</p>
+        <p style={{ color: COLORS.textSecondary, fontSize: 14, textAlign: "center", margin: "0 0 28px", maxWidth: 280 }}>Pick a photo to place your stats sticker over, right here in the app.</p>
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoChosen} style={{ display: "none" }} />
         <button onClick={() => fileInputRef.current?.click()} style={{ padding: "16px 32px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
           Choose Photo
