@@ -5019,6 +5019,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
   }, [profile?.uid]);
   const activityStats = activitySessions ? computeActivityStats(activitySessions, activityStatsRange === "today" ? 1 : 7) : null;
   const [showActivityShareCard, setShowActivityShareCard] = useState(false);
+  const [showActivityStickerMode, setShowActivityStickerMode] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
@@ -5284,7 +5285,10 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
                     <span style={{ color: COLORS.white, fontSize: 28, fontWeight: 900 }}>{activityStats.activeMinutes}</span>
                     <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600 }}>active minutes</span>
                   </div>
-                  <button onClick={() => setShowActivityShareCard(true)} style={{ background: `${COLORS.white}10`, border: "none", borderRadius: 10, padding: "8px 14px", color: COLORS.white, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Share</button>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setShowActivityShareCard(true)} style={{ background: `${COLORS.white}10`, border: "none", borderRadius: 10, padding: "8px 14px", color: COLORS.white, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Share</button>
+                    <button onClick={() => setShowActivityStickerMode(true)} style={{ background: `${COLORS.white}10`, border: "none", borderRadius: 10, padding: "8px 14px", color: COLORS.white, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Sticker</button>
+                  </div>
                 </div>
                 {activityStats.cardioCalories > 0 && (
                   <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "6px 0 0" }}>+ ~{activityStats.cardioCalories} cal from cardio (estimated)</p>
@@ -5304,6 +5308,18 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
                   ...(activityStats.cardioCalories > 0 ? [{ label: "Calories (est.)", value: `~${activityStats.cardioCalories}` }] : []),
                 ]}
                 onClose={() => setShowActivityShareCard(false)}
+              />
+            )}
+
+            {showActivityStickerMode && activityStats && (
+              <StickerShareScreen
+                title={activityStatsRange === "today" ? "Today" : "This Week"}
+                icon={Flame}
+                stats={[
+                  { label: "Active Minutes", value: String(activityStats.activeMinutes) },
+                  ...(activityStats.cardioCalories > 0 ? [{ label: "Calories (est.)", value: `~${activityStats.cardioCalories}` }] : []),
+                ]}
+                onClose={() => setShowActivityStickerMode(false)}
               />
             )}
           </div>
@@ -14789,6 +14805,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // render time from state that keeps changing during the summary screen.
   const [finalCalories, setFinalCalories] = useState<number | undefined>(undefined);
   const [showShareCard, setShowShareCard] = useState(false);
+  const [showStickerMode, setShowStickerMode] = useState(false);
 
   const watchIdRef = React.useRef<number | null>(null);
   const timerIntervalRef = React.useRef<any>(null);
@@ -15021,9 +15038,14 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         </div>
 
         <div style={{ padding: "0 24px 40px", marginTop: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-          <button onClick={() => setShowShareCard(true)} style={{ width: "100%", padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-            Share
-          </button>
+          <div style={{ display: "flex", gap: 12 }}>
+            <button onClick={() => setShowShareCard(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              Share
+            </button>
+            <button onClick={() => setShowStickerMode(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              Sticker
+            </button>
+          </div>
           <button onClick={onBack} style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 17, fontWeight: 800, cursor: "pointer", boxShadow: `0 8px 30px ${COLORS.primary}40` }}>
             Done
           </button>
@@ -15044,6 +15066,21 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
               ...(finalCalories ? [{ label: "Calories", value: `~${finalCalories}` }] : []),
             ]}
             onClose={() => setShowShareCard(false)}
+          />
+        )}
+
+        {showStickerMode && (
+          <StickerShareScreen
+            title={activityType}
+            icon={activityMeta?.icon}
+            stats={[
+              distanceMeters > 0
+                ? { label: "Distance", value: `${(distanceMeters / 1000).toFixed(2)} km` }
+                : { label: "Time", value: formatTime(elapsedSeconds) },
+              ...(distanceMeters > 0 ? [{ label: "Time", value: formatTime(elapsedSeconds) }] : []),
+              ...(finalCalories ? [{ label: "Calories", value: `~${finalCalories}` }] : []),
+            ]}
+            onClose={() => setShowStickerMode(false)}
           />
         )}
       </div>
@@ -15307,6 +15344,260 @@ const ShareableStatCard = ({
 
       <div style={{ width: 340, marginTop: 20 }}>
         {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: "0 0 12px" }}>{shareError}</p>}
+        <button onClick={handleShare} disabled={sharing} style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: sharing ? "default" : "pointer", opacity: sharing ? 0.7 : 1 }}>
+          {sharing ? "Preparing..." : "Share"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Sticker Share Mode ─────────────────────────────────────────────────────
+// A translucent, draggable/resizable stats sticker the person can position
+// over their own photo (Strava's "sticker" story pattern). The frosted-glass
+// panel with auto light/dark contrast is the actual clever bit: rather than
+// making the person manually pick a text color to stay readable against
+// whatever photo they chose (a real problem - a bright sky washes out white
+// text, a dark gym washes out black text), it samples the actual photo
+// pixels behind the sticker's current position and switches the panel's
+// light/dark treatment automatically. A single tap still overrides it for
+// the rare case the auto-read guesses wrong, without a full color picker.
+const StickerShareScreen = ({
+  title,
+  stats,
+  icon: Icon,
+  onClose,
+}: {
+  title: string;
+  stats: { label: string; value: string }[];
+  icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  onClose: () => void;
+}) => {
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const photoImgRef = React.useRef<HTMLImageElement>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const stickerRef = React.useRef<HTMLDivElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Position/scale as fractions of the container (0-1), not raw pixels -
+  // keeps the sticker's relative placement correct regardless of the
+  // container's actual on-screen size, and maps cleanly onto the
+  // full-resolution photo when html2canvas captures the final composite.
+  const [pos, setPos] = useState({ x: 0.5, y: 0.5 });
+  const [scale, setScale] = useState(1);
+  const [autoLight, setAutoLight] = useState(false);
+  const [contrastOverride, setContrastOverride] = useState<"auto" | "light" | "dark">("auto");
+  const dragState = React.useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+  const resizeState = React.useRef<{ startDist: number; origScale: number } | null>(null);
+
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+
+  const handlePhotoChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setPhotoUrl(url);
+  };
+
+  // Samples the photo's actual pixel brightness in roughly the sticker's
+  // current on-screen region, using a small off-screen canvas rather than
+  // the full-resolution image for speed. Called after drag/resize settles,
+  // not continuously during the gesture - brightness sampling on every
+  // pointermove would be wasteful and the panel flipping style mid-drag
+  // would feel jittery rather than helpful.
+  const sampleContrast = () => {
+    if (!photoImgRef.current || !containerRef.current) return;
+    const img = photoImgRef.current;
+    const container = containerRef.current.getBoundingClientRect();
+    const canvas = document.createElement("canvas");
+    const sampleSize = 40;
+    canvas.width = sampleSize;
+    canvas.height = sampleSize;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    try {
+      // Map the sticker's fractional position onto the source image's
+      // natural pixel dimensions, then draw just that small region.
+      const sx = Math.max(0, pos.x * img.naturalWidth - (sampleSize * img.naturalWidth / container.width) / 2);
+      const sy = Math.max(0, pos.y * img.naturalHeight - (sampleSize * img.naturalHeight / container.height) / 2);
+      const sw = Math.min(img.naturalWidth - sx, (sampleSize * 2) * img.naturalWidth / container.width);
+      const sh = Math.min(img.naturalHeight - sy, (sampleSize * 2) * img.naturalHeight / container.height);
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sampleSize, sampleSize);
+      const data = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+      let total = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        // Standard perceived-luminance weighting, not a flat RGB average -
+        // matches how bright a region actually reads to the eye.
+        total += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      }
+      const avgLuminance = total / (data.length / 4);
+      // Bright photo behind the sticker -> dark text/panel reads better,
+      // and vice versa. This is the inverse of the background's own
+      // brightness, which is exactly the point.
+      setAutoLight(avgLuminance > 150);
+    } catch (e) {
+      // Canvas can throw on cross-origin images (shouldn't happen for a
+      // locally-chosen file, but fails safe rather than crashing the
+      // sticker screen if it ever does).
+    }
+  };
+
+  React.useEffect(() => {
+    if (photoUrl) {
+      // Small delay lets the <img> finish laying out at its real displayed
+      // size before the first sample - reading it a frame too early would
+      // sample against a zero-size element.
+      const t = setTimeout(sampleContrast, 150);
+      return () => clearTimeout(t);
+    }
+  }, [photoUrl]);
+
+  const isLight = contrastOverride === "auto" ? autoLight : contrastOverride === "light";
+
+  const clamp01 = (n: number) => Math.max(0.08, Math.min(0.92, n));
+
+  const handleStickerPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragState.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
+  };
+  const handleStickerPointerMove = (e: React.PointerEvent) => {
+    if (!dragState.current || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const dx = (e.clientX - dragState.current.startX) / rect.width;
+    const dy = (e.clientY - dragState.current.startY) / rect.height;
+    setPos({ x: clamp01(dragState.current.origX + dx), y: clamp01(dragState.current.origY + dy) });
+  };
+  const handleStickerPointerUp = () => {
+    dragState.current = null;
+    sampleContrast();
+  };
+
+  const handleResizePointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    resizeState.current = { startDist: e.clientX + e.clientY, origScale: scale };
+  };
+  const handleResizePointerMove = (e: React.PointerEvent) => {
+    if (!resizeState.current) return;
+    const delta = (e.clientX + e.clientY) - resizeState.current.startDist;
+    setScale(Math.max(0.6, Math.min(2, resizeState.current.origScale + delta / 200)));
+  };
+  const handleResizePointerUp = () => {
+    resizeState.current = null;
+    sampleContrast();
+  };
+
+  const handleShare = async () => {
+    if (!containerRef.current) return;
+    setSharing(true);
+    setShareError(null);
+    try {
+      const canvas = await html2canvas(containerRef.current, { scale: 2, useCORS: true });
+      const blob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"));
+      if (!blob) throw new Error("Could not generate image");
+      const file = new File([blob], "amenityfit-sticker.png", { type: "image/png" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "My AmenityFit Stats" });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "amenityfit-sticker.png";
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e: any) {
+      if (e?.name !== "AbortError") setShareError("Couldn't share right now. Try again.");
+    }
+    setSharing(false);
+  };
+
+  if (!photoUrl) {
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 500, background: COLORS.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', sans-serif" }}>
+        <button onClick={onClose} style={{ position: "absolute", top: 24, right: 24, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer" }}>×</button>
+        <div style={{ width: 72, height: 72, borderRadius: 20, background: `${COLORS.white}10`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+          <Camera size={30} color={COLORS.white} strokeWidth={1.75} />
+        </div>
+        <h2 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: "0 0 8px", textAlign: "center" }}>Choose a Photo</h2>
+        <p style={{ color: COLORS.textSecondary, fontSize: 14, textAlign: "center", margin: "0 0 28px", maxWidth: 280 }}>Pick a photo or video still to place your stats sticker over.</p>
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoChosen} style={{ display: "none" }} />
+        <button onClick={() => fileInputRef.current?.click()} style={{ padding: "16px 32px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
+          Choose Photo
+        </button>
+      </div>
+    );
+  }
+
+  const stickerStyle: React.CSSProperties = isLight
+    ? { background: "rgba(255,255,255,0.82)", color: "#0A0A0A", border: "1px solid rgba(255,255,255,0.9)" }
+    : { background: "rgba(10,10,10,0.55)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.18)" };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "#000", display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
+      <div ref={containerRef} style={{ position: "relative", flex: 1, overflow: "hidden", touchAction: "none" }}>
+        <img ref={photoImgRef} src={photoUrl} alt="" crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+
+        <div
+          ref={stickerRef}
+          onPointerDown={handleStickerPointerDown}
+          onPointerMove={handleStickerPointerMove}
+          onPointerUp={handleStickerPointerUp}
+          style={{
+            position: "absolute",
+            left: `${pos.x * 100}%`, top: `${pos.y * 100}%`,
+            transform: `translate(-50%, -50%) scale(${scale})`,
+            borderRadius: 20, padding: "18px 22px",
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+            cursor: "grab", touchAction: "none", userSelect: "none",
+            minWidth: 160,
+            ...stickerStyle,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            {Icon && <Icon size={16} color={stickerStyle.color as string} strokeWidth={2.25} />}
+            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.75 }}>{title}</span>
+          </div>
+          {stats.map((s, i) => (
+            <div key={i} style={{ marginBottom: i < stats.length - 1 ? 6 : 0 }}>
+              <span style={{ fontSize: i === 0 ? 30 : 16, fontWeight: 900, lineHeight: 1.1 }}>{s.value}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.65, marginLeft: 6 }}>{s.label}</span>
+            </div>
+          ))}
+          {/* Resize handle - bottom-right corner, deliberately small so it
+              doesn't compete visually with the stats themselves. */}
+          <div
+            onPointerDown={handleResizePointerDown}
+            onPointerMove={handleResizePointerMove}
+            onPointerUp={handleResizePointerUp}
+            style={{
+              position: "absolute", right: -6, bottom: -6, width: 22, height: 22, borderRadius: 8,
+              background: isLight ? "rgba(255,255,255,0.95)" : "rgba(30,30,30,0.9)",
+              border: `1px solid ${isLight ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.2)"}`,
+              cursor: "nwse-resize", touchAction: "none",
+            }}
+          />
+        </div>
+      </div>
+
+      <div style={{ padding: "16px 24px 40px", display: "flex", flexDirection: "column", gap: 12, background: COLORS.background }}>
+        {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: 0 }}>{shareError}</p>}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            {(["auto", "light", "dark"] as const).map((mode) => (
+              <button key={mode} onClick={() => setContrastOverride(mode)} style={{
+                padding: "8px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", textTransform: "capitalize",
+                background: contrastOverride === mode ? COLORS.white : COLORS.card,
+                color: contrastOverride === mode ? "#0A0A0A" : COLORS.textSecondary,
+                border: `1px solid ${COLORS.border}`,
+              }}>{mode}</button>
+            ))}
+          </div>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+        </div>
         <button onClick={handleShare} disabled={sharing} style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: sharing ? "default" : "pointer", opacity: sharing ? 0.7 : 1 }}>
           {sharing ? "Preparing..." : "Share"}
         </button>
