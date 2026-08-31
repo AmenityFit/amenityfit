@@ -5232,7 +5232,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
       <div style={{ flex: 1, minHeight: 0, padding: "16px 24px 24px", overflowY: "auto", WebkitOverflowScrolling: "touch" as any }}>
 
         {/* Today's Workout */}
-        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} profile={profile} dayFocus={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return deriveWorkoutSubtitle(_d) || currentDay?.focus; })()} groups={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); return dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); })()} exerciseCount={(() => { const _g = filterGroupsForSessionLength(currentDay?.groups || [], sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
+        <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} profile={profile} dayFocus={(() => { const _re = profile?.reEntryMode ? filterGroupsForReEntry(currentDay?.groups || [], profile?.effectiveLevel || profile?.experience || "intermediate", profile?.programKey || "") : (currentDay?.groups || []); const _g = filterGroupsForSessionLength(_re, sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return deriveWorkoutSubtitle(_d) || currentDay?.focus; })()} groups={(() => { const _re = profile?.reEntryMode ? filterGroupsForReEntry(currentDay?.groups || [], profile?.effectiveLevel || profile?.experience || "intermediate", profile?.programKey || "") : (currentDay?.groups || []); const _g = filterGroupsForSessionLength(_re, sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); return dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); })()} exerciseCount={(() => { const _re = profile?.reEntryMode ? filterGroupsForReEntry(currentDay?.groups || [], profile?.effectiveLevel || profile?.experience || "intermediate", profile?.programKey || "") : (currentDay?.groups || []); const _g = filterGroupsForSessionLength(_re, sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
 
         {/* View Full Week link */}
         <button onClick={onViewWeekly} style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20, marginTop: -8 }}>
@@ -12212,8 +12212,13 @@ const buildSystemPrompt = (profile: any) => {
         isRestDay = !!todayDay.isRest;
         todayFocus = todayDay.focus || todayDay.title || "";
         if (!isRestDay && todayDay.groups) {
-          const cardioGroups = todayDay.groups.filter((g: any) => g.type === "cardio");
-          const strengthGroups = todayDay.groups.filter((g: any) => g.type !== "cardio" && g.type !== "rest");
+          // Re-entry mode reduces which groups actually appear in the real
+          // workout (see the same fix on Dashboard's TodayWorkoutCard) -
+          // without this, the coach ends up referencing exercises that
+          // were filtered out and aren't actually part of today's session.
+          const reEntryFilteredGroups = profile?.reEntryMode ? filterGroupsForReEntry(todayDay.groups, profile?.effectiveLevel || profile?.experience || "intermediate", profile?.programKey || "") : todayDay.groups;
+          const cardioGroups = reEntryFilteredGroups.filter((g: any) => g.type === "cardio");
+          const strengthGroups = reEntryFilteredGroups.filter((g: any) => g.type !== "cardio" && g.type !== "rest");
           todayExercises = strengthGroups
             .flatMap((g: any) => g.exercises?.map((e: any) => {
               const ex = EXERCISES_DATA[e.id];
@@ -12340,6 +12345,7 @@ ${injuries ? `- Injury flags: ${injuries} — factor this into everything. Don't
 THEIR PROGRAM RIGHT NOW:
 - Program: ${programName} — when referring to their program, use this name naturally (e.g. "By Any Means" or "Virtue and Patience"). Never say the internal program key, never say "Advanced 4x/week" or similar technical labels. Describe what the program is about if asked, not how it was built.
 - Today is Day ${programDay} of their cycle
+${profile?.reEntryMode ? `- They're in re-entry mode after time away from training - today's session is deliberately reduced (fewer exercises/groups than their normal full program) to ease them back in. If asked why today looks shorter or different, this is why - explain it plainly, don't treat it as a mistake or apologize for it.` : ""}
 - ${isRestDay ? "Today is a rest day. Recovery is the work today." : workoutDoneToday ? `Today's workout is done — they completed ${todayFocus}. They're post-workout. Recovery, what they felt, what's coming next — those are the relevant angles.` : `Today's focus: ${todayFocus} — not yet done`}
 ${!isRestDay && !workoutDoneToday && todayExercises.length > 0 ? `- Still to do today: ${todayExercises.join(", ")}` : ""}
 ${!isRestDay && workoutDoneToday && todayExercises.length > 0 ? `- What they just completed: ${todayExercises.join(", ")}` : ""}
@@ -15034,12 +15040,32 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     );
   }
 
+  // Confirms before discarding once real tracking data exists (elapsed
+  // time > 0) - silently losing a genuinely in-progress GPS activity would
+  // be worse than the missing exit itself. Before that point there's
+  // nothing to lose, so it exits immediately.
+  const handleExitTracking = () => {
+    if (elapsedSeconds > 0) {
+      if (window.confirm("Discard this activity? Your progress so far won't be saved.")) {
+        stopTrackingInternals();
+        onBack();
+      }
+    } else {
+      onBack();
+    }
+  };
+
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, textTransform: "capitalize" }}>
-          {ACTIVITY_TYPES.find((a) => a.key === activityType)?.emoji} {activityType}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={handleExitTracking} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <ArrowLeft size={16} color={COLORS.white} />
+          </button>
+          <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, textTransform: "capitalize" }}>
+            {ACTIVITY_TYPES.find((a) => a.key === activityType)?.emoji} {activityType}
+          </span>
+        </div>
         {isAutoPaused && status === "tracking" && (
           <span style={{ color: COLORS.accent, fontSize: 12, fontWeight: 700 }}>AUTO-PAUSED</span>
         )}
