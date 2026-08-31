@@ -14999,6 +14999,12 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   const [finalCalories, setFinalCalories] = useState<number | undefined>(undefined);
   const [showShareCard, setShowShareCard] = useState(false);
   const [showStickerMode, setShowStickerMode] = useState(false);
+  // Progressive stats reveal on the live tracking screen: starts minimal
+  // (just Time, the single most important number mid-activity), tapping
+  // expands to show Distance/Pace too. Defaults to expanded for indoor
+  // activities, which only ever have Time to show anyway - there's nothing
+  // to progressively reveal there.
+  const [statsTier, setStatsTier] = useState(0);
 
   const watchIdRef = React.useRef<number | null>(null);
   const timerIntervalRef = React.useRef<any>(null);
@@ -15448,7 +15454,10 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         </div>
       )}
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 36 }}>
+      <div
+        onClick={() => { if (!isIndoorActivity) setStatsTier((t) => (t === 0 ? 1 : 0)); }}
+        style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 36, cursor: !isIndoorActivity ? "pointer" : "default" }}
+      >
         <div style={{ textAlign: "center", position: "relative" }}>
           <div style={{
             position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
@@ -15459,7 +15468,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           <p style={{ position: "relative", color: COLORS.textSecondary, fontSize: 13, margin: "0 0 6px", fontWeight: 700, letterSpacing: 2 }}>TIME</p>
           <h1 style={{ position: "relative", color: COLORS.white, fontSize: 76, fontWeight: 900, margin: 0, letterSpacing: -2, fontVariantNumeric: "tabular-nums", textShadow: `0 0 50px ${COLORS.primary}50` }}>{formatTime(elapsedSeconds)}</h1>
         </div>
-        {!isIndoorActivity && (
+        {!isIndoorActivity && statsTier === 1 && (
           <div style={{ display: "flex", gap: 48 }}>
             <div style={{ textAlign: "center" }}>
               <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 6px", fontWeight: 700, letterSpacing: 1 }}>DISTANCE</p>
@@ -15470,6 +15479,9 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
               <h2 style={{ color: COLORS.white, fontSize: 36, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{paceLabel}</h2>
             </div>
           </div>
+        )}
+        {!isIndoorActivity && statsTier === 0 && (
+          <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, opacity: 0.6, margin: 0 }}>Tap for distance & pace</p>
         )}
       </div>
 
