@@ -15916,23 +15916,36 @@ const StickerShareScreen = ({
           backgroundSize: "20px 20px", backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
         }}>
           <div ref={stickerOnlyRef} style={{
-            borderRadius: 20, padding: "18px 22px",
-            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
-            minWidth: 160,
+            borderRadius: 24, padding: "22px 26px", position: "relative", overflow: "hidden",
+            backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
+            boxShadow: "0 12px 40px rgba(0,0,0,0.3)",
+            minWidth: 190,
             ...soStyle,
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              {Icon && <Icon size={16} color={soStyle.color as string} strokeWidth={2.25} />}
-              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.75 }}>{title}</span>
+            {/* Soft accent glow behind the hero number - works even at
+                partial opacity since it's just a gradient, not a solid
+                fill, so it doesn't fight the sticker's translucency. */}
+            <div style={{
+              position: "absolute", top: -30, left: "50%", transform: "translateX(-50%)",
+              width: 160, height: 100, borderRadius: "50%",
+              background: `radial-gradient(circle, ${COLORS.primary}35 0%, transparent 70%)`,
+              pointerEvents: "none",
+            }} />
+            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              {Icon && (
+                <div style={{ width: 26, height: 26, borderRadius: 8, background: `${soStyle.color as string}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Icon size={15} color={soStyle.color as string} strokeWidth={2.25} />
+                </div>
+              )}
+              <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.8 }}>{title}</span>
             </div>
             {stats.map((s, i) => (
-              <div key={i} style={{ marginBottom: i < stats.length - 1 ? 6 : 0 }}>
-                <span style={{ fontSize: i === 0 ? 30 : 16, fontWeight: 900, lineHeight: 1.1 }}>{s.value}</span>
+              <div key={i} style={{ position: "relative", marginBottom: i < stats.length - 1 ? 8 : 0 }}>
+                <span style={{ fontSize: i === 0 ? 42 : 18, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1 : 0 }}>{s.value}</span>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.65, marginLeft: 6 }}>{s.label}</span>
               </div>
             ))}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, paddingTop: 8, borderTop: `1px solid ${soStyle.color as string}20` }}>
+            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 6, marginTop: 14, paddingTop: 10, borderTop: `1px solid ${soStyle.color as string}20` }}>
               <div style={{ width: 12, height: 12, borderRadius: 3, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` }} />
               <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: 0.6, opacity: 0.7 }}>AMENITYFIT</span>
             </div>
@@ -15997,25 +16010,35 @@ const StickerShareScreen = ({
             position: "absolute",
             left: `${pos.x * 100}%`, top: `${pos.y * 100}%`,
             transform: `translate(-50%, -50%) scale(${scale})`,
-            borderRadius: 20, padding: "18px 22px",
-            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+            borderRadius: 24, padding: "22px 26px", overflow: "hidden",
+            backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
+            boxShadow: "0 12px 40px rgba(0,0,0,0.3)",
             cursor: "grab", touchAction: "none", userSelect: "none",
-            minWidth: 160,
+            minWidth: 190,
             ...stickerStyle,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            {Icon && <Icon size={16} color={stickerStyle.color as string} strokeWidth={2.25} />}
-            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.75 }}>{title}</span>
+          <div style={{
+            position: "absolute", top: -30, left: "50%", transform: "translateX(-50%)",
+            width: 160, height: 100, borderRadius: "50%",
+            background: `radial-gradient(circle, ${COLORS.primary}35 0%, transparent 70%)`,
+            pointerEvents: "none",
+          }} />
+          <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            {Icon && (
+              <div style={{ width: 26, height: 26, borderRadius: 8, background: `${stickerStyle.color as string}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon size={15} color={stickerStyle.color as string} strokeWidth={2.25} />
+              </div>
+            )}
+            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.8 }}>{title}</span>
           </div>
           {stats.map((s, i) => (
-            <div key={i} style={{ marginBottom: i < stats.length - 1 ? 6 : 0 }}>
-              <span style={{ fontSize: i === 0 ? 30 : 16, fontWeight: 900, lineHeight: 1.1 }}>{s.value}</span>
+            <div key={i} style={{ position: "relative", marginBottom: i < stats.length - 1 ? 8 : 0 }}>
+              <span style={{ fontSize: i === 0 ? 42 : 18, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1 : 0 }}>{s.value}</span>
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.65, marginLeft: 6 }}>{s.label}</span>
             </div>
           ))}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, paddingTop: 8, borderTop: `1px solid ${stickerStyle.color as string}20` }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 6, marginTop: 14, paddingTop: 10, borderTop: `1px solid ${stickerStyle.color as string}20` }}>
             <div style={{ width: 12, height: 12, borderRadius: 3, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` }} />
             <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: 0.6, opacity: 0.7 }}>AMENITYFIT</span>
           </div>
