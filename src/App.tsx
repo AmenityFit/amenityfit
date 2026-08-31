@@ -920,6 +920,42 @@ const computeActivityStats = (sessions: any[], days: number): { activeMinutes: n
   return { activeMinutes, cardioCalories: Math.round(cardioCalories) };
 };
 
+// Builds a short, readable summary of recent cardio activity for the coach
+// chat's system prompt - e.g. "3 cardio activities in the last 2 weeks:
+// most recent a 5.2km run in 32 min on Tue Aug 26; also 1 bike, 1 hike."
+// Deliberately only a plain factual summary (dates, types, distances,
+// durations) - no editorializing or trend analysis baked in here, since
+// that's exactly the kind of interpretation the coach itself should be
+// doing live in conversation, not something pre-computed and handed to it
+// as a conclusion.
+const summarizeRecentCardio = (sessions: any[], days: number): string => {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  cutoff.setHours(0, 0, 0, 0);
+
+  const cardioSessions = sessions
+    .filter((s) => !!s.type && s.type !== "gym")
+    .filter((s) => {
+      const d = new Date(s.date);
+      return !isNaN(d.getTime()) && d >= cutoff;
+    })
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  if (cardioSessions.length === 0) return "";
+
+  const most = cardioSessions[0];
+  const dateLabel = new Date(most.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const distanceKm = most.distanceMeters ? (most.distanceMeters / 1000).toFixed(1) : null;
+  const durationMin = Math.round((most.durationSeconds || 0) / 60);
+  const mostDesc = `${most.type}${distanceKm ? `, ${distanceKm}km` : ""}, ${durationMin} min on ${dateLabel}`;
+
+  const typeCounts: Record<string, number> = {};
+  for (const s of cardioSessions) typeCounts[s.type] = (typeCounts[s.type] || 0) + 1;
+  const countsDesc = Object.entries(typeCounts).map(([type, count]) => `${count} ${type}${count > 1 ? "s" : ""}`).join(", ");
+
+  return `${cardioSessions.length} cardio ${cardioSessions.length === 1 ? "activity" : "activities"} in the last ${days} days (${countsDesc}). Most recent: ${mostDesc}.`;
+};
+
 // ─── Invite Code System ───────────────────────────────────────────────────────
 
 // Generate a cryptographically opaque invite code — AF-XXXXXX format
@@ -12293,6 +12329,7 @@ ${(() => {
 ${totalCardioMins > 0 && !isRestDay ? `- Today's time breakdown: ${sessionLength - totalCardioMins} min strength + ${totalCardioMins} min cardio = ${sessionLength} min total — this is exact, matches what's on their workout card` : ""}
 ${tomorrowFocus ? `- Tomorrow: ${tomorrowFocus}` : ""}
 ${weekStructure ? `- Their week: ${weekStructure}` : ""}
+${profile?.recentCardioSummary ? `- Recent cardio/tracked activity (factual only - form your own read on it rather than treating this line as a conclusion): ${profile.recentCardioSummary}` : ""}
 
 HOW YOU THINK:
 When someone gives you a surface question, look for what's actually being asked. When someone gives you an excuse, find what's underneath it before you respond to the excuse directly. When someone is struggling — not physically, but in their head or their life — don't give them a pep talk. Help them locate something real. A feeling they've been ignoring. A version of themselves they've been avoiding. A simple next action that isn't about the gym at all but will translate to it. Make it make sense for them specifically, not in general.
@@ -12389,6 +12426,19 @@ Invent exercises or protocols you're not certain about. Contradict someone's doc
 };
 
 const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => {
+  // Fetched once per mount, same lightweight pattern as Dashboard's weekly
+  // activity stats - a plain factual summary of recent cardio activity
+  // (see summarizeRecentCardio), so the coach can genuinely reference real
+  // history ("you ran Tuesday") instead of only ever knowing about today's
+  // programmed workout.
+  const [recentCardioSummary, setRecentCardioSummary] = useState("");
+  useEffect(() => {
+    if (!profile?.uid) return;
+    fetchWorkoutHistory(profile.uid).then((sessions) => {
+      setRecentCardioSummary(summarizeRecentCardio(sessions, 14));
+    });
+  }, [profile?.uid]);
+
   const suggestedQuestions = getSuggestedQuestions(profile);
 
   // Build a context-aware opening message
@@ -12718,7 +12768,7 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     } catch (e) {
       console.error("Failed to fetch today's session for chat context:", e);
     }
-    const profileWithSession = { ...profile, todayWeightsLogged: todaySessionData.weightsLogged, todayWeightNotes: todaySessionData.weightNotes };
+    const profileWithSession = { ...profile, todayWeightsLogged: todaySessionData.weightsLogged, todayWeightNotes: todaySessionData.weightNotes, recentCardioSummary };
 
     try {
       const response = await fetch(ANTHROPIC_PROXY_URL, {
