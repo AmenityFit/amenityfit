@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import html2canvas from "html2canvas";
 
 // ─── Firebase ─────────────────────────────────────────────────────────────────
 import { initializeApp } from "firebase/app";
@@ -5011,6 +5012,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
     });
   }, [profile?.uid]);
   const activityStats = activitySessions ? computeActivityStats(activitySessions, activityStatsRange === "today" ? 1 : 7) : null;
+  const [showActivityShareCard, setShowActivityShareCard] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
@@ -5271,9 +5273,12 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
             </div>
             {activityStats && activityStats.activeMinutes > 0 ? (
               <>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <span style={{ color: COLORS.white, fontSize: 28, fontWeight: 900 }}>{activityStats.activeMinutes}</span>
-                  <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600 }}>active minutes</span>
+                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ color: COLORS.white, fontSize: 28, fontWeight: 900 }}>{activityStats.activeMinutes}</span>
+                    <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600 }}>active minutes</span>
+                  </div>
+                  <button onClick={() => setShowActivityShareCard(true)} style={{ background: `${COLORS.white}10`, border: "none", borderRadius: 10, padding: "8px 14px", color: COLORS.white, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Share</button>
                 </div>
                 {activityStats.cardioCalories > 0 && (
                   <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "6px 0 0" }}>+ ~{activityStats.cardioCalories} cal from cardio (estimated)</p>
@@ -5281,6 +5286,19 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
               </>
             ) : (
               <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>{activityStatsRange === "today" ? "Nothing logged today yet." : "Nothing logged this week yet."}</p>
+            )}
+
+            {showActivityShareCard && activityStats && (
+              <ShareableStatCard
+                title="AmenityFit Activity"
+                subtitle={activityStatsRange === "today" ? "Today" : "This Week"}
+                emoji="🔥"
+                stats={[
+                  { label: "Active Minutes", value: String(activityStats.activeMinutes) },
+                  ...(activityStats.cardioCalories > 0 ? [{ label: "Calories (est.)", value: `~${activityStats.cardioCalories}` }] : []),
+                ]}
+                onClose={() => setShowActivityShareCard(false)}
+              />
             )}
           </div>
         )}
@@ -14737,6 +14755,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // that exact moment, so it's captured here rather than recomputed at
   // render time from state that keeps changing during the summary screen.
   const [finalCalories, setFinalCalories] = useState<number | undefined>(undefined);
+  const [showShareCard, setShowShareCard] = useState(false);
 
   const watchIdRef = React.useRef<number | null>(null);
   const timerIntervalRef = React.useRef<any>(null);
@@ -14956,11 +14975,32 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           </div>
         </div>
 
-        <div style={{ padding: "0 24px 40px", marginTop: "auto" }}>
+        <div style={{ padding: "0 24px 40px", marginTop: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+          <button onClick={() => setShowShareCard(true)} style={{ width: "100%", padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+            Share
+          </button>
           <button onClick={onBack} style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 17, fontWeight: 800, cursor: "pointer", boxShadow: `0 8px 30px ${COLORS.primary}40` }}>
             Done
           </button>
         </div>
+
+        {showShareCard && (
+          <ShareableStatCard
+            title={`${activityType} on AmenityFit`}
+            subtitle={new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+            emoji={activityMeta?.emoji}
+            mapUrl={mapUrl}
+            stats={[
+              distanceMeters > 0
+                ? { label: "Distance", value: `${(distanceMeters / 1000).toFixed(2)} km` }
+                : { label: "Time", value: formatTime(elapsedSeconds) },
+              ...(distanceMeters > 0 ? [{ label: "Time", value: formatTime(elapsedSeconds) }] : []),
+              ...(distanceMeters > 0 ? [{ label: "Pace", value: paceLabel }] : []),
+              ...(finalCalories ? [{ label: "Calories", value: `~${finalCalories}` }] : []),
+            ]}
+            onClose={() => setShowShareCard(false)}
+          />
+        )}
       </div>
     );
   }
@@ -15054,6 +15094,150 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             </button>
           </>
         )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Shareable Stat Card ────────────────────────────────────────────────────
+// Renders a full preview the person can actually see before sharing (not a
+// blind generate-and-share flow) - a genuinely designed card matching the
+// app's own dark theme and gradient identity, not a generic template.
+// Reused for both a single tracked activity's stats and Dashboard's
+// aggregate week/today view via the same flexible `stats` prop shape.
+const ShareableStatCard = ({
+  title,
+  subtitle,
+  stats,
+  mapUrl,
+  emoji,
+  onClose,
+}: {
+  title: string;
+  subtitle: string;
+  stats: { label: string; value: string }[];
+  mapUrl?: string | null;
+  emoji?: string;
+  onClose: () => void;
+}) => {
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+
+  const captureCard = async (): Promise<Blob | null> => {
+    if (!cardRef.current) return null;
+    // scale:2 renders at roughly retina resolution - a shared image at 1x
+    // canvas resolution looks visibly soft next to the rest of a phone's
+    // real screen density, especially once posted to Instagram/etc.
+    const canvas = await html2canvas(cardRef.current, { scale: 2, backgroundColor: null });
+    return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png"));
+  };
+
+  const handleShare = async () => {
+    setSharing(true);
+    setShareError(null);
+    try {
+      const blob = await captureCard();
+      if (!blob) throw new Error("Could not generate image");
+      const file = new File([blob], "amenityfit-stats.png", { type: "image/png" });
+      // Web Share API with files - the standard mobile share sheet
+      // (Instagram Stories, Messages, Save to Photos, etc.), the same
+      // mechanism any native-feeling share flow uses. Falls back to a
+      // plain download if the device/browser doesn't support file
+      // sharing at all, so this never dead-ends with no result.
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "My AmenityFit Stats" });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "amenityfit-stats.png";
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e: any) {
+      // AbortError fires when the person simply cancels the native share
+      // sheet - not a real failure, shouldn't show an error for it.
+      if (e?.name !== "AbortError") setShareError("Couldn't share right now. Try again.");
+    }
+    setSharing(false);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <button onClick={onClose} style={{ position: "absolute", top: 24, right: 24, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer" }}>×</button>
+
+      <div
+        ref={cardRef}
+        style={{
+          width: 340, borderRadius: 28, overflow: "hidden", position: "relative",
+          background: `linear-gradient(160deg, ${COLORS.background} 0%, ${COLORS.card} 100%)`,
+          border: `1px solid ${COLORS.border}`,
+          boxShadow: `0 20px 60px rgba(0,0,0,0.5)`,
+          fontFamily: "'Inter', sans-serif",
+        }}
+      >
+        {/* Soft glow behind the header - the kind of real depth cue that
+            separates a genuinely designed card from a flat template, and
+            renders correctly through html2canvas since it's a plain CSS
+            gradient, not an SVG filter. */}
+        <div style={{
+          position: "absolute", top: -80, left: "50%", transform: "translateX(-50%)",
+          width: 280, height: 280, borderRadius: "50%",
+          background: `radial-gradient(circle, ${COLORS.primary}35 0%, transparent 70%)`,
+          pointerEvents: "none",
+        }} />
+
+        <div style={{ position: "relative", padding: "32px 24px 8px", textAlign: "center" }}>
+          {emoji && <span style={{ fontSize: 40, display: "block", marginBottom: 4 }}>{emoji}</span>}
+          <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 4px" }}>{subtitle}</p>
+        </div>
+
+        {/* Hero stat - the single most important number, given genuine
+            visual dominance rather than sitting equal-sized in a grid with
+            everything else. This is the number the whole card exists to
+            show off. */}
+        {stats.length > 0 && (
+          <div style={{ position: "relative", textAlign: "center", padding: "4px 24px 20px" }}>
+            <h1 style={{
+              color: COLORS.white, fontSize: 56, fontWeight: 900, margin: 0, lineHeight: 1,
+              letterSpacing: -1.5,
+              textShadow: `0 0 40px ${COLORS.primary}60`,
+            }}>{stats[0].value}</h1>
+            <p style={{ color: COLORS.accent, fontSize: 13, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", margin: "8px 0 0" }}>{stats[0].label}</p>
+          </div>
+        )}
+
+        <h2 style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: "0 24px 20px", textAlign: "center" }}>{title}</h2>
+
+        {mapUrl && (
+          <div style={{ margin: "0 20px 20px", borderRadius: 16, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
+            <img src={mapUrl} alt="" style={{ width: "100%", display: "block" }} crossOrigin="anonymous" />
+          </div>
+        )}
+
+        {stats.length > 1 && (
+          <div style={{ padding: "0 24px 28px", display: "grid", gridTemplateColumns: stats.length > 3 ? "1fr 1fr" : `repeat(${stats.length - 1}, 1fr)`, gap: 14 }}>
+            {stats.slice(1).map((s, i) => (
+              <div key={i} style={{ background: `${COLORS.white}08`, borderRadius: 14, padding: "12px 8px", textAlign: "center" }}>
+                <p style={{ color: COLORS.textSecondary, fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", margin: "0 0 4px" }}>{s.label}</p>
+                <p style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: 0 }}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ position: "relative", padding: "16px 24px", borderTop: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <div style={{ width: 20, height: 20, borderRadius: 6, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` }} />
+          <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 900, letterSpacing: 0.8 }}>AMENITYFIT</span>
+        </div>
+      </div>
+
+      <div style={{ width: 340, marginTop: 20 }}>
+        {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: "0 0 12px" }}>{shareError}</p>}
+        <button onClick={handleShare} disabled={sharing} style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: sharing ? "default" : "pointer", opacity: sharing ? 0.7 : 1 }}>
+          {sharing ? "Preparing..." : "Share"}
+        </button>
       </div>
     </div>
   );
