@@ -9262,6 +9262,11 @@ const WheelPickerScroll = React.memo(({ options, selected, itemHeight, category,
 });
 
 const ActiveExerciseScreen = ({ group, groupIndex, totalGroups, onGroupComplete, onBack, onGoHome, onShowOverview, profile, initialRound = 1, initialExerciseIndex = 0, initialCompletedCells = [], initialWeights = {} as Record<string, number>, onSaveState = (round: number, exerciseIndex: number, cells?: string[]) => {}, onSwap = (swapKey: string, newId: string) => {}, onWeightsSaved = (weights: Record<string, number>) => {}, initialSwaps = {} as Record<string, string>, sessionId = null as string | null, startTime = Date.now() }) => {
+  // Controls the cardio-tracking overlay (see the cardio branch below) -
+  // local to this component and never touches top-level screen navigation,
+  // so opening/closing it can never disturb this screen's own in-progress
+  // state.
+  const [showCardioTracker, setShowCardioTracker] = useState(false);
   // Live workout clock - same timestamp-anchored pattern as the rest timer
   // above: always recomputed from real elapsed wall-clock time against the
   // single startTime the whole session already uses (the same value the
@@ -9964,6 +9969,30 @@ if (showRest) {
   if (!group) return null;
   if (!group) return null;
   if (group.type === "cardio") {
+    // Rendered as a full-screen overlay when active, entirely independent
+    // of top-level screen navigation (the `screen` state variable) - this
+    // deliberately avoids unmounting ActiveExerciseScreen itself, which
+    // would risk disrupting its own delicate in-progress state (round,
+    // exerciseIndex, weights, etc. - the exact class of state that already
+    // had real bugs found and fixed earlier tonight). Finishing tracking
+    // simply closes the overlay and calls the same onGroupComplete this
+    // screen already used before this feature existed - identical outcome
+    // to tapping "Cardio Complete" manually, just with real tracked data
+    // saved alongside it.
+    if (showCardioTracker) {
+      return (
+        <CardioTrackingScreen
+          profile={profile}
+          presetActivityType={null as any}
+          goalDurationSeconds={(group.cardioMinutes || 15) * 60}
+          linkedWorkoutId={sessionId || undefined}
+          onBack={() => {
+            setShowCardioTracker(false);
+            onGroupComplete();
+          }}
+        />
+      );
+    }
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", padding: "52px 24px 40px" }}>
         <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", marginBottom: 32 }}>
@@ -9983,6 +10012,14 @@ if (showRest) {
             ))}
           </div>
         </div>
+        {/* Secondary action, visually quieter than the primary button below
+            (bordered card, not gradient) - matches the existing secondary-
+            button pattern used elsewhere (e.g. View Full Week), so this
+            reads as an optional extra rather than competing with the
+            primary "Cardio Complete" action beneath it. */}
+        <button onClick={() => setShowCardioTracker(true)} style={{ width: "100%", padding: "16px", borderRadius: 16, border: `1px solid #1DB95440`, background: "#1DB95415", color: "#1DB954", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>
+          🏃 Track This Cardio
+        </button>
         <button onClick={onGroupComplete} style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 17, fontWeight: 700, cursor: "pointer", boxShadow: `0 8px 30px ${COLORS.primary}40` }}>
           Cardio Complete ✓
         </button>
