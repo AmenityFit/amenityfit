@@ -4994,19 +4994,23 @@ const getWorkoutImage = (type: string, programDay: number = 1): string => {
 };
 
 const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, workoutDoneToday = false, isInProgress = false, onNavigate = (s) => {}, onViewWeekly = () => {}, reEntryMode = false, reEntrySessions = 0, reEntryTarget = 6, wearableModifier = null, onWearableOverride = () => {} }) => {
-  // Weekly Active Minutes + cardio-only estimated Calories - see
-  // computeActivityStats for what is and isn't estimated and why. Fetched
-  // once per Dashboard mount alongside notifications below; workoutDoneToday
-  // changing (passed in the key from the top-level render) already forces a
-  // fresh Dashboard mount after any completion, so this naturally refreshes
-  // right after a workout or tracked activity finishes.
-  const [activityStats, setActivityStats] = useState<{ activeMinutes: number; cardioCalories: number } | null>(null);
+  // Raw session history, fetched once per Dashboard mount alongside
+  // notifications below - workoutDoneToday changing (passed in the key
+  // from the top-level render) already forces a fresh Dashboard mount
+  // after any completion, so this naturally refreshes right after a
+  // workout or tracked activity finishes. Kept as raw sessions (not
+  // pre-aggregated) so both the "This Week" and "Today" views below can
+  // be derived from the same single fetch via computeActivityStats,
+  // rather than needing a separate query per view.
+  const [activitySessions, setActivitySessions] = useState<any[] | null>(null);
+  const [activityStatsRange, setActivityStatsRange] = useState<"week" | "today">("week");
   useEffect(() => {
     if (!profile?.uid) return;
     fetchWorkoutHistory(profile.uid).then((sessions) => {
-      setActivityStats(computeActivityStats(sessions, 7));
+      setActivitySessions(sessions);
     });
   }, [profile?.uid]);
+  const activityStats = activitySessions ? computeActivityStats(activitySessions, activityStatsRange === "today" ? 1 : 7) : null;
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
@@ -5249,20 +5253,34 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
           <StatCard label="This Week" value={`${profile.sessionsThisWeek || 0}/${frequency}`} sub="workouts" icon={Calendar} color={COLORS.accent} />
         </div>
 
-        {/* Combined gym + cardio weekly summary - Active Minutes is always
-            real (exact duration known for both types); cardio calories is
-            a clearly-estimated secondary line, never blended into one
-            falsely-precise number, and only shown once there's genuinely
-            something to report so a fresh week stays uncluttered. */}
-        {activityStats && activityStats.activeMinutes > 0 && (
+        {/* Combined gym + cardio summary, toggleable between this week
+            and today - Active Minutes is always real (exact duration known
+            for both types); cardio calories is a clearly-estimated
+            secondary line, never blended into one falsely-precise number.
+            Only shown once the selected range has genuinely something to
+            report, so an empty day/week stays uncluttered rather than
+            showing a zero. */}
+        {activitySessions && (
           <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 20 }}>
-            <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 10px" }}>This Week's Activity</p>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span style={{ color: COLORS.white, fontSize: 28, fontWeight: 900 }}>{activityStats.activeMinutes}</span>
-              <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600 }}>active minutes</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: activityStats && activityStats.activeMinutes > 0 ? 10 : 0 }}>
+              <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: 0 }}>{activityStatsRange === "today" ? "Today's Activity" : "This Week's Activity"}</p>
+              <div style={{ display: "flex", background: COLORS.background, borderRadius: 8, padding: 2 }}>
+                <button onClick={() => setActivityStatsRange("week")} style={{ background: activityStatsRange === "week" ? COLORS.border : "transparent", border: "none", borderRadius: 6, padding: "4px 10px", color: activityStatsRange === "week" ? COLORS.white : COLORS.textSecondary, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Week</button>
+                <button onClick={() => setActivityStatsRange("today")} style={{ background: activityStatsRange === "today" ? COLORS.border : "transparent", border: "none", borderRadius: 6, padding: "4px 10px", color: activityStatsRange === "today" ? COLORS.white : COLORS.textSecondary, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Today</button>
+              </div>
             </div>
-            {activityStats.cardioCalories > 0 && (
-              <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "6px 0 0" }}>+ ~{activityStats.cardioCalories} cal from cardio (estimated)</p>
+            {activityStats && activityStats.activeMinutes > 0 ? (
+              <>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <span style={{ color: COLORS.white, fontSize: 28, fontWeight: 900 }}>{activityStats.activeMinutes}</span>
+                  <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600 }}>active minutes</span>
+                </div>
+                {activityStats.cardioCalories > 0 && (
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "6px 0 0" }}>+ ~{activityStats.cardioCalories} cal from cardio (estimated)</p>
+                )}
+              </>
+            ) : (
+              <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>{activityStatsRange === "today" ? "Nothing logged today yet." : "Nothing logged this week yet."}</p>
             )}
           </div>
         )}
