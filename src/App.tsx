@@ -93,6 +93,7 @@ import {
   Volleyball,
   Goal,
   CircleDot,
+  SportShoe,
 } from "lucide-react";
 
 const firebaseConfig = {
@@ -5257,7 +5258,8 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
             pendingCardioLink is set here, CardioTrackingScreen opens on
             its own activity-type picker rather than any preset/goal. */}
         <button onClick={() => onNavigate("cardioTracking")} style={{ width: "100%", padding: "14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20 }}>
-          🏃 Track an Activity
+          <Watch size={16} color={COLORS.white} strokeWidth={2} />
+          Track an Activity
         </button>
         <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
           <StatCard label="Streak" value={String(profile.streak || 0)} sub="days 🔥" icon={Flame} color="#FF6B35" />
@@ -14789,7 +14791,13 @@ const buildRouteMapUrl = (route: { lat: number; lng: number }[], width: number, 
 // Returned as a data: URL so it can be used as a plain <img src> exactly
 // like buildRouteMapUrl's output, with no change needed anywhere it's used.
 const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel", accentColor: string): string => {
-  const stroke = accentColor.replace("#", "%23");
+  // Bug fix: this previously pre-encoded "#" to "%23" here, then the WHOLE
+  // svg string got passed through encodeURIComponent() again below, which
+  // re-encoded that literal "%" into "%25" - mangling every color into
+  // garbage the browser couldn't parse as CSS, so nothing rendered at all.
+  // encodeURIComponent already handles "#" correctly on its own; no manual
+  // pre-encoding needed.
+  const stroke = accentColor;
   let svg = "";
 
   if (courtType === "basketball") {
@@ -14839,6 +14847,102 @@ const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel",
 // single bad jump can otherwise add hundreds of meters of phantom distance.
 const MAX_PLAUSIBLE_SPEED_MPS = 12.5; // ~45 km/h, well above realistic run/bike-commute speed
 
+// Custom icons for sports lucide genuinely doesn't have (verified by
+// listing its full icon set, not assumed) - drawn in the same stroke-based,
+// 24x24-viewbox, round-cap style as lucide's own icons so they sit
+// naturally in the same grid, rather than settling for a mismatched
+// built-in substitute (a volleyball standing in for a basketball, a
+// sailboat for a rowing machine). Shapes checked against real reference
+// images before drawing, not approximated from memory alone.
+type IconProps = { size?: number; color?: string; strokeWidth?: number };
+
+const BasketballIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 3 L12 21" />
+    <path d="M3 12 L21 12" />
+    <path d="M12 3 Q5 12 12 21" />
+    <path d="M12 3 Q19 12 12 21" />
+  </svg>
+);
+
+const SoccerBallIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 8 L15.8 10.8 L14.4 15.2 L9.6 15.2 L8.2 10.8 Z" fill={color} stroke="none" />
+    <path d="M12 8 L12 3.5" />
+    <path d="M15.8 10.8 L19.7 9.5" />
+    <path d="M14.4 15.2 L17.1 18.6" />
+    <path d="M9.6 15.2 L6.9 18.6" />
+    <path d="M8.2 10.8 L4.3 9.5" />
+  </svg>
+);
+
+const PadelRacketIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <ellipse cx="13" cy="9" rx="6" ry="7.5" transform="rotate(25 13 9)" />
+    <circle cx="11" cy="6" r="0.6" fill={color} stroke="none" />
+    <circle cx="15" cy="7" r="0.6" fill={color} stroke="none" />
+    <circle cx="9.5" cy="10" r="0.6" fill={color} stroke="none" />
+    <circle cx="13.5" cy="11" r="0.6" fill={color} stroke="none" />
+    <circle cx="17" cy="10.5" r="0.6" fill={color} stroke="none" />
+    <path d="M8.5 15 L4 20" />
+    <path d="M4 20 L6 22" />
+  </svg>
+);
+
+// Rowing MACHINE specifically - a seated figure pulling a handle cabled to
+// a flywheel, not crossed oars, which would actually suggest open-water
+// rowing and be wrong for this activity. Matches reference images of real
+// rowing-machine icons/pictograms rather than the boat-oar convention.
+const RowingIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="18.5" cy="12.5" r="2.2" />
+    <path d="M4 20 L16.3 20" />
+    <circle cx="14" cy="7.5" r="1.7" />
+    <path d="M14.7 9 L12 14 L15.5 20" />
+    <path d="M12 14 L7 16.5" />
+    <path d="M15.5 15 L18.5 12.5" />
+  </svg>
+);
+
+// Walking - mid-stride pose (front leg planted, back leg pushing off),
+// distinguished from RunningIcon by a upright torso and lower knee lift.
+const WalkingIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="14" cy="4" r="2" />
+    <path d="M14 6 L12 14" />
+    <path d="M13 8 L17 10" />
+    <path d="M13 8 L9 7" />
+    <path d="M12 14 L16 18 L18 21" />
+    <path d="M12 14 L8 17 L5 15" />
+  </svg>
+);
+
+// Running - forward-leaning torso, higher knee lift, bent pumping arms.
+const RunningIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="15" cy="3" r="2" />
+    <path d="M15 5 L11 13" />
+    <path d="M12 7 L16 6 L18 9" />
+    <path d="M12 7 L8 9 L6 6" />
+    <path d="M11 13 L15 15 L14 20" />
+    <path d="M11 13 L7 16 L4 14" />
+  </svg>
+);
+
+// Swimming - freestyle stroke pose (extended reaching arm, head down, other
+// arm trailing back) over wave lines, not just generic water.
+const SwimmingIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="17" cy="7" r="1.8" />
+    <path d="M15.5 8 L9 10 L3 8" />
+    <path d="M11 9.3 L13 13" />
+    <path d="M13 13 L17 15" />
+    <path d="M3 18 Q5 16 7 18 T11 18 T15 18 T19 18 T21 18" />
+  </svg>
+);
+
 // icon: a lucide-react component reference, not platform emoji - matches
 // Strava's own minimal line-icon treatment rather than colorful, inconsistently-
 // rendered iOS/Android glyphs. indoor: true means no meaningful GPS movement
@@ -14846,23 +14950,26 @@ const MAX_PLAUSIBLE_SPEED_MPS = 12.5; // ~45 km/h, well above realistic run/bike
 // skips requesting location, hides distance/pace, and the completion summary
 // skips the route map for these, tracking only time + estimated calories.
 const ACTIVITY_TYPES = [
-  { key: "run", label: "Run", icon: Footprints, indoor: false },
+  { key: "run", label: "Outdoor Run", icon: RunningIcon, indoor: false },
   { key: "bike", label: "Bike", icon: Bike, indoor: false },
   { key: "hike", label: "Hike", icon: Mountain, indoor: false },
-  { key: "walk", label: "Walk", icon: PersonStanding, indoor: false },
-  { key: "swim", label: "Swim", icon: Waves, indoor: false },
-  { key: "row", label: "Row (machine)", icon: Sailboat, indoor: true },
+  { key: "walk", label: "Walk", icon: WalkingIcon, indoor: false },
+  { key: "swim", label: "Swim", icon: SwimmingIcon, indoor: false },
+  { key: "row", label: "Row (machine)", icon: RowingIcon, indoor: true },
   { key: "elliptical", label: "Elliptical", icon: Activity, indoor: true },
-  { key: "treadmill", label: "Treadmill", icon: Footprints, indoor: true },
+  // SportShoe (not RunningIcon/Footprints) specifically so Treadmill reads
+  // as visually distinct from Outdoor Run at a glance, not the same icon
+  // reused for two different activities.
+  { key: "treadmill", label: "Treadmill", icon: SportShoe, indoor: true },
   { key: "indoor-bike", label: "Indoor Bike", icon: Bike, indoor: true },
   // Court/field sports - GPS distance isn't meaningful for play confined to
   // a fixed court, so these track like indoor activities (time + estimated
   // calories only), but get their own custom court illustration (see
-  // COURT_ILLUSTRATIONS) in place of the route map, rather than either a
-  // real map that has nothing to show or no visual at all.
-  { key: "basketball", label: "Basketball", icon: Volleyball, indoor: true, courtType: "basketball" },
-  { key: "soccer", label: "Soccer", icon: Goal, indoor: true, courtType: "soccer" },
-  { key: "padel", label: "Padel", icon: CircleDot, indoor: true, courtType: "padel" },
+  // buildCourtIllustrationUrl) in place of the route map, rather than either
+  // a real map that has nothing to show or no visual at all.
+  { key: "basketball", label: "Basketball", icon: BasketballIcon, indoor: true, courtType: "basketball" },
+  { key: "soccer", label: "Soccer", icon: SoccerBallIcon, indoor: true, courtType: "soccer" },
+  { key: "padel", label: "Padel", icon: PadelRacketIcon, indoor: true, courtType: "padel" },
   { key: "other", label: "Other", icon: Zap, indoor: false },
 ];
 
@@ -15082,7 +15189,11 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
         <div style={{ padding: "52px 24px 8px", textAlign: "center" }}>
-          {activityMeta?.icon && <activityMeta.icon size={40} color={COLORS.white} strokeWidth={1.75} />}
+          {activityMeta?.icon && (
+            <div style={{ width: 72, height: 72, borderRadius: 20, background: `linear-gradient(135deg, ${COLORS.primary}22, ${COLORS.accent}22)`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
+              <activityMeta.icon size={36} color={COLORS.white} strokeWidth={1.75} />
+            </div>
+          )}
           <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "8px 0 0", textTransform: "capitalize" }}>{activityType} Complete</h1>
         </div>
 
@@ -15174,18 +15285,18 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           </button>
           <h1 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: 0 }}>Track an Activity</h1>
         </div>
-        <div style={{ padding: 24, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "24px 24px 40px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {ACTIVITY_TYPES.map((a) => (
             <button
               key={a.key}
               onClick={() => setActivityType(a.key)}
               style={{
                 background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16,
-                padding: "24px 16px", display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+                padding: "26px 16px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
                 cursor: "pointer",
               }}
             >
-              <a.icon size={28} color={COLORS.white} strokeWidth={1.75} />
+              <a.icon size={40} color={COLORS.white} strokeWidth={1.6} />
               <span style={{ color: COLORS.white, fontSize: 15, fontWeight: 700 }}>{a.label}</span>
             </button>
           ))}
