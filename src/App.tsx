@@ -15069,6 +15069,63 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // need. Time and estimated calories still track normally.
   const isIndoorActivity = !!ACTIVITY_TYPES.find((a) => a.key === activityType)?.indoor;
 
+  // Persists the tracking session's real wall-clock timestamps (not just
+  // in-memory React state) so that if iOS suspends or kills the app mid-
+  // activity - a real, common thing for backgrounded web content in an app
+  // shell, not a bug in this code - reopening can recompute genuinely
+  // correct elapsed time from Date.now() minus the real start time, instead
+  // of the whole session simply vanishing. This does NOT make GPS keep
+  // collecting points while the app is actually suspended (that needs
+  // native background-location entitlements in the wrapper app, a separate
+  // piece of work) - it specifically prevents losing the session and timer
+  // entirely, which was the more damaging part of what was reported.
+  const ACTIVE_TRACKING_KEY = "amenityfit_active_tracking";
+  const persistTrackingState = () => {
+    if (!startTimeRef.current) return;
+    try {
+      localStorage.setItem(ACTIVE_TRACKING_KEY, JSON.stringify({
+        activityType,
+        startTimestamp: startTimeRef.current,
+        pausedAccumMs: pausedAccumMsRef.current,
+        isPaused: manuallyPausedRef.current,
+        pauseStartedAt: pauseStartedAtRef.current,
+        distanceMeters,
+        route: routeRef.current,
+        linkedWorkoutId: linkedWorkoutId || null,
+        goalDurationSeconds: goalDurationSeconds || null,
+      }));
+    } catch (e) {
+      // Storage can fail (quota, private mode) - losing the resume safety
+      // net shouldn't crash an otherwise-working tracking session over it.
+    }
+  };
+  const clearPersistedTrackingState = () => {
+    try { localStorage.removeItem(ACTIVE_TRACKING_KEY); } catch (e) {}
+  };
+
+  // The actual GPS-watch-plus-timer startup, separated from resetting
+  // elapsed/distance to zero - shared by both a genuinely fresh start and
+  // resuming a persisted session, which must NOT reset those values.
+  const beginWatchAndTimer = () => {
+    if (!isIndoorActivity && navigator.geolocation) {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        handlePosition,
+        (err) => setLocationError(err.message),
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+      );
+    }
+    timerIntervalRef.current = setInterval(() => {
+      if (!startTimeRef.current) return;
+      if (isAutoPausedRef.current || manuallyPausedRef.current) return;
+      const elapsed = Math.floor((Date.now() - startTimeRef.current - pausedAccumMsRef.current) / 1000);
+      setElapsedSeconds(elapsed);
+      // Throttled to roughly every 5s rather than every tick - this is a
+      // safety net for an app suspension, not something that needs
+      // sub-second freshness, and localStorage writes aren't free.
+      if (elapsed % 5 === 0) persistTrackingState();
+    }, 1000);
+  };
+
   const startTracking = () => {
     if (!isIndoorActivity && !navigator.geolocation) {
       setLocationError("Location isn't available on this device.");
@@ -15085,22 +15142,38 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     setIsAutoPaused(false);
     setDistanceMeters(0);
     setElapsedSeconds(0);
-
-    if (!isIndoorActivity) {
-      watchIdRef.current = navigator.geolocation.watchPosition(
-        handlePosition,
-        (err) => setLocationError(err.message),
-        { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
-      );
-    }
-
-    timerIntervalRef.current = setInterval(() => {
-      if (!startTimeRef.current) return;
-      if (isAutoPausedRef.current || manuallyPausedRef.current) return;
-      const elapsed = Math.floor((Date.now() - startTimeRef.current - pausedAccumMsRef.current) / 1000);
-      setElapsedSeconds(elapsed);
-    }, 1000);
+    beginWatchAndTimer();
+    persistTrackingState();
   };
+
+  // On mount, checks for a session that was in progress when the app got
+  // suspended/reloaded, and resumes it with correctly recalculated elapsed
+  // time rather than starting fresh or losing it. Runs once.
+  React.useEffect(() => {
+    if (activityType || presetActivityType) return;
+    try {
+      const raw = localStorage.getItem(ACTIVE_TRACKING_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!saved?.activityType || !saved?.startTimestamp) return;
+      setActivityType(saved.activityType);
+      startTimeRef.current = saved.startTimestamp;
+      pausedAccumMsRef.current = saved.pausedAccumMs || 0;
+      routeRef.current = saved.route || [];
+      setDistanceMeters(saved.distanceMeters || 0);
+      if (saved.isPaused) {
+        manuallyPausedRef.current = true;
+        pauseStartedAtRef.current = saved.pauseStartedAt || Date.now();
+        setStatus("paused");
+      } else {
+        setStatus("tracking");
+      }
+      const elapsed = Math.floor((Date.now() - saved.startTimestamp - (saved.pausedAccumMs || 0)) / 1000);
+      setElapsedSeconds(Math.max(0, elapsed));
+      beginWatchAndTimer();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    } catch (e) {}
+  }, []);
 
   const toggleManualPause = () => {
     if (manuallyPausedRef.current) {
@@ -15115,6 +15188,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
       setStatus("paused");
       pauseStartedAtRef.current = Date.now();
     }
+    persistTrackingState();
   };
 
   const stopTrackingInternals = () => {
@@ -15126,6 +15200,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
+    clearPersistedTrackingState();
   };
 
   const finishActivity = async () => {
@@ -15203,7 +15278,12 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     const activityMeta = ACTIVITY_TYPES.find((a) => a.key === activityType);
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
-        <div style={{ padding: "52px 24px 8px", textAlign: "center" }}>
+        {/* Centers the header/map/stats block vertically in whatever space
+            remains above the bottom-anchored buttons, rather than pinning
+            it to the top and leaving an oversized empty gap for indoor
+            activities that have no map to fill that space. */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 0 }}>
+        <div style={{ padding: "36px 24px 8px", textAlign: "center" }}>
           {activityMeta?.icon && (
             <div style={{ width: 72, height: 72, borderRadius: 20, background: `linear-gradient(135deg, ${COLORS.primary}22, ${COLORS.accent}22)`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
               <activityMeta.icon size={36} color={COLORS.white} strokeWidth={1.75} />
@@ -15239,6 +15319,8 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>Calories</p>
             <p style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: 0 }}>{finalCalories ? `~${finalCalories}` : "—"}</p>
           </div>
+        </div>
+
         </div>
 
         <div style={{ padding: "0 24px 40px", marginTop: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -15850,6 +15932,10 @@ const StickerShareScreen = ({
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.65, marginLeft: 6 }}>{s.label}</span>
               </div>
             ))}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, paddingTop: 8, borderTop: `1px solid ${soStyle.color as string}20` }}>
+              <div style={{ width: 12, height: 12, borderRadius: 3, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` }} />
+              <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: 0.6, opacity: 0.7 }}>AMENITYFIT</span>
+            </div>
           </div>
         </div>
 
@@ -15929,6 +16015,10 @@ const StickerShareScreen = ({
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.65, marginLeft: 6 }}>{s.label}</span>
             </div>
           ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, paddingTop: 8, borderTop: `1px solid ${stickerStyle.color as string}20` }}>
+            <div style={{ width: 12, height: 12, borderRadius: 3, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` }} />
+            <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: 0.6, opacity: 0.7 }}>AMENITYFIT</span>
+          </div>
         </div>
       </div>
 
