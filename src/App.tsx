@@ -14898,50 +14898,44 @@ const PadelRacketIcon = ({ size = 24, color = "currentColor", strokeWidth = 1.6 
   </svg>
 );
 
-// Rowing MACHINE, redesigned as the apparatus itself (rail, seat, flywheel,
-// handle, cable) rather than a human figure - a human pose in pure line art
-// is exactly where freehand coordinate guessing keeps reading as "off" (two
-// straight misses). A machine made of straight lines and circles is far
-// more reliable to get looking clean and correctly proportioned.
-const RowingIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
+// Rowing machine, rebuilt to match the clean reference line-art directly:
+// seated figure leaning back, arms pulling a handle connected to a large
+// flywheel on the right, bent legs, seat and frame with support legs.
+const RowingIcon = ({ size = 24, color = "currentColor", strokeWidth = 1.8 }: IconProps) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="19" cy="17" r="2.5" />
-    <path d="M3 19 L16.5 19" />
-    <rect x="7" y="16.5" width="3.5" height="2" rx="0.5" />
-    <path d="M11 17.5 L15 12" />
-    <path d="M15 12 L19 14.7" />
-    <path d="M6 12.5 L9 8" />
-    <path d="M9 8 L13 9.5" />
+    <circle cx="5.5" cy="4" r="1.8" />
+    <path d="M5.8 5.7 L7.5 11" />
+    <path d="M7.5 11 L11.5 8.7" />
+    <path d="M11.5 8.7 L15.5 10.2" />
+    <circle cx="18" cy="10.5" r="3" />
+    <path d="M7.5 11 L6 15 L9.5 15" />
+    <path d="M9.5 15 L11 11.5" />
+    <path d="M3.5 17.5 L20.5 17.5" />
+    <path d="M6 15 L4.5 17.5" />
+    <path d="M15.2 17.5 L15.2 20" />
+    <path d="M20 17.5 L20 20" />
   </svg>
 );
 
-// Walking, rebuilt to match the crosswalk-sign reference pictogram
-// directly: upright torso, one foot always flat and weight-bearing on the
-// ground - the defining biomechanical difference from running, which is
-// exactly what makes them distinct rather than looking like the same pose.
-const WalkingIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="13" cy="3.5" r="2" />
-    <path d="M13 5.5 L12.5 13" />
-    <path d="M12.7 8 L17 9.5" />
-    <path d="M12.7 8 L9.5 6" />
-    <path d="M12.5 13 L16.5 15.5 L18 20" />
-    <path d="M12.5 13 L9 16 L5 16" />
+// Walking and Running as solid filled silhouettes, matching the exact
+// reference pictograms directly (both were filled black silhouettes, not
+// line art) rather than translating them into a stroke style that kept
+// losing fidelity to the actual pose. Coordinates traced against a mental
+// grid over each reference image, not approximated freehand.
+const WalkingIcon = ({ size = 24, color = "currentColor" }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+    <circle cx="14.5" cy="3.2" r="2.1" />
+    <path d="M13.6 5.5 C12.9 5.5 12.3 6 12.2 6.7 L11.5 12.8 C11.45 13.25 11.65 13.68 12 13.95 L15.3 16.4 L16.6 20.3 C16.85 21 17.6 21.35 18.3 21.1 C19 20.85 19.35 20.1 19.1 19.4 L17.6 15 C17.5 14.7 17.3 14.45 17.05 14.27 L14.7 12.55 L15.1 8.9 L16.5 10.3 C16.75 10.55 17.05 10.7 17.4 10.75 L19.7 11 C20.4 11.08 21.05 10.57 21.13 9.86 C21.2 9.15 20.7 8.5 20 8.43 L18.15 8.23 L15.85 5.95 C15.5 5.65 15.05 5.5 14.6 5.5 Z" />
+    <path d="M12.05 13.9 L11.6 14.5 C11.4 14.75 11.15 14.95 10.85 15.05 L7.2 16.35 C6.5 16.6 5.75 16.25 5.5 15.55 C5.25 14.85 5.6 14.1 6.3 13.85 L9.5 12.7 L10.6 11.2 C11.05 10.6 11.9 10.5 12.5 10.9 C13.1 11.35 13.2 12.2 12.75 12.8 Z" />
   </svg>
 );
 
-// Running, rebuilt to match the dynamic runner-silhouette reference
-// directly: forward-leaning torso, sharply bent high-knee-lift front leg,
-// fully extended airborne back leg, tightly bent pumping arms - both feet
-// off the ground at once, unlike walking's grounded stride.
-const RunningIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: IconProps) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="16" cy="3" r="2" />
-    <path d="M15.3 5 L10.5 12" />
-    <path d="M12.2 6.5 L16 4.5 L17.5 7.5" />
-    <path d="M12.2 6.5 L8 8 L7 5" />
-    <path d="M10.5 12 L14.5 13 L13.5 19" />
-    <path d="M10.5 12 L6 15.5 L3 14" />
+const RunningIcon = ({ size = 24, color = "currentColor" }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+    <circle cx="17" cy="3.5" r="2.2" />
+    <path d="M17.7 6.3 C17.15 5.85 16.4 5.75 15.75 6.05 L12.3 7.6 C11.95 7.75 11.65 8 11.45 8.35 L9.6 11.5 C9.25 12.1 9.45 12.85 10.05 13.2 C10.65 13.55 11.4 13.35 11.75 12.75 L13.3 10.1 L14.9 9.4 L13.5 12.9 C13.35 13.25 13.35 13.65 13.5 14 L15.6 18.6 C15.9 19.25 16.65 19.5 17.3 19.2 C17.95 18.9 18.2 18.15 17.9 17.5 L16.1 13.55 L18.2 8.4 L19.15 9.5 C19.4 9.8 19.75 9.98 20.15 10 L21.3 10.05 C22 10.1 22.6 9.55 22.63 8.85 C22.65 8.15 22.1 7.55 21.4 7.53 L20.55 7.5 L18.6 5.25 C18.35 4.95 18.05 4.7 17.7 4.5 Z" />
+    <path d="M9.5 11.6 L6.3 12.3 C5.6 12.45 5.15 13.15 5.3 13.85 C5.45 14.55 6.15 15 6.85 14.85 L10.5 14.05 C10.85 13.98 11.15 13.78 11.35 13.5 L12.4 12 C12.8 11.4 12.65 10.6 12.05 10.2 C11.45 9.8 10.65 9.95 10.25 10.55 Z" />
+    <path d="M13.5 14 L11.4 16.6 C11.15 16.9 11 17.28 11 17.68 L10.95 21.3 C10.94 22 11.5 22.58 12.2 22.6 C12.9 22.6 13.5 22.05 13.5 21.35 L13.55 18.15 L15.6 15.55 Z" />
   </svg>
 );
 
