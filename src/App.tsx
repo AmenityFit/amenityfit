@@ -785,6 +785,65 @@ const saveWorkoutSession = async (uid: string, session: any, sessionId?: string)
   }
 };
 
+// Saves a cardio/standalone activity (run, bike, hike, walk, row, swim,
+// etc.) into the SAME workoutSessions collection used for gym workouts,
+// so all history queries (Progress, Coach context, future Calendar) can
+// read one unified timeline instead of juggling two separate sources.
+//
+// Deliberately a SEPARATE function from saveWorkoutSession, not a shared
+// path - saveWorkoutSession dedupes to one document per user per day
+// (queries by uid+date and reuses that day's existing doc id), which is
+// exactly right for gym workouts but would be wrong here: someone doing
+// a gym session AND a standalone run on the same day needs two separate
+// history entries, not one overwriting the other. This function always
+// generates a fresh, timestamp-based id, so multiple cardio activities
+// on the same calendar day each get their own document.
+//
+// Every doc written here carries an explicit `type` matching the activity
+// (e.g. "run", "bike", "hike") - existing gym-session documents have no
+// `type` field at all (written before this feature existed), so anything
+// reading history can treat a missing `type` as the implicit "gym" case
+// for full backward compatibility with every historical record already
+// in this collection, without needing to touch or backfill old documents.
+//
+// linkedWorkoutId is optional: set when this cardio activity was started
+// from a programmed workout day's cardio segment (see the goal-duration
+// flow), left undefined for a fully standalone activity the person chose
+// to track on their own, unconnected to any programmed day.
+const saveCardioActivity = async (uid: string, activity: {
+  type: string;
+  durationSeconds: number;
+  distanceMeters?: number;
+  route?: { lat: number; lng: number; timestamp: number }[];
+  calories?: number;
+  avgPaceSecondsPerKm?: number;
+  linkedWorkoutId?: string;
+  goalDurationSeconds?: number;
+}): Promise<string | null> => {
+  try {
+    const today = getLocalDateString();
+    const id = `${uid}_${Date.now()}`;
+    await setDoc(doc(db, "workoutSessions", id), {
+      uid,
+      sessionId: id,
+      date: today,
+      type: activity.type,
+      durationSeconds: activity.durationSeconds,
+      distanceMeters: activity.distanceMeters ?? null,
+      route: activity.route ?? null,
+      calories: activity.calories ?? null,
+      avgPaceSecondsPerKm: activity.avgPaceSecondsPerKm ?? null,
+      linkedWorkoutId: activity.linkedWorkoutId ?? null,
+      goalDurationSeconds: activity.goalDurationSeconds ?? null,
+      completedAt: serverTimestamp(),
+    });
+    return id;
+  } catch (e) {
+    console.error("saveCardioActivity error:", e);
+    return null;
+  }
+};
+
 // Fetch the user's full workout session history from Firestore
 const fetchWorkoutHistory = async (uid: string, onFastResult?: (sessions: any[]) => void): Promise<any[]> => {
   try {
@@ -5090,6 +5149,15 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
           <Calendar size={14} color={COLORS.textSecondary} />
           View Full Week
           <ChevronRight size={14} color={COLORS.textSecondary} />
+        </button>
+
+        {/* Standalone activity tracking entry point - independent of any
+            programmed workout day. onNavigate("cardioTracking") falls
+            through to the catch-all setScreen(s) case, and since no
+            pendingCardioLink is set here, CardioTrackingScreen opens on
+            its own activity-type picker rather than any preset/goal. */}
+        <button onClick={() => onNavigate("cardioTracking")} style={{ width: "100%", padding: "14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20 }}>
+          🏃 Track an Activity
         </button>
         <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
           <StatCard label="Streak" value={String(profile.streak || 0)} sub="days 🔥" icon={Flame} color="#FF6B35" />
@@ -14370,6 +14438,316 @@ const MyNotesScreen = ({ profile, onBack }) => {
   );
 };
 
+// ─── Cardio Tracking ────────────────────────────────────────────────────────
+// Great-circle distance between two lat/lng points, in meters. Standard
+// Haversine formula - accurate enough for GPS-tracking purposes (the GPS
+// hardware's own error margin is far larger than this formula's).
+const haversineDistanceMeters = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+};
+
+// Below this speed, the person is considered stopped/walking-a-break rather
+// than actively doing the activity - matches a slow amble, not real
+// movement. Auto-pause triggers only after staying below this for
+// AUTO_PAUSE_TRIGGER_SECONDS, not on a single slow reading, since GPS speed
+// is noisy and a single low sample (e.g. briefly waiting at a crosswalk,
+// or GPS jitter while running normally) shouldn't flicker the state.
+const AUTO_PAUSE_SPEED_THRESHOLD_MPS = 0.6;
+const AUTO_PAUSE_TRIGGER_SECONDS = 12;
+// A GPS fix implying faster than this is almost certainly a bad reading
+// (satellite jump, urban canyon reflection) rather than real movement -
+// discarded entirely rather than added to the distance total, since a
+// single bad jump can otherwise add hundreds of meters of phantom distance.
+const MAX_PLAUSIBLE_SPEED_MPS = 12.5; // ~45 km/h, well above realistic run/bike-commute speed
+
+const ACTIVITY_TYPES = [
+  { key: "run", label: "Run", emoji: "🏃" },
+  { key: "bike", label: "Bike", emoji: "🚴" },
+  { key: "hike", label: "Hike", emoji: "🥾" },
+  { key: "walk", label: "Walk", emoji: "🚶" },
+  { key: "row", label: "Row", emoji: "🚣" },
+  { key: "swim", label: "Swim", emoji: "🏊" },
+  { key: "other", label: "Other", emoji: "⚡" },
+];
+
+const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSeconds, presetActivityType }:
+  { profile: any; onBack: () => void; linkedWorkoutId?: string; goalDurationSeconds?: number; presetActivityType?: string }
+) => {
+  const [activityType, setActivityType] = useState<string | null>(presetActivityType || null);
+  const [status, setStatus] = useState<"ready" | "tracking" | "paused" | "finished">("ready");
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [distanceMeters, setDistanceMeters] = useState(0);
+  const [isAutoPaused, setIsAutoPaused] = useState(false);
+  const [goalHitPromptShown, setGoalHitPromptShown] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  const watchIdRef = React.useRef<number | null>(null);
+  const timerIntervalRef = React.useRef<any>(null);
+  const routeRef = React.useRef<{ lat: number; lng: number; timestamp: number }[]>([]);
+  const lastAcceptedPointRef = React.useRef<{ lat: number; lng: number; timestamp: number } | null>(null);
+  const belowThresholdSinceRef = React.useRef<number | null>(null);
+  const isAutoPausedRef = React.useRef(false);
+  const manuallyPausedRef = React.useRef(false);
+  const startTimeRef = React.useRef<number | null>(null);
+  const pausedAccumMsRef = React.useRef(0);
+  const pauseStartedAtRef = React.useRef<number | null>(null);
+
+  const handlePosition = (pos: GeolocationPosition) => {
+    const { latitude, longitude } = pos.coords;
+    const now = pos.timestamp;
+    routeRef.current.push({ lat: latitude, lng: longitude, timestamp: now });
+
+    const last = lastAcceptedPointRef.current;
+    if (last) {
+      const dtSeconds = (now - last.timestamp) / 1000;
+      if (dtSeconds > 0.5) {
+        const d = haversineDistanceMeters(last.lat, last.lng, latitude, longitude);
+        const speedMps = d / dtSeconds;
+
+        if (speedMps <= MAX_PLAUSIBLE_SPEED_MPS) {
+          if (speedMps < AUTO_PAUSE_SPEED_THRESHOLD_MPS) {
+            if (belowThresholdSinceRef.current === null) belowThresholdSinceRef.current = now;
+            const belowFor = (now - belowThresholdSinceRef.current) / 1000;
+            if (belowFor >= AUTO_PAUSE_TRIGGER_SECONDS && !isAutoPausedRef.current) {
+              isAutoPausedRef.current = true;
+              setIsAutoPaused(true);
+              pauseStartedAtRef.current = Date.now();
+            }
+          } else {
+            belowThresholdSinceRef.current = null;
+            if (isAutoPausedRef.current) {
+              isAutoPausedRef.current = false;
+              setIsAutoPaused(false);
+              if (pauseStartedAtRef.current) {
+                pausedAccumMsRef.current += Date.now() - pauseStartedAtRef.current;
+                pauseStartedAtRef.current = null;
+              }
+            }
+          }
+
+          // Only accumulate real distance while genuinely active - not
+          // during an auto-paused stretch, so someone stopped at a light
+          // doesn't rack up phantom distance from GPS drift while standing
+          // still.
+          if (!isAutoPausedRef.current) {
+            setDistanceMeters((prev) => prev + d);
+          }
+        }
+      }
+    }
+    lastAcceptedPointRef.current = { lat: latitude, lng: longitude, timestamp: now };
+  };
+
+  const startTracking = () => {
+    if (!navigator.geolocation) {
+      setLocationError("Location isn't available on this device.");
+      return;
+    }
+    setStatus("tracking");
+    startTimeRef.current = Date.now();
+    pausedAccumMsRef.current = 0;
+    routeRef.current = [];
+    lastAcceptedPointRef.current = null;
+    belowThresholdSinceRef.current = null;
+    isAutoPausedRef.current = false;
+    manuallyPausedRef.current = false;
+    setIsAutoPaused(false);
+    setDistanceMeters(0);
+    setElapsedSeconds(0);
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      handlePosition,
+      (err) => setLocationError(err.message),
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+    );
+
+    timerIntervalRef.current = setInterval(() => {
+      if (!startTimeRef.current) return;
+      if (isAutoPausedRef.current || manuallyPausedRef.current) return;
+      const elapsed = Math.floor((Date.now() - startTimeRef.current - pausedAccumMsRef.current) / 1000);
+      setElapsedSeconds(elapsed);
+    }, 1000);
+  };
+
+  const toggleManualPause = () => {
+    if (manuallyPausedRef.current) {
+      manuallyPausedRef.current = false;
+      setStatus("tracking");
+      if (pauseStartedAtRef.current) {
+        pausedAccumMsRef.current += Date.now() - pauseStartedAtRef.current;
+        pauseStartedAtRef.current = null;
+      }
+    } else {
+      manuallyPausedRef.current = true;
+      setStatus("paused");
+      pauseStartedAtRef.current = Date.now();
+    }
+  };
+
+  const stopTrackingInternals = () => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+  };
+
+  const finishActivity = async () => {
+    stopTrackingInternals();
+    setStatus("finished");
+    const uid = profile?.uid;
+    if (uid && activityType) {
+      const distanceKm = distanceMeters / 1000;
+      const avgPace = distanceKm > 0 ? elapsedSeconds / distanceKm : undefined;
+      await saveCardioActivity(uid, {
+        type: activityType,
+        durationSeconds: elapsedSeconds,
+        distanceMeters: distanceMeters > 0 ? distanceMeters : undefined,
+        route: routeRef.current.length > 1 ? routeRef.current : undefined,
+        avgPaceSecondsPerKm: avgPace,
+        linkedWorkoutId: linkedWorkoutId,
+        goalDurationSeconds: goalDurationSeconds,
+      });
+    }
+    onBack();
+  };
+
+  // Goal-linked cardio (started from a programmed workout day): prompt once
+  // the target duration is reached, offering to stop there or keep going -
+  // never a hard cutoff, since the person may want to push past what the
+  // program suggested.
+  useEffect(() => {
+    if (goalDurationSeconds && !goalHitPromptShown && elapsedSeconds >= goalDurationSeconds && status === "tracking") {
+      setGoalHitPromptShown(true);
+    }
+  }, [elapsedSeconds, goalDurationSeconds, goalHitPromptShown, status]);
+
+  useEffect(() => {
+    return () => stopTrackingInternals();
+  }, []);
+
+  const formatTime = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return h > 0
+      ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+      : `${m}:${String(s).padStart(2, "0")}`;
+  };
+
+  const paceLabel = (() => {
+    const distanceKm = distanceMeters / 1000;
+    if (distanceKm < 0.05 || elapsedSeconds < 10) return "--:--";
+    const paceSecondsPerKm = elapsedSeconds / distanceKm;
+    const m = Math.floor(paceSecondsPerKm / 60);
+    const s = Math.round(paceSecondsPerKm % 60);
+    return `${m}:${String(s).padStart(2, "0")} /km`;
+  })();
+
+  if (!activityType) {
+    return (
+      <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", gap: 14, borderBottom: `1px solid ${COLORS.border}` }}>
+          <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <ArrowLeft size={18} color={COLORS.white} />
+          </button>
+          <h1 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: 0 }}>Track an Activity</h1>
+        </div>
+        <div style={{ padding: 24, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {ACTIVITY_TYPES.map((a) => (
+            <button
+              key={a.key}
+              onClick={() => setActivityType(a.key)}
+              style={{
+                background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16,
+                padding: "24px 16px", display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+                cursor: "pointer",
+              }}
+            >
+              <span style={{ fontSize: 32 }}>{a.emoji}</span>
+              <span style={{ color: COLORS.white, fontSize: 15, fontWeight: 700 }}>{a.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, textTransform: "capitalize" }}>
+          {ACTIVITY_TYPES.find((a) => a.key === activityType)?.emoji} {activityType}
+        </span>
+        {isAutoPaused && status === "tracking" && (
+          <span style={{ color: COLORS.accent, fontSize: 12, fontWeight: 700 }}>AUTO-PAUSED</span>
+        )}
+      </div>
+
+      {locationError && (
+        <div style={{ margin: "0 24px 16px", padding: 12, background: `${COLORS.danger || "#ff4444"}20`, borderRadius: 12, color: COLORS.white, fontSize: 13 }}>
+          {locationError}
+        </div>
+      )}
+
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 32 }}>
+        <div style={{ textAlign: "center" }}>
+          <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 4px", fontWeight: 600, letterSpacing: 1 }}>TIME</p>
+          <h1 style={{ color: COLORS.white, fontSize: 56, fontWeight: 900, margin: 0, fontVariantNumeric: "tabular-nums" }}>{formatTime(elapsedSeconds)}</h1>
+        </div>
+        <div style={{ display: "flex", gap: 40 }}>
+          <div style={{ textAlign: "center" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 4px", fontWeight: 600 }}>DISTANCE</p>
+            <h2 style={{ color: COLORS.white, fontSize: 24, fontWeight: 800, margin: 0 }}>{(distanceMeters / 1000).toFixed(2)} km</h2>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 4px", fontWeight: 600 }}>PACE</p>
+            <h2 style={{ color: COLORS.white, fontSize: 24, fontWeight: 800, margin: 0 }}>{paceLabel}</h2>
+          </div>
+        </div>
+      </div>
+
+      {goalDurationSeconds && goalHitPromptShown && status === "tracking" && (
+        <div style={{ margin: "0 24px 16px", padding: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16 }}>
+          <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Cardio goal hit — stop here, or keep going?</p>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={finishActivity} style={{ flex: 1, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "12px", color: COLORS.white, fontWeight: 700, cursor: "pointer" }}>Stop Here</button>
+            <button onClick={() => setGoalHitPromptShown(false)} style={{ flex: 1, background: COLORS.primary, border: "none", borderRadius: 12, padding: "12px", color: COLORS.white, fontWeight: 700, cursor: "pointer" }}>Keep Going</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ padding: "0 24px 40px", display: "flex", gap: 12 }}>
+        {status === "ready" && (
+          <button onClick={startTracking} style={{ flex: 1, background: COLORS.primary, border: "none", borderRadius: 16, padding: "18px", color: COLORS.white, fontSize: 17, fontWeight: 800, cursor: "pointer" }}>
+            Start
+          </button>
+        )}
+        {(status === "tracking" || status === "paused") && (
+          <>
+            <button onClick={toggleManualPause} style={{ flex: 1, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px", color: COLORS.white, fontSize: 17, fontWeight: 800, cursor: "pointer" }}>
+              {status === "paused" ? "Resume" : "Pause"}
+            </button>
+            <button onClick={finishActivity} style={{ flex: 1, background: COLORS.success || COLORS.primary, border: "none", borderRadius: 16, padding: "18px", color: "#000", fontSize: 17, fontWeight: 800, cursor: "pointer" }}>
+              Finish
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // Shared full-screen photo viewer - used anywhere a photo thumbnail (profile
 // photo, building logo) should be tappable to see it larger, the same
 // standard pattern most apps use for this. Tapping anywhere, including the
@@ -20116,6 +20494,12 @@ export default function App() {
   const [superAdminLoggedIn, setSuperAdminLoggedIn] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  // Carries context into the cardioTracking screen when it's launched from
+  // a specific place - a programmed workout day's cardio segment (goal
+  // duration + link back to that workout) versus the standalone "Track an
+  // Activity" entry point, which passes none of this and lets the person
+  // pick their own activity type freely.
+  const [pendingCardioLink, setPendingCardioLink] = useState<{ linkedWorkoutId?: string; goalDurationSeconds?: number; presetActivityType?: string } | null>(null);
 
   // Shared sign-out reset — every "Sign Out" button (resident, building manager,
   // property manager, super admin) should call this so leftover session flags
@@ -21052,6 +21436,13 @@ const isInitialLoad = React.useRef(true);
   if (screen === "history") return <HistoryScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("progress")} onNavigate={navigate} />;
   if (screen === "progress") return <ProgressScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("dashboard")} onNavigate={navigate} onUpdate={(updated) => setUserProfile(updated)} />;  if (screen === "assistant") return <FitnessAssistantScreen key={"assistant" + JSON.stringify(userProfile?.dayOverrides || {})} profile={liveProfile} onBack={() => setScreen("dashboard")} onNavigate={navigate} />;
   if (screen === "myNotes") return <MyNotesScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("profile")} />;
+  if (screen === "cardioTracking") return <CardioTrackingScreen
+    profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }}
+    onBack={() => setScreen("dashboard")}
+    linkedWorkoutId={pendingCardioLink?.linkedWorkoutId}
+    goalDurationSeconds={pendingCardioLink?.goalDurationSeconds}
+    presetActivityType={pendingCardioLink?.presetActivityType}
+  />;
   if (screen === "nutrition") return <NutritionScreen onBack={() => setScreen("dashboard")} onNavigate={navigate} />;
   if (screen === "profile") return <ProfileScreen profile={liveProfile} onUpdate={(updated) => {
     setUserProfile(updated);
