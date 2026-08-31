@@ -90,6 +90,9 @@ import {
   PersonStanding,
   Sailboat,
   Waves,
+  Volleyball,
+  Goal,
+  CircleDot,
 } from "lucide-react";
 
 const firebaseConfig = {
@@ -14706,6 +14709,9 @@ const CARDIO_MET_VALUES: Record<string, number> = {
   elliptical: 5.0,
   treadmill: 8.3,
   "indoor-bike": 7.0,
+  basketball: 8.0,
+  soccer: 7.0,
+  padel: 6.0,
   other: 5.0,
 };
 
@@ -14764,6 +14770,69 @@ const buildRouteMapUrl = (route: { lat: number; lng: number }[], width: number, 
   const retina = dpr > 1 ? "@2x" : "";
   return `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/geojson(${encodedGeojson})/auto/${width}x${height}${retina}?padding=40&path-color=${strokeColor}&path-width=4&path-opacity=0.9&access_token=${MAPBOX_ACCESS_TOKEN}`;
 };
+
+// Court/field illustrations for basketball, soccer, and padel - used in
+// place of a real GPS route map for these court-confined sports, where a
+// real map has nothing meaningful to show. Proportions are drawn from real
+// regulation dimensions (NBA/FIBA basketball, IFAB soccer, FIP padel), not
+// approximated from memory, so these read as genuinely accurate rather than
+// a generic placeholder shape:
+// - Basketball: half-court view (94x50ft full court; half-court view shown,
+//   the standard convention for this kind of small illustration), 16ft-wide
+//   free-throw lane, 12ft-diameter free-throw circle, three-point arc.
+// - Soccer: full pitch (105x68m), 9.15m-radius center circle, 16.5x40.3m
+//   penalty areas with 5.5m-deep goal areas nested inside, penalty arcs.
+// - Padel: full court (20x10m), net, service lines 6.95m from net, center
+//   service line - with a double-line perimeter specifically to suggest
+//   the glass-wall enclosure that's padel's own distinctive visual feature,
+//   the detail that keeps it from reading as a generic tennis court.
+// Returned as a data: URL so it can be used as a plain <img src> exactly
+// like buildRouteMapUrl's output, with no change needed anywhere it's used.
+const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel", accentColor: string): string => {
+  const stroke = accentColor.replace("#", "%23");
+  let svg = "";
+
+  if (courtType === "basketball") {
+    // ViewBox scaled from half-court 50ft(w) x 47ft(h) at 10px/ft.
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 470">
+      <rect x="10" y="10" width="480" height="450" fill="none" stroke="${stroke}" stroke-width="4"/>
+      <rect x="170" y="10" width="160" height="190" fill="none" stroke="${stroke}" stroke-width="4"/>
+      <circle cx="250" cy="200" r="60" fill="none" stroke="${stroke}" stroke-width="4"/>
+      <path d="M 30 460 A 220 220 0 0 1 470 460" fill="none" stroke="${stroke}" stroke-width="4"/>
+      <line x1="10" y1="460" x2="30" y2="460" stroke="${stroke}" stroke-width="4"/>
+      <line x1="470" y1="460" x2="490" y2="460" stroke="${stroke}" stroke-width="4"/>
+    </svg>`;
+  } else if (courtType === "soccer") {
+    // ViewBox scaled from 105x68m at 5px/m.
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 525 340">
+      <rect x="10" y="10" width="505" height="320" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <line x1="262.5" y1="10" x2="262.5" y2="330" stroke="${stroke}" stroke-width="3"/>
+      <circle cx="262.5" cy="170" r="46" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <circle cx="262.5" cy="170" r="3" fill="${stroke}"/>
+      <rect x="10" y="87" width="82" height="166" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <rect x="10" y="142" width="27" height="56" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <path d="M 92 122 A 46 46 0 0 1 92 218" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <rect x="433" y="87" width="82" height="166" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <rect x="488" y="142" width="27" height="56" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <path d="M 433 122 A 46 46 0 0 0 433 218" fill="none" stroke="${stroke}" stroke-width="3"/>
+    </svg>`;
+  } else {
+    // Padel - viewBox scaled from 20x10m at 20px/m. Double-line perimeter
+    // is the deliberate glass-wall cue.
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
+      <rect x="6" y="6" width="388" height="188" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <rect x="12" y="12" width="376" height="176" fill="none" stroke="${stroke}" stroke-width="1.5" opacity="0.5"/>
+      <line x1="200" y1="12" x2="200" y2="188" stroke="${stroke}" stroke-width="4"/>
+      <line x1="61" y1="12" x2="61" y2="188" stroke="${stroke}" stroke-width="2"/>
+      <line x1="339" y1="12" x2="339" y2="188" stroke="${stroke}" stroke-width="2"/>
+      <line x1="61" y1="100" x2="200" y2="100" stroke="${stroke}" stroke-width="2"/>
+      <line x1="200" y1="100" x2="339" y2="100" stroke="${stroke}" stroke-width="2"/>
+    </svg>`;
+  }
+
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+};
+
 // A GPS fix implying faster than this is almost certainly a bad reading
 // (satellite jump, urban canyon reflection) rather than real movement -
 // discarded entirely rather than added to the distance total, since a
@@ -14786,6 +14855,14 @@ const ACTIVITY_TYPES = [
   { key: "elliptical", label: "Elliptical", icon: Activity, indoor: true },
   { key: "treadmill", label: "Treadmill", icon: Footprints, indoor: true },
   { key: "indoor-bike", label: "Indoor Bike", icon: Bike, indoor: true },
+  // Court/field sports - GPS distance isn't meaningful for play confined to
+  // a fixed court, so these track like indoor activities (time + estimated
+  // calories only), but get their own custom court illustration (see
+  // COURT_ILLUSTRATIONS) in place of the route map, rather than either a
+  // real map that has nothing to show or no visual at all.
+  { key: "basketball", label: "Basketball", icon: Volleyball, indoor: true, courtType: "basketball" },
+  { key: "soccer", label: "Soccer", icon: Goal, indoor: true, courtType: "soccer" },
+  { key: "padel", label: "Padel", icon: CircleDot, indoor: true, courtType: "padel" },
   { key: "other", label: "Other", icon: Zap, indoor: false },
 ];
 
@@ -14999,7 +15076,8 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // (same underlying state, just frozen at the finish moment), plus the
   // route map when there's a real route to show.
   if (status === "finished") {
-    const mapUrl = buildRouteMapUrl(routeRef.current, 640, 360);
+    const courtType = ACTIVITY_TYPES.find((a) => a.key === activityType)?.courtType;
+    const mapUrl = courtType ? buildCourtIllustrationUrl(courtType, COLORS.accent) : buildRouteMapUrl(routeRef.current, 640, 360);
     const activityMeta = ACTIVITY_TYPES.find((a) => a.key === activityType);
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
