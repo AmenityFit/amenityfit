@@ -15488,7 +15488,7 @@ const ShareableStatCard = ({
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", padding: "72px 24px 24px", overflowY: "auto" }}>
-      <button onClick={onClose} style={{ position: "absolute", top: 24, right: 24, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer" }}>×</button>
+      <button onClick={onClose} style={{ position: "absolute", top: 56, right: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer", zIndex: 10 }}>×</button>
 
       <div
         ref={cardRef}
@@ -15675,36 +15675,59 @@ const StickerShareScreen = ({
 
   const clamp01 = (n: number) => Math.max(0.08, Math.min(0.92, n));
 
+  // Pinch-to-resize (two simultaneous pointers) alongside single-pointer
+  // drag-to-reposition, replacing a separate visible resize-handle box -
+  // that extra square element was cluttering the sticker itself and wasn't
+  // an obviously-understood affordance. This matches how Instagram/Snapchat
+  // handle sticker resizing: no visible handle, just a natural gesture.
+  const activePointers = React.useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStartDist = React.useRef<number | null>(null);
+  const pinchStartScale = React.useRef(1);
+
+  const getPinchDistance = (): number | null => {
+    const pts = Array.from(activePointers.current.values());
+    if (pts.length < 2) return null;
+    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  };
+
   const handleStickerPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    dragState.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
+    activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (activePointers.current.size === 2) {
+      pinchStartDist.current = getPinchDistance();
+      pinchStartScale.current = scale;
+      dragState.current = null;
+    } else if (activePointers.current.size === 1) {
+      dragState.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
+    }
   };
   const handleStickerPointerMove = (e: React.PointerEvent) => {
+    if (!activePointers.current.has(e.pointerId)) return;
+    activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointers.current.size === 2 && pinchStartDist.current) {
+      const dist = getPinchDistance();
+      if (dist) {
+        const ratio = dist / pinchStartDist.current;
+        setScale(Math.max(0.6, Math.min(2.5, pinchStartScale.current * ratio)));
+      }
+      return;
+    }
+
     if (!dragState.current || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const dx = (e.clientX - dragState.current.startX) / rect.width;
     const dy = (e.clientY - dragState.current.startY) / rect.height;
     setPos({ x: clamp01(dragState.current.origX + dx), y: clamp01(dragState.current.origY + dy) });
   };
-  const handleStickerPointerUp = () => {
-    dragState.current = null;
-    sampleContrast();
-  };
-
-  const handleResizePointerDown = (e: React.PointerEvent) => {
-    e.stopPropagation();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    resizeState.current = { startDist: e.clientX + e.clientY, origScale: scale };
-  };
-  const handleResizePointerMove = (e: React.PointerEvent) => {
-    if (!resizeState.current) return;
-    const delta = (e.clientX + e.clientY) - resizeState.current.startDist;
-    setScale(Math.max(0.6, Math.min(2, resizeState.current.origScale + delta / 200)));
-  };
-  const handleResizePointerUp = () => {
-    resizeState.current = null;
-    sampleContrast();
+  const handleStickerPointerUp = (e: React.PointerEvent) => {
+    activePointers.current.delete(e.pointerId);
+    if (activePointers.current.size < 2) pinchStartDist.current = null;
+    if (activePointers.current.size === 0) {
+      dragState.current = null;
+      sampleContrast();
+    }
   };
 
   const handleShare = async () => {
@@ -15773,7 +15796,7 @@ const StickerShareScreen = ({
   if (mode === "choose") {
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 500, background: COLORS.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', sans-serif" }}>
-        <button onClick={onClose} style={{ position: "absolute", top: 24, right: 24, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer" }}>×</button>
+        <button onClick={onClose} style={{ position: "absolute", top: 56, right: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer", zIndex: 10 }}>×</button>
         <div style={{ width: 72, height: 72, borderRadius: 20, background: `${COLORS.white}10`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
           <Camera size={30} color={COLORS.white} strokeWidth={1.75} />
         </div>
@@ -15856,7 +15879,7 @@ const StickerShareScreen = ({
         <button onClick={() => setMode("choose")} style={{ position: "absolute", top: 24, left: 24, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <ArrowLeft size={18} color={COLORS.white} />
         </button>
-        <button onClick={onClose} style={{ position: "absolute", top: 24, right: 24, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer" }}>×</button>
+        <button onClick={onClose} style={{ position: "absolute", top: 56, right: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer", zIndex: 10 }}>×</button>
         <div style={{ width: 72, height: 72, borderRadius: 20, background: `${COLORS.white}10`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
           <Camera size={30} color={COLORS.white} strokeWidth={1.75} />
         </div>
@@ -15906,19 +15929,6 @@ const StickerShareScreen = ({
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.65, marginLeft: 6 }}>{s.label}</span>
             </div>
           ))}
-          {/* Resize handle - bottom-right corner, deliberately small so it
-              doesn't compete visually with the stats themselves. */}
-          <div
-            onPointerDown={handleResizePointerDown}
-            onPointerMove={handleResizePointerMove}
-            onPointerUp={handleResizePointerUp}
-            style={{
-              position: "absolute", right: -6, bottom: -6, width: 22, height: 22, borderRadius: 8,
-              background: isLight ? "rgba(255,255,255,0.95)" : "rgba(30,30,30,0.9)",
-              border: `1px solid ${isLight ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.2)"}`,
-              cursor: "nwse-resize", touchAction: "none",
-            }}
-          />
         </div>
       </div>
 
