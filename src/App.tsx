@@ -14849,20 +14849,19 @@ const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel",
       <rect x="515" y="150" width="8" height="40" fill="none" stroke="${stroke}" stroke-width="1.5"/>
     </svg>`;
   } else {
-    // Padel - rebuilt from a real reference: outer double-line perimeter
-    // (glass-wall cue), service lines dividing each half into a back zone
-    // and a service-box zone, center line spanning only between the
-    // service lines (not full court height, matching real court markings),
-    // and a distinct heavier net line with small end posts.
+    // Padel - rebuilt from Senz's own reference diagram: open end-zones
+    // at each short end (no internal lines - just the back wall area),
+    // a dashed center line running the full court height (the net, dashed
+    // per Senz's request), and symmetric service lines above/below the
+    // net within the two main playing zones only.
     svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
       <rect x="6" y="6" width="388" height="188" fill="none" stroke="${stroke}" stroke-width="3"/>
       <rect x="12" y="12" width="376" height="176" fill="none" stroke="${stroke}" stroke-width="1.5" opacity="0.5"/>
-      <line x1="6" y1="42" x2="394" y2="42" stroke="${stroke}" stroke-width="2"/>
-      <line x1="6" y1="158" x2="394" y2="158" stroke="${stroke}" stroke-width="2"/>
-      <line x1="200" y1="42" x2="200" y2="158" stroke="${stroke}" stroke-width="2"/>
-      <line x1="6" y1="100" x2="394" y2="100" stroke="${stroke}" stroke-width="4"/>
-      <line x1="6" y1="96" x2="6" y2="104" stroke="${stroke}" stroke-width="4"/>
-      <line x1="394" y1="96" x2="394" y2="104" stroke="${stroke}" stroke-width="4"/>
+      <line x1="70" y1="6" x2="70" y2="194" stroke="${stroke}" stroke-width="2"/>
+      <line x1="330" y1="6" x2="330" y2="194" stroke="${stroke}" stroke-width="2"/>
+      <line x1="200" y1="6" x2="200" y2="194" stroke="${stroke}" stroke-width="3" stroke-dasharray="8 6"/>
+      <line x1="70" y1="72" x2="330" y2="72" stroke="${stroke}" stroke-width="2"/>
+      <line x1="70" y1="128" x2="330" y2="128" stroke="${stroke}" stroke-width="2"/>
     </svg>`;
   }
 
