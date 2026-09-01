@@ -15327,7 +15327,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
 
         {mapUrl && (
           <div style={{ margin: "16px 24px 0", borderRadius: 20, overflow: "hidden", border: `1px solid ${COLORS.border}`, boxShadow: "0 8px 30px rgba(0,0,0,0.3)" }}>
-            <img src={mapUrl} alt="Route map" style={{ width: "100%", display: "block" }} />
+            <img src={mapUrl} alt="Route map" decoding="sync" loading="eager" style={{ width: "100%", display: "block" }} />
           </div>
         )}
 
@@ -15671,7 +15671,7 @@ const ShareableStatCard = ({
           </div>
         )}
 
-        <h2 style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: "0 24px 20px", textAlign: "center" }}>{title}</h2>
+        <h2 style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: "0 24px 20px", textAlign: "center", textTransform: "capitalize" }}>{title}</h2>
 
         {mapUrl && (
           <div style={{ margin: "0 20px 20px", borderRadius: 16, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
@@ -15747,7 +15747,9 @@ const StickerShareScreen = ({
           <img
             src={routeMapUrl}
             alt=""
-            style={{ width: 220, height: 140, objectFit: "cover", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
+            decoding="sync"
+            loading="eager"
+            style={{ maxWidth: 240, maxHeight: 160, width: "auto", height: "auto", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
           />
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
