@@ -15730,12 +15730,18 @@ const StickerShareScreen = ({
   onClose: () => void;
   mapUrl?: string | null;
 }) => {
+  // Density tier for the stat stack - 0 shows just the hero stat, 1 shows
+  // everything. Shared across both sticker-only and photo-overlay modes so
+  // tapping either one behaves identically.
+  const [overlayTier, setOverlayTier] = useState<0 | 1>(0);
+
   // Shared renderer for both sticker-only and photo-overlay modes, so the
   // two can't visually drift apart again the way dark/light styling once
   // did. Always borderless (matches every Strava reference image - no
   // card/box, ever), with a real hero/support font hierarchy and an
   // optional, properly-sized route thumbnail above the stack.
   const renderStatOverlay = (fontColor: "white" | "black", routeMapUrl?: string | null) => {
+    const visibleStats = overlayTier === 0 ? stats.slice(0, 1) : stats;
     const textColor = fontColor === "white" ? "#FFFFFF" : "#0A0A0A";
     const textShadowStyle = fontColor === "white"
       ? "0 2px 10px rgba(0,0,0,0.65), 0 1px 3px rgba(0,0,0,0.9)"
@@ -15757,7 +15763,7 @@ const StickerShareScreen = ({
             : Icon && <Icon size={16} color={textColor} strokeWidth={2.5} style={{ filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />}
           <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 13, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>{title}</span>
         </div>
-        {stats.map((s, i) => (
+        {visibleStats.map((s, i) => (
           <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
             <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: i === 0 ? 48 : 24, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1 : -0.3 }}>{s.value}</span>
             <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.85 }}>{s.label}</span>
@@ -15913,6 +15919,13 @@ const StickerShareScreen = ({
     activePointers.current.delete(e.pointerId);
     if (activePointers.current.size < 2) pinchStartDist.current = null;
     if (activePointers.current.size === 0) {
+      // A real tap (not a drag) moved only a few pixels between press and
+      // release - treat that as "cycle the stat tier" rather than always
+      // firing on release, which would trigger even after a genuine drag.
+      if (dragState.current) {
+        const moved = Math.hypot(e.clientX - dragState.current.startX, e.clientY - dragState.current.startY);
+        if (moved < 6) setOverlayTier((t) => (t === 0 ? 1 : 0));
+      }
       dragState.current = null;
       sampleContrast();
     }
@@ -16028,13 +16041,16 @@ const StickerShareScreen = ({
           backgroundImage: "linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)",
           backgroundSize: "20px 20px", backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
         }}>
-          <div ref={stickerOnlyRef} style={{ padding: 8 }}>
+          <div ref={stickerOnlyRef} onClick={() => setOverlayTier((t) => (t === 0 ? 1 : 0))} style={{ padding: 8, cursor: "pointer" }}>
             {renderStatOverlay(stickerFontColor, mapUrl)}
           </div>
         </div>
 
         <div style={{ padding: "16px 24px 40px", display: "flex", flexDirection: "column", gap: 12 }}>
           {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: 0 }}>{shareError}</p>}
+          <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, opacity: 0.6, margin: 0, textAlign: "center" }}>
+            {overlayTier === 0 ? "Tap the stats to add more detail" : "Tap the stats to simplify"}
+          </p>
           <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
             {(["white", "black"] as const).map((m) => (
               <button key={m} onClick={() => setStickerFontColor(m)} style={{
@@ -16096,6 +16112,9 @@ const StickerShareScreen = ({
 
       <div style={{ padding: "16px 24px 40px", display: "flex", flexDirection: "column", gap: 12, background: COLORS.background }}>
         {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: 0 }}>{shareError}</p>}
+        <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, opacity: 0.6, margin: 0, textAlign: "center" }}>
+          {overlayTier === 0 ? "Tap the stats on your photo to add more detail" : "Tap the stats to simplify"}
+        </p>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", gap: 8 }}>
             {(["white", "black"] as const).map((m) => (
