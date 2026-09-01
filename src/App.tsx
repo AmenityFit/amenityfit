@@ -8,6 +8,7 @@ import iconPadel from "./assets/icons/padel.png";
 import iconBikeOutdoor from "./assets/icons/bike_outdoor.png";
 import iconSwim from "./assets/icons/swim.png";
 import iconStairClimber from "./assets/icons/stairclimber.png";
+import amenityfitLogo from "./assets/icons/amenityfit-logo.png";
 
 // ─── Firebase ─────────────────────────────────────────────────────────────────
 import { initializeApp } from "firebase/app";
@@ -14810,17 +14811,25 @@ const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel",
   let svg = "";
 
   if (courtType === "basketball") {
-    // ViewBox scaled from half-court 50ft(w) x 47ft(h) at 10px/ft.
-    svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 470">
-      <rect x="10" y="10" width="480" height="450" fill="none" stroke="${stroke}" stroke-width="4"/>
-      <rect x="170" y="10" width="160" height="190" fill="none" stroke="${stroke}" stroke-width="4"/>
-      <circle cx="250" cy="200" r="60" fill="none" stroke="${stroke}" stroke-width="4"/>
-      <path d="M 30 460 A 220 220 0 0 1 470 460" fill="none" stroke="${stroke}" stroke-width="4"/>
-      <line x1="10" y1="460" x2="30" y2="460" stroke="${stroke}" stroke-width="4"/>
-      <line x1="470" y1="460" x2="490" y2="460" stroke="${stroke}" stroke-width="4"/>
+    // Full court now (not half), traced from a real full-court reference:
+    // both baskets, both keys with free-throw circles, both three-point
+    // arcs, center line and center circle. ViewBox at 5px/ft (94x50ft).
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 250">
+      <rect x="5" y="5" width="460" height="240" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <line x1="235" y1="5" x2="235" y2="245" stroke="${stroke}" stroke-width="3"/>
+      <circle cx="235" cy="125" r="30" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <rect x="5" y="85" width="95" height="80" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <circle cx="100" cy="125" r="30" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <path d="M 15 5 A 120 120 0 0 1 15 245" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <rect x="370" y="85" width="95" height="80" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <circle cx="370" cy="125" r="30" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <path d="M 455 5 A 120 120 0 0 0 455 245" fill="none" stroke="${stroke}" stroke-width="3"/>
     </svg>`;
   } else if (courtType === "soccer") {
-    // ViewBox scaled from 105x68m at 5px/m.
+    // ViewBox scaled from 105x68m at 5px/m. Added corner arcs and goal
+    // frames poking outside the end lines, traced from a real reference -
+    // both were missing before despite being immediately recognizable
+    // details on any real pitch diagram.
     svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 525 340">
       <rect x="10" y="10" width="505" height="320" fill="none" stroke="${stroke}" stroke-width="3"/>
       <line x1="262.5" y1="10" x2="262.5" y2="330" stroke="${stroke}" stroke-width="3"/>
@@ -14832,18 +14841,28 @@ const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel",
       <rect x="433" y="87" width="82" height="166" fill="none" stroke="${stroke}" stroke-width="3"/>
       <rect x="488" y="142" width="27" height="56" fill="none" stroke="${stroke}" stroke-width="3"/>
       <path d="M 433 122 A 46 46 0 0 0 433 218" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <path d="M 10 18 A 8 8 0 0 1 18 10" fill="none" stroke="${stroke}" stroke-width="2"/>
+      <path d="M 10 322 A 8 8 0 0 0 18 330" fill="none" stroke="${stroke}" stroke-width="2"/>
+      <path d="M 515 18 A 8 8 0 0 0 507 10" fill="none" stroke="${stroke}" stroke-width="2"/>
+      <path d="M 515 322 A 8 8 0 0 1 507 330" fill="none" stroke="${stroke}" stroke-width="2"/>
+      <rect x="2" y="150" width="8" height="40" fill="none" stroke="${stroke}" stroke-width="1.5"/>
+      <rect x="515" y="150" width="8" height="40" fill="none" stroke="${stroke}" stroke-width="1.5"/>
     </svg>`;
   } else {
-    // Padel - viewBox scaled from 20x10m at 20px/m. Double-line perimeter
-    // is the deliberate glass-wall cue.
+    // Padel - rebuilt from a real reference: outer double-line perimeter
+    // (glass-wall cue), service lines dividing each half into a back zone
+    // and a service-box zone, center line spanning only between the
+    // service lines (not full court height, matching real court markings),
+    // and a distinct heavier net line with small end posts.
     svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
       <rect x="6" y="6" width="388" height="188" fill="none" stroke="${stroke}" stroke-width="3"/>
       <rect x="12" y="12" width="376" height="176" fill="none" stroke="${stroke}" stroke-width="1.5" opacity="0.5"/>
-      <line x1="200" y1="12" x2="200" y2="188" stroke="${stroke}" stroke-width="4"/>
-      <line x1="61" y1="12" x2="61" y2="188" stroke="${stroke}" stroke-width="2"/>
-      <line x1="339" y1="12" x2="339" y2="188" stroke="${stroke}" stroke-width="2"/>
-      <line x1="61" y1="100" x2="200" y2="100" stroke="${stroke}" stroke-width="2"/>
-      <line x1="200" y1="100" x2="339" y2="100" stroke="${stroke}" stroke-width="2"/>
+      <line x1="6" y1="42" x2="394" y2="42" stroke="${stroke}" stroke-width="2"/>
+      <line x1="6" y1="158" x2="394" y2="158" stroke="${stroke}" stroke-width="2"/>
+      <line x1="200" y1="42" x2="200" y2="158" stroke="${stroke}" stroke-width="2"/>
+      <line x1="6" y1="100" x2="394" y2="100" stroke="${stroke}" stroke-width="4"/>
+      <line x1="6" y1="96" x2="6" y2="104" stroke="${stroke}" stroke-width="4"/>
+      <line x1="394" y1="96" x2="394" y2="104" stroke="${stroke}" stroke-width="4"/>
     </svg>`;
   }
 
@@ -15672,7 +15691,7 @@ const ShareableStatCard = ({
         )}
 
         <div style={{ position: "relative", padding: "16px 24px", borderTop: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          <div style={{ width: 20, height: 20, borderRadius: 6, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` }} />
+          <img src={amenityfitLogo} alt="" style={{ width: 20, height: 20, borderRadius: 6, objectFit: "contain" }} />
           <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 900, letterSpacing: 0.8 }}>AMENITYFIT</span>
         </div>
       </div>
@@ -15744,7 +15763,7 @@ const StickerShareScreen = ({
           </div>
         ))}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-          <div style={{ width: 12, height: 12, borderRadius: 3, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` }} />
+          <img src={amenityfitLogo} alt="" style={{ width: 12, height: 12, objectFit: "contain", filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />
           <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 9, fontWeight: 900, letterSpacing: 0.6, opacity: 0.85 }}>AMENITYFIT</span>
         </div>
       </div>
