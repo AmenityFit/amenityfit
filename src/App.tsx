@@ -15410,7 +15410,9 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
                 cursor: "pointer",
               }}
             >
-              <a.icon size={40} color={COLORS.white} strokeWidth={1.6} />
+              {a.iconImage
+                ? <img src={a.iconImage} alt="" style={{ width: 40, height: 40, objectFit: "contain" }} />
+                : <a.icon size={40} color={COLORS.white} strokeWidth={1.6} />}
               <span style={{ color: COLORS.white, fontSize: 15, fontWeight: 700 }}>{a.label}</span>
             </button>
           ))}
