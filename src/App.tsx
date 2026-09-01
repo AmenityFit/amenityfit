@@ -14692,6 +14692,7 @@ const haversineDistanceMeters = (lat1: number, lng1: number, lat2: number, lng2:
 // or GPS jitter while running normally) shouldn't flicker the state.
 const AUTO_PAUSE_SPEED_THRESHOLD_MPS = 0.6;
 const AUTO_PAUSE_TRIGGER_SECONDS = 12;
+const AUTO_PAUSE_GRACE_PERIOD_SECONDS = 15; // no auto-pause evaluation for the first 15s after Start, so early GPS jitter before real movement can't trigger it
 
 // Standard MET (metabolic equivalent) values per activity type - widely
 // used, defensible reference numbers for estimating calorie burn from
@@ -15030,7 +15031,9 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         const speedMps = d / dtSeconds;
 
         if (speedMps <= MAX_PLAUSIBLE_SPEED_MPS) {
-          if (speedMps < AUTO_PAUSE_SPEED_THRESHOLD_MPS) {
+          const sinceStartSeconds = startTimeRef.current ? (now - startTimeRef.current) / 1000 : Infinity;
+          const pastGracePeriod = sinceStartSeconds >= AUTO_PAUSE_GRACE_PERIOD_SECONDS;
+          if (pastGracePeriod && speedMps < AUTO_PAUSE_SPEED_THRESHOLD_MPS) {
             if (belowThresholdSinceRef.current === null) belowThresholdSinceRef.current = now;
             const belowFor = (now - belowThresholdSinceRef.current) / 1000;
             if (belowFor >= AUTO_PAUSE_TRIGGER_SECONDS && !isAutoPausedRef.current) {
