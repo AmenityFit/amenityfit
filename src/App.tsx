@@ -15468,8 +15468,8 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             background: `radial-gradient(circle, ${COLORS.primary}30 0%, transparent 70%)`,
             pointerEvents: "none",
           }} />
-          <p style={{ position: "relative", color: COLORS.textSecondary, fontSize: 13, margin: "0 0 6px", fontWeight: 700, letterSpacing: 2 }}>TIME</p>
-          <h1 style={{ position: "relative", color: COLORS.white, fontSize: 76, fontWeight: 900, margin: 0, letterSpacing: -2, fontVariantNumeric: "tabular-nums", textShadow: `0 0 50px ${COLORS.primary}50` }}>{formatTime(elapsedSeconds)}</h1>
+          <p style={{ position: "relative", color: COLORS.textSecondary, fontSize: 13, margin: "0 0 18px", fontWeight: 700, letterSpacing: 2 }}>TIME</p>
+          <h1 style={{ position: "relative", color: COLORS.white, fontSize: 76, fontWeight: 900, margin: 0, lineHeight: 1, letterSpacing: -2, fontVariantNumeric: "tabular-nums", textShadow: `0 0 50px ${COLORS.primary}50` }}>{formatTime(elapsedSeconds)}</h1>
         </div>
         {!isIndoorActivity && statsTier === 1 && (
           <div style={{ display: "flex", gap: 48 }}>
