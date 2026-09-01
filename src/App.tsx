@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from "react";
 import html2canvas from "html2canvas";
+import iconRunning from "./assets/icons/running.png";
+import iconWalking from "./assets/icons/walking.png";
+import iconRowing from "./assets/icons/rowing.png";
+import iconSoccer from "./assets/icons/soccer.png";
+import iconPadel from "./assets/icons/padel.png";
+import iconBikeOutdoor from "./assets/icons/bike_outdoor.png";
+import iconSwim from "./assets/icons/swim.png";
+import iconStairClimber from "./assets/icons/stairclimber.png";
 
 // ─── Firebase ─────────────────────────────────────────────────────────────────
 import { initializeApp } from "firebase/app";
@@ -14960,12 +14968,13 @@ const SwimmingIcon = ({ size = 24, color = "currentColor", strokeWidth = 2 }: Ic
 // skips requesting location, hides distance/pace, and the completion summary
 // skips the route map for these, tracking only time + estimated calories.
 const ACTIVITY_TYPES = [
-  { key: "run", label: "Outdoor Run", icon: RunningIcon, indoor: false },
-  { key: "bike", label: "Bike", icon: Bike, indoor: false },
+  { key: "run", label: "Outdoor Run", iconImage: iconRunning, indoor: false },
+  { key: "bike", label: "Bike", iconImage: iconBikeOutdoor, indoor: false },
   { key: "hike", label: "Hike", icon: Mountain, indoor: false },
-  { key: "walk", label: "Walk", icon: WalkingIcon, indoor: false },
-  { key: "swim", label: "Swim", icon: SwimmingIcon, indoor: false },
-  { key: "row", label: "Row (machine)", icon: RowingIcon, indoor: true },
+  { key: "walk", label: "Walk", iconImage: iconWalking, indoor: false },
+  { key: "swim", label: "Swim", iconImage: iconSwim, indoor: false },
+  { key: "row", label: "Row (machine)", iconImage: iconRowing, indoor: true },
+  { key: "stairclimber", label: "Stair Climber", iconImage: iconStairClimber, indoor: true },
   { key: "elliptical", label: "Elliptical", icon: Activity, indoor: true },
   // SportShoe (not RunningIcon/Footprints) specifically so Treadmill reads
   // as visually distinct from Outdoor Run at a glance, not the same icon
@@ -14978,8 +14987,8 @@ const ACTIVITY_TYPES = [
   // buildCourtIllustrationUrl) in place of the route map, rather than either
   // a real map that has nothing to show or no visual at all.
   { key: "basketball", label: "Basketball", icon: BasketballIcon, indoor: true, courtType: "basketball" },
-  { key: "soccer", label: "Soccer", icon: SoccerBallIcon, indoor: true, courtType: "soccer" },
-  { key: "padel", label: "Padel", icon: PadelRacketIcon, indoor: true, courtType: "padel" },
+  { key: "soccer", label: "Soccer", iconImage: iconSoccer, indoor: true, courtType: "soccer" },
+  { key: "padel", label: "Padel", iconImage: iconPadel, indoor: true, courtType: "padel" },
   { key: "other", label: "Other", icon: Zap, indoor: false },
 ];
 
@@ -15287,9 +15296,11 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             activities that have no map to fill that space. */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 0 }}>
         <div style={{ padding: "36px 24px 8px", textAlign: "center" }}>
-          {activityMeta?.icon && (
+          {(activityMeta?.icon || activityMeta?.iconImage) && (
             <div style={{ width: 72, height: 72, borderRadius: 20, background: `linear-gradient(135deg, ${COLORS.primary}22, ${COLORS.accent}22)`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
-              <activityMeta.icon size={36} color={COLORS.white} strokeWidth={1.75} />
+              {activityMeta.iconImage
+                ? <img src={activityMeta.iconImage} alt="" style={{ width: 36, height: 36, objectFit: "contain" }} />
+                : <activityMeta.icon size={36} color={COLORS.white} strokeWidth={1.75} />}
             </div>
           )}
           <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "8px 0 0", textTransform: "capitalize" }}>{activityType} Complete</h1>
@@ -15345,6 +15356,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             title={`${activityType} on AmenityFit`}
             subtitle={new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             icon={activityMeta?.icon}
+            iconImage={activityMeta?.iconImage}
             mapUrl={mapUrl}
             stats={[
               distanceMeters > 0
@@ -15362,6 +15374,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           <StickerShareScreen
             title={activityType}
             icon={activityMeta?.icon}
+            iconImage={activityMeta?.iconImage}
             mapUrl={mapUrl}
             stats={[
               distanceMeters > 0
@@ -15443,7 +15456,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             <ArrowLeft size={16} color={COLORS.white} />
           </button>
           <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, textTransform: "capitalize", display: "flex", alignItems: "center", gap: 6 }}>
-            {(() => { const HeaderIcon = ACTIVITY_TYPES.find((a) => a.key === activityType)?.icon; return HeaderIcon ? <HeaderIcon size={15} color={COLORS.textSecondary} strokeWidth={2} /> : null; })()}
+            {(() => { const meta = ACTIVITY_TYPES.find((a) => a.key === activityType); if (meta?.iconImage) return <img src={meta.iconImage} alt="" style={{ width: 15, height: 15, objectFit: "contain" }} />; const HeaderIcon = meta?.icon; return HeaderIcon ? <HeaderIcon size={15} color={COLORS.textSecondary} strokeWidth={2} /> : null; })()}
             {activityType}
           </span>
         </div>
@@ -15532,6 +15545,7 @@ const ShareableStatCard = ({
   stats,
   mapUrl,
   icon: Icon,
+  iconImage,
   onClose,
 }: {
   title: string;
@@ -15539,6 +15553,7 @@ const ShareableStatCard = ({
   stats: { label: string; value: string }[];
   mapUrl?: string | null;
   icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  iconImage?: string;
   onClose: () => void;
 }) => {
   const cardRef = React.useRef<HTMLDivElement>(null);
@@ -15610,9 +15625,11 @@ const ShareableStatCard = ({
         }} />
 
         <div style={{ position: "relative", padding: "32px 24px 8px", textAlign: "center" }}>
-          {Icon && (
+          {(Icon || iconImage) && (
             <div style={{ width: 56, height: 56, borderRadius: 16, background: `${COLORS.white}10`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px" }}>
-              <Icon size={26} color={COLORS.white} strokeWidth={2} />
+              {iconImage
+                ? <img src={iconImage} alt="" style={{ width: 26, height: 26, objectFit: "contain" }} />
+                : <Icon size={26} color={COLORS.white} strokeWidth={2} />}
             </div>
           )}
           <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 4px" }}>{subtitle}</p>
@@ -15682,12 +15699,14 @@ const StickerShareScreen = ({
   title,
   stats,
   icon: Icon,
+  iconImage,
   onClose,
   mapUrl,
 }: {
   title: string;
   stats: { label: string; value: string }[];
   icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  iconImage?: string;
   onClose: () => void;
   mapUrl?: string | null;
 }) => {
@@ -15711,7 +15730,9 @@ const StickerShareScreen = ({
           />
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {Icon && <Icon size={16} color={textColor} strokeWidth={2.5} style={{ filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />}
+          {iconImage
+            ? <img src={iconImage} alt="" style={{ width: 16, height: 16, objectFit: "contain", filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />
+            : Icon && <Icon size={16} color={textColor} strokeWidth={2.5} style={{ filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />}
           <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 13, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>{title}</span>
         </div>
         {stats.map((s, i) => (
