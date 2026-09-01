@@ -15394,19 +15394,19 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         )}
 
         <div style={{ padding: "24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <div style={{ background: `linear-gradient(160deg, ${COLORS.card}, ${COLORS.background})`, border: `1px solid ${COLORS.border}`, borderRadius: 18, padding: "20px 16px", textAlign: "center" }}>
-            <p style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Time</p>
-            <p style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.5, fontVariantNumeric: "tabular-nums" }}>{formatTime(elapsedSeconds)}</p>
+          <div style={{ background: sessionPRs.duration ? `linear-gradient(160deg, ${COLORS.accent}22, ${COLORS.background})` : `linear-gradient(160deg, ${COLORS.card}, ${COLORS.background})`, border: sessionPRs.duration ? `1px solid ${COLORS.accent}70` : `1px solid ${COLORS.border}`, borderRadius: 18, padding: "20px 16px", textAlign: "center" }}>
+            <p style={{ color: sessionPRs.duration ? COLORS.accent : COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>{sessionPRs.duration ? "NEW PR · Time" : "Time"}</p>
+            <p style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.5, fontVariantNumeric: "tabular-nums", textShadow: sessionPRs.duration ? `0 0 24px ${COLORS.accent}80` : "none" }}>{formatTime(elapsedSeconds)}</p>
           </div>
           {!isIndoorActivity && (
             <>
-              <div style={{ background: `linear-gradient(160deg, ${COLORS.card}, ${COLORS.background})`, border: `1px solid ${COLORS.border}`, borderRadius: 18, padding: "20px 16px", textAlign: "center" }}>
-                <p style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Distance</p>
-                <p style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{(distanceMeters / 1000).toFixed(2)}<span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textSecondary, marginLeft: 3 }}>km</span></p>
+              <div style={{ background: sessionPRs.distance ? `linear-gradient(160deg, ${COLORS.accent}22, ${COLORS.background})` : `linear-gradient(160deg, ${COLORS.card}, ${COLORS.background})`, border: sessionPRs.distance ? `1px solid ${COLORS.accent}70` : `1px solid ${COLORS.border}`, borderRadius: 18, padding: "20px 16px", textAlign: "center" }}>
+                <p style={{ color: sessionPRs.distance ? COLORS.accent : COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>{sessionPRs.distance ? "NEW PR · Distance" : "Distance"}</p>
+                <p style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.5, textShadow: sessionPRs.distance ? `0 0 24px ${COLORS.accent}80` : "none" }}>{(distanceMeters / 1000).toFixed(2)}<span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textSecondary, marginLeft: 3 }}>km</span></p>
               </div>
-              <div style={{ background: `linear-gradient(160deg, ${COLORS.card}, ${COLORS.background})`, border: `1px solid ${COLORS.border}`, borderRadius: 18, padding: "20px 16px", textAlign: "center" }}>
-                <p style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Pace</p>
-                <p style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{paceLabel}</p>
+              <div style={{ background: sessionPRs.pace ? `linear-gradient(160deg, ${COLORS.accent}22, ${COLORS.background})` : `linear-gradient(160deg, ${COLORS.card}, ${COLORS.background})`, border: sessionPRs.pace ? `1px solid ${COLORS.accent}70` : `1px solid ${COLORS.border}`, borderRadius: 18, padding: "20px 16px", textAlign: "center" }}>
+                <p style={{ color: sessionPRs.pace ? COLORS.accent : COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>{sessionPRs.pace ? "NEW PR · Pace" : "Pace"}</p>
+                <p style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.5, textShadow: sessionPRs.pace ? `0 0 24px ${COLORS.accent}80` : "none" }}>{paceLabel}</p>
               </div>
             </>
           )}
