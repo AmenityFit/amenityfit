@@ -15362,6 +15362,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           <StickerShareScreen
             title={activityType}
             icon={activityMeta?.icon}
+            mapUrl={mapUrl}
             stats={[
               distanceMeters > 0
                 ? { label: "Distance", value: `${(distanceMeters / 1000).toFixed(2)} km` }
@@ -15682,12 +15683,51 @@ const StickerShareScreen = ({
   stats,
   icon: Icon,
   onClose,
+  mapUrl,
 }: {
   title: string;
   stats: { label: string; value: string }[];
   icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   onClose: () => void;
+  mapUrl?: string | null;
 }) => {
+  // Shared renderer for both sticker-only and photo-overlay modes, so the
+  // two can't visually drift apart again the way dark/light styling once
+  // did. Always borderless (matches every Strava reference image - no
+  // card/box, ever), with a real hero/support font hierarchy and an
+  // optional, properly-sized route thumbnail above the stack.
+  const renderStatOverlay = (fontColor: "white" | "black", routeMapUrl?: string | null) => {
+    const textColor = fontColor === "white" ? "#FFFFFF" : "#0A0A0A";
+    const textShadowStyle = fontColor === "white"
+      ? "0 2px 10px rgba(0,0,0,0.65), 0 1px 3px rgba(0,0,0,0.9)"
+      : "0 2px 10px rgba(255,255,255,0.55), 0 1px 3px rgba(255,255,255,0.85)";
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
+        {routeMapUrl && (
+          <img
+            src={routeMapUrl}
+            alt=""
+            style={{ width: 220, height: 140, objectFit: "cover", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
+          />
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {Icon && <Icon size={16} color={textColor} strokeWidth={2.5} style={{ filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />}
+          <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 13, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>{title}</span>
+        </div>
+        {stats.map((s, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: i === 0 ? 48 : 24, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1 : -0.3 }}>{s.value}</span>
+            <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.85 }}>{s.label}</span>
+          </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+          <div style={{ width: 12, height: 12, borderRadius: 3, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` }} />
+          <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 9, fontWeight: 900, letterSpacing: 0.6, opacity: 0.85 }}>AMENITYFIT</span>
+        </div>
+      </div>
+    );
+  };
+
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const photoImgRef = React.useRef<HTMLImageElement>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -15875,7 +15915,7 @@ const StickerShareScreen = ({
   // background at all, just the stat text floating on the photo/video with
   // a drop-shadow for legibility, rather than always wrapping stats in a
   // frosted-glass box.
-  const [stickerOnlyStyle, setStickerOnlyStyle] = useState<"dark" | "light" | "none">("dark");
+  const [stickerFontColor, setStickerFontColor] = useState<"white" | "black">("white");
 
   const handleShareStickerOnly = async () => {
     if (!stickerOnlyRef.current) return;
@@ -15928,10 +15968,6 @@ const StickerShareScreen = ({
     // level. "none" drops the card entirely - just text + icon directly on
     // the photo with a drop-shadow for legibility, matching Strava's own
     // minimal sticker convention rather than always wrapping stats in a box.
-    const soStyle: React.CSSProperties =
-      stickerOnlyStyle === "light" ? { background: "rgba(255,255,255,0.45)", color: "#0A0A0A", border: "1px solid rgba(255,255,255,0.35)" } :
-      stickerOnlyStyle === "dark" ? { background: "rgba(10,10,10,0.55)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.18)" } :
-      { background: "transparent", color: "#FFFFFF", border: "none", textShadow: "0 2px 12px rgba(0,0,0,0.7), 0 1px 3px rgba(0,0,0,0.9)" };
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 500, background: COLORS.background, display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
         <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -15949,57 +15985,21 @@ const StickerShareScreen = ({
           backgroundImage: "linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)",
           backgroundSize: "20px 20px", backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
         }}>
-          <div ref={stickerOnlyRef} style={{
-            borderRadius: stickerOnlyStyle === "none" ? 0 : 24,
-            padding: stickerOnlyStyle === "none" ? "8px" : "22px 26px",
-            position: "relative",
-            overflow: stickerOnlyStyle === "none" ? "visible" : "hidden",
-            backdropFilter: stickerOnlyStyle === "none" ? "none" : "blur(24px)",
-            WebkitBackdropFilter: stickerOnlyStyle === "none" ? "none" : "blur(24px)",
-            boxShadow: stickerOnlyStyle === "none" ? "none" : "0 12px 40px rgba(0,0,0,0.3)",
-            minWidth: 190,
-            ...soStyle,
-          }}>
-            {/* Soft accent glow behind the hero number - works even at
-                partial opacity since it's just a gradient, not a solid
-                fill, so it doesn't fight the sticker's translucency. */}
-            <div style={{
-              position: "absolute", top: -30, left: "50%", transform: "translateX(-50%)",
-              width: 160, height: 100, borderRadius: "50%",
-              background: `radial-gradient(circle, ${COLORS.primary}35 0%, transparent 70%)`,
-              pointerEvents: "none",
-            }} />
-            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              {Icon && (
-                <div style={{ width: 26, height: 26, borderRadius: 8, background: `${soStyle.color as string}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Icon size={15} color={soStyle.color as string} strokeWidth={2.25} />
-                </div>
-              )}
-              <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.8 }}>{title}</span>
-            </div>
-            {stats.map((s, i) => (
-              <div key={i} style={{ position: "relative", marginBottom: i < stats.length - 1 ? 8 : 0 }}>
-                <span style={{ fontSize: i === 0 ? 42 : 18, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1 : 0 }}>{s.value}</span>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.65, marginLeft: 6 }}>{s.label}</span>
-              </div>
-            ))}
-            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 6, marginTop: 14, paddingTop: 10, borderTop: `1px solid ${soStyle.color as string}20` }}>
-              <div style={{ width: 12, height: 12, borderRadius: 3, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` }} />
-              <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: 0.6, opacity: 0.7 }}>AMENITYFIT</span>
-            </div>
+          <div ref={stickerOnlyRef} style={{ padding: 8 }}>
+            {renderStatOverlay(stickerFontColor, mapUrl)}
           </div>
         </div>
 
         <div style={{ padding: "16px 24px 40px", display: "flex", flexDirection: "column", gap: 12 }}>
           {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: 0 }}>{shareError}</p>}
           <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-            {(["dark", "light", "none"] as const).map((m) => (
-              <button key={m} onClick={() => setStickerOnlyStyle(m)} style={{
+            {(["white", "black"] as const).map((m) => (
+              <button key={m} onClick={() => setStickerFontColor(m)} style={{
                 padding: "8px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", textTransform: "capitalize",
-                background: stickerOnlyStyle === m ? COLORS.white : COLORS.card,
-                color: stickerOnlyStyle === m ? "#0A0A0A" : COLORS.textSecondary,
+                background: stickerFontColor === m ? COLORS.white : COLORS.card,
+                color: stickerFontColor === m ? "#0A0A0A" : COLORS.textSecondary,
                 border: `1px solid ${COLORS.border}`,
-              }}>{m}</button>
+              }}>{m} text</button>
             ))}
           </div>
           <button onClick={handleShareStickerOnly} disabled={sharing} style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: sharing ? "default" : "pointer", opacity: sharing ? 0.7 : 1 }}>
@@ -16030,11 +16030,6 @@ const StickerShareScreen = ({
     );
   }
 
-  const stickerStyle: React.CSSProperties =
-    effectiveStyle === "light" ? { background: "rgba(255,255,255,0.45)", color: "#0A0A0A", border: "1px solid rgba(255,255,255,0.35)" } :
-    effectiveStyle === "dark" ? { background: "rgba(10,10,10,0.55)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.18)" } :
-    { background: "transparent", color: "#FFFFFF", border: "none", textShadow: "0 2px 12px rgba(0,0,0,0.7), 0 1px 3px rgba(0,0,0,0.9)" };
-
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "#000", display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
       <div ref={containerRef} style={{ position: "relative", flex: 1, overflow: "hidden", touchAction: "none" }}>
@@ -16049,41 +16044,10 @@ const StickerShareScreen = ({
             position: "absolute",
             left: `${pos.x * 100}%`, top: `${pos.y * 100}%`,
             transform: `translate(-50%, -50%) scale(${scale})`,
-            borderRadius: effectiveStyle === "none" ? 0 : 24,
-            padding: effectiveStyle === "none" ? "8px" : "22px 26px",
-            overflow: effectiveStyle === "none" ? "visible" : "hidden",
-            backdropFilter: effectiveStyle === "none" ? "none" : "blur(24px)",
-            WebkitBackdropFilter: effectiveStyle === "none" ? "none" : "blur(24px)",
-            boxShadow: effectiveStyle === "none" ? "none" : "0 12px 40px rgba(0,0,0,0.3)",
             cursor: "grab", touchAction: "none", userSelect: "none",
-            minWidth: 190,
-            ...stickerStyle,
           }}
         >
-          <div style={{
-            position: "absolute", top: -30, left: "50%", transform: "translateX(-50%)",
-            width: 160, height: 100, borderRadius: "50%",
-            background: `radial-gradient(circle, ${COLORS.primary}35 0%, transparent 70%)`,
-            pointerEvents: "none",
-          }} />
-          <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            {Icon && (
-              <div style={{ width: 26, height: 26, borderRadius: 8, background: `${stickerStyle.color as string}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Icon size={15} color={stickerStyle.color as string} strokeWidth={2.25} />
-              </div>
-            )}
-            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.8 }}>{title}</span>
-          </div>
-          {stats.map((s, i) => (
-            <div key={i} style={{ position: "relative", marginBottom: i < stats.length - 1 ? 8 : 0 }}>
-              <span style={{ fontSize: i === 0 ? 42 : 18, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1 : 0 }}>{s.value}</span>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.65, marginLeft: 6 }}>{s.label}</span>
-            </div>
-          ))}
-          <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 6, marginTop: 14, paddingTop: 10, borderTop: `1px solid ${stickerStyle.color as string}20` }}>
-            <div style={{ width: 12, height: 12, borderRadius: 3, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` }} />
-            <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: 0.6, opacity: 0.7 }}>AMENITYFIT</span>
-          </div>
+          {renderStatOverlay(stickerFontColor, mapUrl)}
         </div>
       </div>
 
@@ -16091,13 +16055,13 @@ const StickerShareScreen = ({
         {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: 0 }}>{shareError}</p>}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", gap: 8 }}>
-            {(["auto", "light", "dark", "none"] as const).map((mode) => (
-              <button key={mode} onClick={() => setContrastOverride(mode)} style={{
+            {(["white", "black"] as const).map((m) => (
+              <button key={m} onClick={() => setStickerFontColor(m)} style={{
                 padding: "8px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", textTransform: "capitalize",
-                background: contrastOverride === mode ? COLORS.white : COLORS.card,
-                color: contrastOverride === mode ? "#0A0A0A" : COLORS.textSecondary,
+                background: stickerFontColor === m ? COLORS.white : COLORS.card,
+                color: stickerFontColor === m ? "#0A0A0A" : COLORS.textSecondary,
                 border: `1px solid ${COLORS.border}`,
-              }}>{mode}</button>
+              }}>{m} text</button>
             ))}
           </div>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
