@@ -864,6 +864,62 @@ const saveCardioActivity = async (uid: string, activity: {
   }
 };
 
+// A pace PR only counts above this distance - otherwise a short sprint
+// could "beat" a real sustained-pace record, which wouldn't be a
+// meaningful comparison.
+const MIN_PACE_PR_DISTANCE_METERS = 1000;
+
+// Personal records, kept in their own collection (one doc per user) rather
+// than derived by scanning full session history on every completion -
+// cheap to read/update, and the comparison-and-store step is explicit
+// (never automatic/inferred) per how this was scoped. Checked and updated
+// the moment a cardio session finishes. Returns which fields (if any) are
+// new PRs, so the completion/share screens can visually promote them.
+const checkAndUpdateCardioPRs = async (
+  uid: string,
+  activityType: string,
+  session: { distanceMeters?: number; durationSeconds: number; avgPaceSecondsPerKm?: number }
+): Promise<{ distance: boolean; pace: boolean; duration: boolean }> => {
+  const result = { distance: false, pace: false, duration: false };
+  try {
+    const ref = doc(db, "personalRecords", uid);
+    const snap = await getDoc(ref);
+    const existing = snap.exists() ? (snap.data()?.cardio?.[activityType] || {}) : {};
+
+    const updates: Record<string, any> = {};
+
+    if (session.distanceMeters && session.distanceMeters > (existing.farthestDistanceMeters || 0)) {
+      result.distance = true;
+      updates.farthestDistanceMeters = session.distanceMeters;
+      updates.farthestDistanceSetAt = new Date().toISOString();
+    }
+
+    if (
+      session.avgPaceSecondsPerKm &&
+      (session.distanceMeters || 0) >= MIN_PACE_PR_DISTANCE_METERS &&
+      (!existing.fastestPaceSecondsPerKm || session.avgPaceSecondsPerKm < existing.fastestPaceSecondsPerKm)
+    ) {
+      result.pace = true;
+      updates.fastestPaceSecondsPerKm = session.avgPaceSecondsPerKm;
+      updates.fastestPaceDistanceMeters = session.distanceMeters;
+      updates.fastestPaceSetAt = new Date().toISOString();
+    }
+
+    if (session.durationSeconds > (existing.longestDurationSeconds || 0)) {
+      result.duration = true;
+      updates.longestDurationSeconds = session.durationSeconds;
+      updates.longestDurationSetAt = new Date().toISOString();
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await setDoc(ref, { cardio: { [activityType]: { ...existing, ...updates } } }, { merge: true });
+    }
+  } catch (e) {
+    console.error("checkAndUpdateCardioPRs error:", e);
+  }
+  return result;
+};
+
 // Fetch the user's full workout session history from Firestore
 const fetchWorkoutHistory = async (uid: string, onFastResult?: (sessions: any[]) => void): Promise<any[]> => {
   try {
@@ -15025,6 +15081,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // that exact moment, so it's captured here rather than recomputed at
   // render time from state that keeps changing during the summary screen.
   const [finalCalories, setFinalCalories] = useState<number | undefined>(undefined);
+  const [sessionPRs, setSessionPRs] = useState<{ distance: boolean; pace: boolean; duration: boolean }>({ distance: false, pace: false, duration: false });
   const [showShareCard, setShowShareCard] = useState(false);
   const [showStickerMode, setShowStickerMode] = useState(false);
   // Progressive stats reveal on the live tracking screen: starts minimal
@@ -15256,6 +15313,12 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         linkedWorkoutId: linkedWorkoutId,
         goalDurationSeconds: goalDurationSeconds,
       });
+      const prs = await checkAndUpdateCardioPRs(uid, activityType, {
+        distanceMeters: distanceMeters > 0 ? distanceMeters : undefined,
+        durationSeconds: elapsedSeconds,
+        avgPaceSecondsPerKm: avgPace,
+      });
+      setSessionPRs(prs);
     }
     // Show a real completion summary (stats + route map) instead of
     // immediately returning to whatever screen launched tracking - people
@@ -15378,10 +15441,10 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             mapUrl={mapUrl}
             stats={[
               distanceMeters > 0
-                ? { label: "Distance", value: `${(distanceMeters / 1000).toFixed(2)} km` }
-                : { label: "Time", value: formatTime(elapsedSeconds) },
-              ...(distanceMeters > 0 ? [{ label: "Time", value: formatTime(elapsedSeconds) }] : []),
-              ...(distanceMeters > 0 ? [{ label: "Pace", value: paceLabel }] : []),
+                ? { label: "Distance", value: `${(distanceMeters / 1000).toFixed(2)} km`, isPR: sessionPRs.distance }
+                : { label: "Time", value: formatTime(elapsedSeconds), isPR: sessionPRs.duration },
+              ...(distanceMeters > 0 ? [{ label: "Time", value: formatTime(elapsedSeconds), isPR: sessionPRs.duration }] : []),
+              ...(distanceMeters > 0 ? [{ label: "Pace", value: paceLabel, isPR: sessionPRs.pace }] : []),
               ...(finalCalories ? [{ label: "Calories", value: `~${finalCalories}` }] : []),
             ]}
             onClose={() => setShowShareCard(false)}
@@ -15396,9 +15459,9 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             mapUrl={mapUrl}
             stats={[
               distanceMeters > 0
-                ? { label: "Distance", value: `${(distanceMeters / 1000).toFixed(2)} km` }
-                : { label: "Time", value: formatTime(elapsedSeconds) },
-              ...(distanceMeters > 0 ? [{ label: "Time", value: formatTime(elapsedSeconds) }] : []),
+                ? { label: "Distance", value: `${(distanceMeters / 1000).toFixed(2)} km`, isPR: sessionPRs.distance }
+                : { label: "Time", value: formatTime(elapsedSeconds), isPR: sessionPRs.duration },
+              ...(distanceMeters > 0 ? [{ label: "Time", value: formatTime(elapsedSeconds), isPR: sessionPRs.duration }] : []),
               ...(finalCalories ? [{ label: "Calories", value: `~${finalCalories}` }] : []),
             ]}
             onClose={() => setShowStickerMode(false)}
@@ -15570,7 +15633,7 @@ const ShareableStatCard = ({
 }: {
   title: string;
   subtitle: string;
-  stats: { label: string; value: string }[];
+  stats: { label: string; value: string; isPR?: boolean }[];
   mapUrl?: string | null;
   icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   iconImage?: string;
@@ -15661,10 +15724,13 @@ const ShareableStatCard = ({
             show off. */}
         {stats.length > 0 && (
           <div style={{ position: "relative", textAlign: "center", padding: "4px 24px 20px" }}>
+            {stats[0].isPR && (
+              <span style={{ display: "inline-block", background: COLORS.accent, color: "#0A0A0A", fontSize: 10, fontWeight: 900, letterSpacing: 0.8, padding: "3px 8px", borderRadius: 20, marginBottom: 8 }}>NEW PR</span>
+            )}
             <h1 style={{
               color: COLORS.white, fontSize: 56, fontWeight: 900, margin: 0, lineHeight: 1,
               letterSpacing: -1.5,
-              textShadow: `0 0 40px ${COLORS.primary}60`,
+              textShadow: stats[0].isPR ? `0 0 50px ${COLORS.accent}90` : `0 0 40px ${COLORS.primary}60`,
             }}>{stats[0].value}</h1>
             <p style={{ color: COLORS.accent, fontSize: 13, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", margin: "8px 0 0" }}>{stats[0].label}</p>
           </div>
@@ -15681,8 +15747,8 @@ const ShareableStatCard = ({
         {stats.length > 1 && (
           <div style={{ padding: "0 24px 28px", display: "grid", gridTemplateColumns: stats.length > 3 ? "1fr 1fr" : `repeat(${stats.length - 1}, 1fr)`, gap: 14 }}>
             {stats.slice(1).map((s, i) => (
-              <div key={i} style={{ background: `${COLORS.white}08`, borderRadius: 14, padding: "12px 8px", textAlign: "center" }}>
-                <p style={{ color: COLORS.textSecondary, fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", margin: "0 0 4px" }}>{s.label}</p>
+              <div key={i} style={{ background: s.isPR ? `${COLORS.accent}18` : `${COLORS.white}08`, border: s.isPR ? `1px solid ${COLORS.accent}60` : "none", borderRadius: 14, padding: "12px 8px", textAlign: "center" }}>
+                <p style={{ color: s.isPR ? COLORS.accent : COLORS.textSecondary, fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", margin: "0 0 4px" }}>{s.isPR ? "PR" : s.label}</p>
                 <p style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: 0 }}>{s.value}</p>
               </div>
             ))}
@@ -15724,7 +15790,7 @@ const StickerShareScreen = ({
   mapUrl,
 }: {
   title: string;
-  stats: { label: string; value: string }[];
+  stats: { label: string; value: string; isPR?: boolean }[];
   icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   iconImage?: string;
   onClose: () => void;
@@ -15765,8 +15831,8 @@ const StickerShareScreen = ({
         </div>
         {visibleStats.map((s, i) => (
           <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: i === 0 ? 48 : 24, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1 : -0.3 }}>{s.value}</span>
-            <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.85 }}>{s.label}</span>
+            <span style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: i === 0 ? 48 : 24, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1 : -0.3 }}>{s.value}</span>
+            <span style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.85 }}>{s.isPR ? "PR" : s.label}</span>
           </div>
         ))}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
