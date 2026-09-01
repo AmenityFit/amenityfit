@@ -920,6 +920,46 @@ const checkAndUpdateCardioPRs = async (
   return result;
 };
 
+// Weightlifting PRs, deliberately scoped to weight-only ("heaviest weight
+// logged for this exercise") - NOT volume-based. Real reps-performed are
+// never captured today (only the program's prescribed target range is
+// shown during a workout; ActiveExerciseScreen's weight picker logs one
+// weight number per exercise and nothing else), so a volume claim would be
+// fabricated. Senz has explicitly ruled out ever building real per-set
+// reps tracking, so this is the permanent, honest scope - not a
+// placeholder for something richer later.
+const checkAndUpdateLiftPRs = async (
+  uid: string,
+  weightsLogged: Record<string, number>
+): Promise<Record<string, { isPR: boolean; weight: number }>> => {
+  const result: Record<string, { isPR: boolean; weight: number }> = {};
+  const entries = Object.entries(weightsLogged || {}).filter(([, w]) => typeof w === "number" && w > 0);
+  if (entries.length === 0) return result;
+  try {
+    const ref = doc(db, "personalRecords", uid);
+    const snap = await getDoc(ref);
+    const existingLifts = snap.exists() ? (snap.data()?.lifts || {}) : {};
+    const updates: Record<string, any> = {};
+
+    for (const [exerciseId, weight] of entries) {
+      const existingWeight = existingLifts[exerciseId]?.heaviestWeight || 0;
+      if (weight > existingWeight) {
+        result[exerciseId] = { isPR: true, weight };
+        updates[exerciseId] = { heaviestWeight: weight, setAt: new Date().toISOString() };
+      } else {
+        result[exerciseId] = { isPR: false, weight };
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await setDoc(ref, { lifts: { ...existingLifts, ...updates } }, { merge: true });
+    }
+  } catch (e) {
+    console.error("checkAndUpdateLiftPRs error:", e);
+  }
+  return result;
+};
+
 // Fetch the user's full workout session history from Firestore
 const fetchWorkoutHistory = async (uid: string, onFastResult?: (sessions: any[]) => void): Promise<any[]> => {
   try {
@@ -10745,13 +10785,28 @@ const getMotivationalMessage = (sessionCount: number, uid: string = ""): string 
 };
 
 // ─── Session Complete Screen ───────────────────────────────────────────────────
-const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount = 0, uid = "", onDone }) => {
+const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount = 0, uid = "", onDone, weightsLogged = {}, liftPRs = {}, dayTitle = "" }) => {
   const mins = Math.floor(timeSeconds / 60);
   const secs = timeSeconds % 60;
   const message = getMotivationalMessage(sessionCount, uid);
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [showStickerMode, setShowStickerMode] = useState(false);
+
+  // Weight-only PRs (see checkAndUpdateLiftPRs) - real exercise names via
+  // EXERCISES_DATA, not raw ids, and only ever the weight actually logged -
+  // no volume/reps claim, per the honest scope this was built to.
+  const prExercises = Object.entries(liftPRs)
+    .filter(([, v]: any) => v?.isPR)
+    .map(([exerciseId, v]: any) => ({ name: (EXERCISES_DATA as any)[exerciseId]?.name || exerciseId, weight: v.weight }));
+
+  const shareStats = [
+    { label: "Sets Done", value: String(totalSets) },
+    { label: "Time", value: `${mins}m ${secs}s` },
+    ...prExercises.map((p) => ({ label: p.name, value: `${p.weight} lbs`, isPR: true })),
+  ];
 
   return (
-    <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px", textAlign: "center" }}>
+    <div style={{ minHeight: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 32px", textAlign: "center" }}>
       {/* Green check */}
       <div style={{ width: 100, height: 100, borderRadius: 99, background: `${COLORS.success}20`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24, boxShadow: `0 0 60px ${COLORS.success}30` }}>
         <Check size={48} color={COLORS.success} strokeWidth={2.5} />
@@ -10765,12 +10820,21 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
           Well done, {userName}.
         </p>
       )}
-      <p style={{ color: COLORS.textSecondary, fontSize: 15, margin: "0 0 36px", lineHeight: 1.6, maxWidth: 300 }}>
+      <p style={{ color: COLORS.textSecondary, fontSize: 15, margin: "0 0 24px", lineHeight: 1.6, maxWidth: 300 }}>
         {message}
       </p>
 
+      {prExercises.length > 0 && (
+        <div style={{ width: "100%", marginBottom: 20, padding: "14px 16px", borderRadius: 16, background: `${COLORS.accent}18`, border: `1px solid ${COLORS.accent}60` }}>
+          <p style={{ color: COLORS.accent, fontSize: 11, fontWeight: 900, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 8px" }}>New PR{prExercises.length > 1 ? "s" : ""}</p>
+          {prExercises.map((p, i) => (
+            <p key={i} style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: i > 0 ? "4px 0 0" : 0 }}>{p.name} — {p.weight} lbs</p>
+          ))}
+        </div>
+      )}
+
       {/* Stats */}
-      <div style={{ display: "flex", gap: 16, marginBottom: 40, width: "100%" }}>
+      <div style={{ display: "flex", gap: 16, marginBottom: 24, width: "100%" }}>
         <div style={{ flex: 1, background: COLORS.card, borderRadius: 18, padding: "18px 14px", border: `1px solid ${COLORS.border}` }}>
           <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, margin: "0 0 6px" }}>Sets Done</p>
           <p style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0 }}>{totalSets}</p>
@@ -10781,9 +10845,35 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
         </div>
       </div>
 
+      <div style={{ display: "flex", gap: 12, width: "100%", marginBottom: 12 }}>
+        <button onClick={() => setShowShareCard(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+          Share
+        </button>
+        <button onClick={() => setShowStickerMode(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+          Sticker
+        </button>
+      </div>
+
       <button onClick={onDone} style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 17, fontWeight: 700, cursor: "pointer", boxShadow: `0 8px 30px ${COLORS.primary}40`, letterSpacing: 0.3 }}>
         Back to Dashboard
       </button>
+
+      {showShareCard && (
+        <ShareableStatCard
+          title={dayTitle || "Workout"}
+          subtitle={new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+          stats={shareStats}
+          onClose={() => setShowShareCard(false)}
+        />
+      )}
+
+      {showStickerMode && (
+        <StickerShareScreen
+          title={dayTitle || "Workout"}
+          stats={shareStats}
+          onClose={() => setShowStickerMode(false)}
+        />
+      )}
     </div>
   );
 };
@@ -11640,6 +11730,22 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
 
 const WorkoutFlow = ({ profile, onComplete, onBack, onGoHomeSave, onProfileUpdate, isReview = false }) => {  const todayStr = new Date().toDateString();
   const [workoutFlowWeights, setWorkoutFlowWeights] = useState<Record<string, number>>({});
+  const [liftPRs, setLiftPRs] = useState<Record<string, { isPR: boolean; weight: number }>>({});
+  const liftPRCheckDoneRef = React.useRef(false);
+
+  // Fires once, exactly when the session actually completes (all groups
+  // done) - not on every render, and not tied to the "Back to Dashboard"
+  // button, since SessionCompleteScreen needs to already show correct PR
+  // state the moment it first appears.
+  React.useEffect(() => {
+    if (phase === "complete" && !liftPRCheckDoneRef.current) {
+      liftPRCheckDoneRef.current = true;
+      const uid = profile?.uid;
+      if (uid && Object.keys(workoutFlowWeights).length > 0) {
+        checkAndUpdateLiftPRs(uid, workoutFlowWeights).then(setLiftPRs);
+      }
+    }
+  }, [phase]);
   const workoutFlowWeightsRef = React.useRef<Record<string, number>>({});
   React.useEffect(() => { workoutFlowWeightsRef.current = {}; setWorkoutFlowWeights({}); }, []);
   const savedProgress = (() => {
@@ -12062,6 +12168,9 @@ onSaveState={(round: number, exerciseIndex: number, cells?: string[]) => {
       userName={profile?.name ? (profile.name.split(" ")[0].charAt(0).toUpperCase() + profile.name.split(" ")[0].slice(1).toLowerCase()) : ""}
       sessionCount={profile?.sessionsCompleted || 0}
       uid={profile?.uid || ""}
+      weightsLogged={workoutFlowWeights}
+      liftPRs={liftPRs}
+      dayTitle={dayTitle}
       // completedProgramDay is passed up alongside the groups so the save
       // path never has to independently recompute "what day was this" from
       // userProfile.programDay at some later point in time. That second,
