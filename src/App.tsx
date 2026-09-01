@@ -15698,7 +15698,7 @@ const StickerShareScreen = ({
   const [pos, setPos] = useState({ x: 0.5, y: 0.5 });
   const [scale, setScale] = useState(1);
   const [autoLight, setAutoLight] = useState(false);
-  const [contrastOverride, setContrastOverride] = useState<"auto" | "light" | "dark">("auto");
+  const [contrastOverride, setContrastOverride] = useState<"auto" | "light" | "dark" | "none">("auto");
   const dragState = React.useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const resizeState = React.useRef<{ startDist: number; origScale: number } | null>(null);
 
@@ -15765,7 +15765,15 @@ const StickerShareScreen = ({
     }
   }, [photoUrl]);
 
-  const isLight = contrastOverride === "auto" ? autoLight : contrastOverride === "light";
+  // Derives the actual style mode ("light"/"dark"/"none") rather than a
+  // plain isLight boolean, now that "none" (no card at all, matching
+  // Strava's own minimal sticker convention) is a real third option
+  // alongside the two shaded card styles.
+  const effectiveStyle: "light" | "dark" | "none" =
+    contrastOverride === "none" ? "none" :
+    contrastOverride === "auto" ? (autoLight ? "light" : "dark") :
+    contrastOverride;
+  const isLight = effectiveStyle === "light";
 
   const clamp01 = (n: number) => Math.max(0.08, Math.min(0.92, n));
 
@@ -15860,7 +15868,11 @@ const StickerShareScreen = ({
   // how the real apps work.
   const [mode, setMode] = useState<"choose" | "sticker-only" | "overlay">("choose");
   const stickerOnlyRef = React.useRef<HTMLDivElement>(null);
-  const [stickerOnlyLight, setStickerOnlyLight] = useState(false);
+  // "none" matches Strava's own minimal sticker style directly - no card
+  // background at all, just the stat text floating on the photo/video with
+  // a drop-shadow for legibility, rather than always wrapping stats in a
+  // frosted-glass box.
+  const [stickerOnlyStyle, setStickerOnlyStyle] = useState<"dark" | "light" | "none">("dark");
 
   const handleShareStickerOnly = async () => {
     if (!stickerOnlyRef.current) return;
@@ -15907,9 +15919,16 @@ const StickerShareScreen = ({
   }
 
   if (mode === "sticker-only") {
-    const soStyle: React.CSSProperties = stickerOnlyLight
-      ? { background: "rgba(255,255,255,0.82)", color: "#0A0A0A", border: "1px solid rgba(255,255,255,0.9)" }
-      : { background: "rgba(10,10,10,0.72)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.18)" };
+    // Light was previously 82% opaque with a near-white border - that reads
+    // as a solid white card, not translucent, breaking the whole point of
+    // a sticker meant to sit over a photo. Now matches dark's translucency
+    // level. "none" drops the card entirely - just text + icon directly on
+    // the photo with a drop-shadow for legibility, matching Strava's own
+    // minimal sticker convention rather than always wrapping stats in a box.
+    const soStyle: React.CSSProperties =
+      stickerOnlyStyle === "light" ? { background: "rgba(255,255,255,0.45)", color: "#0A0A0A", border: "1px solid rgba(255,255,255,0.35)" } :
+      stickerOnlyStyle === "dark" ? { background: "rgba(10,10,10,0.55)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.18)" } :
+      { background: "transparent", color: "#FFFFFF", border: "none", textShadow: "0 2px 12px rgba(0,0,0,0.7), 0 1px 3px rgba(0,0,0,0.9)" };
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 500, background: COLORS.background, display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
         <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -15928,9 +15947,13 @@ const StickerShareScreen = ({
           backgroundSize: "20px 20px", backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
         }}>
           <div ref={stickerOnlyRef} style={{
-            borderRadius: 24, padding: "22px 26px", position: "relative", overflow: "hidden",
-            backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
-            boxShadow: "0 12px 40px rgba(0,0,0,0.3)",
+            borderRadius: stickerOnlyStyle === "none" ? 0 : 24,
+            padding: stickerOnlyStyle === "none" ? "8px" : "22px 26px",
+            position: "relative",
+            overflow: stickerOnlyStyle === "none" ? "visible" : "hidden",
+            backdropFilter: stickerOnlyStyle === "none" ? "none" : "blur(24px)",
+            WebkitBackdropFilter: stickerOnlyStyle === "none" ? "none" : "blur(24px)",
+            boxShadow: stickerOnlyStyle === "none" ? "none" : "0 12px 40px rgba(0,0,0,0.3)",
             minWidth: 190,
             ...soStyle,
           }}>
@@ -15967,11 +15990,11 @@ const StickerShareScreen = ({
         <div style={{ padding: "16px 24px 40px", display: "flex", flexDirection: "column", gap: 12 }}>
           {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: 0 }}>{shareError}</p>}
           <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-            {(["dark", "light"] as const).map((m) => (
-              <button key={m} onClick={() => setStickerOnlyLight(m === "light")} style={{
+            {(["dark", "light", "none"] as const).map((m) => (
+              <button key={m} onClick={() => setStickerOnlyStyle(m)} style={{
                 padding: "8px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", textTransform: "capitalize",
-                background: (stickerOnlyLight === (m === "light")) ? COLORS.white : COLORS.card,
-                color: (stickerOnlyLight === (m === "light")) ? "#0A0A0A" : COLORS.textSecondary,
+                background: stickerOnlyStyle === m ? COLORS.white : COLORS.card,
+                color: stickerOnlyStyle === m ? "#0A0A0A" : COLORS.textSecondary,
                 border: `1px solid ${COLORS.border}`,
               }}>{m}</button>
             ))}
@@ -16004,9 +16027,10 @@ const StickerShareScreen = ({
     );
   }
 
-  const stickerStyle: React.CSSProperties = isLight
-    ? { background: "rgba(255,255,255,0.82)", color: "#0A0A0A", border: "1px solid rgba(255,255,255,0.9)" }
-    : { background: "rgba(10,10,10,0.55)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.18)" };
+  const stickerStyle: React.CSSProperties =
+    effectiveStyle === "light" ? { background: "rgba(255,255,255,0.45)", color: "#0A0A0A", border: "1px solid rgba(255,255,255,0.35)" } :
+    effectiveStyle === "dark" ? { background: "rgba(10,10,10,0.55)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.18)" } :
+    { background: "transparent", color: "#FFFFFF", border: "none", textShadow: "0 2px 12px rgba(0,0,0,0.7), 0 1px 3px rgba(0,0,0,0.9)" };
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "#000", display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
@@ -16022,9 +16046,12 @@ const StickerShareScreen = ({
             position: "absolute",
             left: `${pos.x * 100}%`, top: `${pos.y * 100}%`,
             transform: `translate(-50%, -50%) scale(${scale})`,
-            borderRadius: 24, padding: "22px 26px", overflow: "hidden",
-            backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
-            boxShadow: "0 12px 40px rgba(0,0,0,0.3)",
+            borderRadius: effectiveStyle === "none" ? 0 : 24,
+            padding: effectiveStyle === "none" ? "8px" : "22px 26px",
+            overflow: effectiveStyle === "none" ? "visible" : "hidden",
+            backdropFilter: effectiveStyle === "none" ? "none" : "blur(24px)",
+            WebkitBackdropFilter: effectiveStyle === "none" ? "none" : "blur(24px)",
+            boxShadow: effectiveStyle === "none" ? "none" : "0 12px 40px rgba(0,0,0,0.3)",
             cursor: "grab", touchAction: "none", userSelect: "none",
             minWidth: 190,
             ...stickerStyle,
@@ -16061,7 +16088,7 @@ const StickerShareScreen = ({
         {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: 0 }}>{shareError}</p>}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", gap: 8 }}>
-            {(["auto", "light", "dark"] as const).map((mode) => (
+            {(["auto", "light", "dark", "none"] as const).map((mode) => (
               <button key={mode} onClick={() => setContrastOverride(mode)} style={{
                 padding: "8px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", textTransform: "capitalize",
                 background: contrastOverride === mode ? COLORS.white : COLORS.card,
