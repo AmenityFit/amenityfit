@@ -15229,6 +15229,12 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // goalDurationSeconds prop (that's reserved for program-linked cardio
   // targets). undefined = not yet chosen; 0 = explicitly open-ended.
   const [chosenGoalDuration, setChosenGoalDuration] = useState<number | undefined>(undefined);
+  // Declared immediately after chosenGoalDuration, before any hook in this
+  // component - the existing goal-hit useEffect runs unconditionally on
+  // every render (hooks always do, regardless of any early return later
+  // in the function), so this must exist before that hook does, not after
+  // the activity-grid's early return like the previous attempt had it.
+  const effectiveGoalDuration = chosenGoalDuration !== undefined ? (chosenGoalDuration || undefined) : goalDurationSeconds;
   const [customMinutes, setCustomMinutes] = useState(15);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [sessionNotes, setSessionNotes] = useState("");
@@ -15852,7 +15858,6 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // Mind-body sessions use the locally-chosen duration; every other
   // activity keeps using whatever the caller passed in (program-linked
   // cardio). 0 = explicitly open-ended, treated the same as no goal.
-  const effectiveGoalDuration = chosenGoalDuration !== undefined ? (chosenGoalDuration || undefined) : goalDurationSeconds;
 
   // Confirms before discarding once real tracking data exists (elapsed
   // time > 0) - silently losing a genuinely in-progress GPS activity would
