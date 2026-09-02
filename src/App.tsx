@@ -15205,6 +15205,18 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   const routeRef = React.useRef<{ lat: number; lng: number; timestamp: number }[]>([]);
   const lastAcceptedPointRef = React.useRef<{ lat: number; lng: number; timestamp: number } | null>(null);
   const belowThresholdSinceRef = React.useRef<number | null>(null);
+  // The position where a potential stop began. Real displacement from this
+  // point (not fix-to-fix instantaneous speed) is what decides whether
+  // movement has genuinely resumed - GPS jitter while standing still
+  // (normal in cities, from signal reflection off buildings) can easily
+  // produce one noisy reading that computes to a speed above the pause
+  // threshold with zero real movement, which was silently resetting the
+  // whole stop timer back to zero every time and could prevent auto-pause
+  // from ever triggering even after standing still for a long time.
+  const stationaryAnchorRef = React.useRef<{ lat: number; lng: number } | null>(null);
+  // A jitter wobble is a few meters; real walking-away is much more -
+  // this gap is the tolerance band between the two.
+  const STATIONARY_DISPLACEMENT_TOLERANCE_METERS = 10;
   const isAutoPausedRef = React.useRef(false);
   const manuallyPausedRef = React.useRef(false);
   const startTimeRef = React.useRef<number | null>(null);
@@ -15226,22 +15238,43 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         if (speedMps <= MAX_PLAUSIBLE_SPEED_MPS) {
           const sinceStartSeconds = startTimeRef.current ? (now - startTimeRef.current) / 1000 : Infinity;
           const pastGracePeriod = sinceStartSeconds >= AUTO_PAUSE_GRACE_PERIOD_SECONDS;
-          if (pastGracePeriod && speedMps < AUTO_PAUSE_SPEED_THRESHOLD_MPS) {
-            if (belowThresholdSinceRef.current === null) belowThresholdSinceRef.current = now;
-            const belowFor = (now - belowThresholdSinceRef.current) / 1000;
-            if (belowFor >= AUTO_PAUSE_TRIGGER_SECONDS && !isAutoPausedRef.current) {
-              isAutoPausedRef.current = true;
-              setIsAutoPaused(true);
-              pauseStartedAtRef.current = Date.now();
-            }
-          } else {
-            belowThresholdSinceRef.current = null;
-            if (isAutoPausedRef.current) {
-              isAutoPausedRef.current = false;
-              setIsAutoPaused(false);
-              if (pauseStartedAtRef.current) {
-                pausedAccumMsRef.current += Date.now() - pauseStartedAtRef.current;
-                pauseStartedAtRef.current = null;
+
+          if (pastGracePeriod) {
+            if (belowThresholdSinceRef.current === null) {
+              // Not currently tracking a potential stop. Only this initial
+              // check uses instantaneous speed - once a stop begins,
+              // everything below is displacement-based instead, which is
+              // what actually needs to be jitter-resistant.
+              if (speedMps < AUTO_PAUSE_SPEED_THRESHOLD_MPS) {
+                belowThresholdSinceRef.current = now;
+                stationaryAnchorRef.current = { lat: latitude, lng: longitude };
+              }
+            } else {
+              // Already tracking a potential stop - real displacement from
+              // the anchor point decides resumed movement, not any single
+              // fix's noisy instantaneous speed.
+              const anchor = stationaryAnchorRef.current;
+              const distFromAnchor = anchor ? haversineDistanceMeters(anchor.lat, anchor.lng, latitude, longitude) : Infinity;
+
+              if (distFromAnchor > STATIONARY_DISPLACEMENT_TOLERANCE_METERS) {
+                // Genuinely moved away - resume.
+                belowThresholdSinceRef.current = null;
+                stationaryAnchorRef.current = null;
+                if (isAutoPausedRef.current) {
+                  isAutoPausedRef.current = false;
+                  setIsAutoPaused(false);
+                  if (pauseStartedAtRef.current) {
+                    pausedAccumMsRef.current += Date.now() - pauseStartedAtRef.current;
+                    pauseStartedAtRef.current = null;
+                  }
+                }
+              } else {
+                const belowFor = (now - belowThresholdSinceRef.current) / 1000;
+                if (belowFor >= AUTO_PAUSE_TRIGGER_SECONDS && !isAutoPausedRef.current) {
+                  isAutoPausedRef.current = true;
+                  setIsAutoPaused(true);
+                  pauseStartedAtRef.current = Date.now();
+                }
               }
             }
           }
