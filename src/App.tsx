@@ -14941,11 +14941,28 @@ const buildRouteMapUrl = (route: { lat: number; lng: number }[], width: number, 
     properties: {},
   };
   const encodedGeojson = encodeURIComponent(JSON.stringify(geojson));
-  // Accent color, no leading # per the Static API's path-color syntax.
   const strokeColor = (COLORS.accent || "#22D3EE").replace("#", "");
   const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
   const retina = dpr > 1 ? "@2x" : "";
-  return `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/geojson(${encodedGeojson})/auto/${width}x${height}${retina}?padding=40&path-color=${strokeColor}&path-width=4&path-opacity=0.9&access_token=${MAPBOX_ACCESS_TOKEN}`;
+  // satellite-v9, not dark-v11: dark-v11 is a full vector map with real
+  // street names, building outlines and place labels baked in - a genuine
+  // privacy problem for a route someone shares (their exact street/home
+  // area readable at a glance), on top of looking flat and grey. Satellite
+  // imagery has no text labels of any kind, is much harder to pinpoint an
+  // exact address from at a glance, and is inherently colorful (real
+  // terrain, trees, water) instead of a bland vector style.
+  //
+  // Two overlays chained in the same path segment (Mapbox Static API
+  // syntax: comma-separated path-WIDTH+COLOR-OPACITY(geojson) entries) -
+  // a wider dark outline drawn first, then the accent-colored route on
+  // top of it. A plain accent line alone can disappear against
+  // similarly-colored terrain in satellite imagery; the dark outline
+  // guarantees the route stays readable regardless of what's underneath.
+  const overlays = [
+    `path-7+000000-0.55(${encodedGeojson})`,
+    `path-4+${strokeColor}-0.95(${encodedGeojson})`,
+  ].join(",");
+  return `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/${overlays}/auto/${width}x${height}${retina}?padding=40&access_token=${MAPBOX_ACCESS_TOKEN}`;
 };
 
 // Court/field illustrations for basketball, soccer, and padel - used in
