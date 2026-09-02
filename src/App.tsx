@@ -15229,6 +15229,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // goalDurationSeconds prop (that's reserved for program-linked cardio
   // targets). undefined = not yet chosen; 0 = explicitly open-ended.
   const [chosenGoalDuration, setChosenGoalDuration] = useState<number | undefined>(undefined);
+  const [customMinutes, setCustomMinutes] = useState(15);
   // Off by default - screen-on for a full session has a real battery
   // cost, and defaulting it on for everyone wasn't the right call. One
   // tap turns it on for anyone who wants the reliability.
@@ -15732,31 +15733,22 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
               {p.label}
             </button>
           ))}
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <input
-              type="number"
-              min={1}
-              placeholder="Custom minutes"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const mins = parseInt((e.target as HTMLInputElement).value, 10);
-                  if (mins > 0) setChosenGoalDuration(mins * 60);
-                }
-              }}
-              id="mindBodyCustomMinutes"
-              style={{ flex: 1, padding: "18px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 16, fontWeight: 700 }}
+          <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "8px 0 -4px", textAlign: "center" }}>Or choose a custom time</p>
+          <div style={{ position: "relative", height: 44 * 5, borderRadius: 16, overflow: "hidden", background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+            <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 44, transform: "translateY(-50%)", background: `${COLORS.white}08`, pointerEvents: "none" }} />
+            <WheelPickerScroll
+              options={Array.from({ length: 120 }, (_, i) => i + 1)}
+              selected={customMinutes}
+              itemHeight={44}
+              category="minutes"
+              exId="customMinutes"
+              formatLabel={(opt: number) => `${opt} min`}
+              onChange={(_id: string, val: number) => setCustomMinutes(val)}
             />
-            <button
-              onClick={() => {
-                const el = document.getElementById("mindBodyCustomMinutes") as HTMLInputElement | null;
-                const mins = el ? parseInt(el.value, 10) : NaN;
-                if (mins > 0) setChosenGoalDuration(mins * 60);
-              }}
-              style={{ padding: "18px 20px", borderRadius: 16, border: "none", background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}
-            >
-              Set
-            </button>
           </div>
+          <button onClick={() => setChosenGoalDuration(customMinutes * 60)} style={{ padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+            Use {customMinutes} min
+          </button>
 
           <button
             onClick={() => setKeepScreenOn((v) => !v)}
