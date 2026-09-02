@@ -15858,8 +15858,27 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
               </div>
             );
           }
+          const showPulsingRing = currentActivityIsMindBody && status === "tracking";
           return (
             <div style={{ textAlign: "center", position: "relative" }}>
+              {showPulsingRing && (
+                <style>{`
+                  @keyframes mindBodyPulse {
+                    0% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.55; }
+                    50% { transform: translate(-50%, -50%) scale(1.05); opacity: 0.15; }
+                    100% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.55; }
+                  }
+                `}</style>
+              )}
+              {showPulsingRing && (
+                <div style={{
+                  position: "absolute", top: "50%", left: "50%",
+                  width: 240, height: 240, borderRadius: "50%",
+                  border: `2px solid ${COLORS.accent}`,
+                  animation: "mindBodyPulse 3.2s ease-in-out infinite",
+                  pointerEvents: "none",
+                }} />
+              )}
               <div style={{
                 position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
                 width: 280, height: 160, borderRadius: "50%",
