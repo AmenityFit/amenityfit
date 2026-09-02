@@ -15225,6 +15225,10 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // render time from state that keeps changing during the summary screen.
   const [finalCalories, setFinalCalories] = useState<number | undefined>(undefined);
   const [sessionPRs, setSessionPRs] = useState<{ distance: boolean; pace: boolean; duration: boolean }>({ distance: false, pace: false, duration: false });
+  // Mind-body duration choice - local to this screen, not the incoming
+  // goalDurationSeconds prop (that's reserved for program-linked cardio
+  // targets). undefined = not yet chosen; 0 = explicitly open-ended.
+  const [chosenGoalDuration, setChosenGoalDuration] = useState<number | undefined>(undefined);
   const [showShareCard, setShowShareCard] = useState(false);
   const [showStickerMode, setShowStickerMode] = useState(false);
   // Progressive stats reveal on the live tracking screen: starts minimal
@@ -15355,7 +15359,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         distanceMeters,
         route: routeRef.current,
         linkedWorkoutId: linkedWorkoutId || null,
-        goalDurationSeconds: goalDurationSeconds || null,
+        goalDurationSeconds: effectiveGoalDuration || null,
       }));
     } catch (e) {
       // Storage can fail (quota, private mode) - losing the resume safety
@@ -15487,7 +15491,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         avgPaceSecondsPerKm: avgPace,
         calories: estimatedCalories,
         linkedWorkoutId: linkedWorkoutId,
-        goalDurationSeconds: goalDurationSeconds,
+        goalDurationSeconds: effectiveGoalDuration,
       });
       const prs = await checkAndUpdateCardioPRs(uid, activityType, {
         distanceMeters: distanceMeters > 0 ? distanceMeters : undefined,
@@ -15509,10 +15513,10 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // never a hard cutoff, since the person may want to push past what the
   // program suggested.
   useEffect(() => {
-    if (goalDurationSeconds && !goalHitPromptShown && elapsedSeconds >= goalDurationSeconds && status === "tracking") {
+    if (effectiveGoalDuration && !goalHitPromptShown && elapsedSeconds >= effectiveGoalDuration && status === "tracking") {
       setGoalHitPromptShown(true);
     }
-  }, [elapsedSeconds, goalDurationSeconds, goalHitPromptShown, status]);
+  }, [elapsedSeconds, effectiveGoalDuration, goalHitPromptShown, status]);
 
   useEffect(() => {
     return () => stopTrackingInternals();
@@ -15678,6 +15682,69 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     );
   }
 
+  // Mind-body duration choice - shown once, right after picking a
+  // Pilates/Yoga session, before this screen's normal ready/tracking UI.
+  // Skipped entirely for program-linked sessions (linkedWorkoutId already
+  // supplies a real goalDurationSeconds from the program itself).
+  const currentActivityIsMindBody = ACTIVITY_TYPES.find((a) => a.key === activityType)?.isMindBody;
+  if (currentActivityIsMindBody && !linkedWorkoutId && chosenGoalDuration === undefined) {
+    const presets = [
+      { label: "5 min", seconds: 5 * 60 },
+      { label: "10 min", seconds: 10 * 60 },
+      { label: "20 min", seconds: 20 * 60 },
+    ];
+    return (
+      <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => setActivityType(null)} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <ArrowLeft size={16} color={COLORS.white} />
+          </button>
+          <h1 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: 0 }}>How long?</h1>
+        </div>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px 40px", gap: 12 }}>
+          {presets.map((p) => (
+            <button key={p.label} onClick={() => setChosenGoalDuration(p.seconds)} style={{ padding: "20px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
+              {p.label}
+            </button>
+          ))}
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <input
+              type="number"
+              min={1}
+              placeholder="Custom minutes"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const mins = parseInt((e.target as HTMLInputElement).value, 10);
+                  if (mins > 0) setChosenGoalDuration(mins * 60);
+                }
+              }}
+              id="mindBodyCustomMinutes"
+              style={{ flex: 1, padding: "18px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 16, fontWeight: 700 }}
+            />
+            <button
+              onClick={() => {
+                const el = document.getElementById("mindBodyCustomMinutes") as HTMLInputElement | null;
+                const mins = el ? parseInt(el.value, 10) : NaN;
+                if (mins > 0) setChosenGoalDuration(mins * 60);
+              }}
+              style={{ padding: "18px 20px", borderRadius: 16, border: "none", background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}
+            >
+              Set
+            </button>
+          </div>
+          <button onClick={() => setChosenGoalDuration(0)} style={{ padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: "pointer", marginTop: 8 }}>
+            Open-Ended (No Timer)
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Mind-body sessions use the locally-chosen duration; every other
+  // activity keeps using whatever the caller passed in (program-linked
+  // cardio). 0 = explicitly open-ended, treated the same as no goal.
+  const effectiveGoalDuration = chosenGoalDuration !== undefined ? (chosenGoalDuration || undefined) : goalDurationSeconds;
+
   // Confirms before discarding once real tracking data exists (elapsed
   // time > 0) - silently losing a genuinely in-progress GPS activity would
   // be worse than the missing exit itself. Before that point there's
@@ -15761,7 +15828,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         )}
       </div>
 
-      {goalDurationSeconds && goalHitPromptShown && status === "tracking" && (
+      {effectiveGoalDuration && goalHitPromptShown && status === "tracking" && (
         <div style={{ margin: "0 24px 16px", padding: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16 }}>
           <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Cardio goal hit — stop here, or keep going?</p>
           <div style={{ display: "flex", gap: 10 }}>
