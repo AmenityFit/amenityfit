@@ -11234,7 +11234,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
             const day = String(d.getDate()).padStart(2, "0");
             return `${y}-${m}-${day}`;
           }
-          return todayUTC;
+          return getLocalDateString();
         })();
         // Fast-then-verify pattern: show whatever's cached immediately so
         // this doesn't block on a network round-trip, then quietly confirm
@@ -11332,7 +11332,6 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
 
   const todayLocal = React.useMemo(() => new Date(), []);
   const weekDays = getWeekSchedule(currentProgramDay, frequency, completedProgramDays, lastSessionDate, profile?.programKey, todayLocal, profile?.generatedDays, profile?.injuries, profile?.equipmentPreference, profile?.buildingEquipment, parseInt(String(profile?.age)) || 30, profile?.sessionLength || 60, profile?.effectiveLevel || profile?.experience || "intermediate", profile?.dayOverrides);
-  if (screen === "weekly") return <WeeklyProgramView profile={liveProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString())} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
 
   const todayDay = weekDays.find((d: any) => d.isToday) ?? null;
   const didAutoSelect = React.useRef(false);
@@ -11600,7 +11599,7 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                   {viewing.isCompleted && !viewing.isRest && Object.keys(dayWeightLog).length > 0 && (
                     <div style={{ background: COLORS.background, borderRadius: 14, padding: "14px 16px", border: `1px solid ${COLORS.border}` }}>
                       <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 10px" }}>Weights Logged</p>
-                      {Object.entries(dayWeightLog).map(([exId, weight]) => {
+                      {Object.entries(dayWeightLog).map(([exId, weight], i) => {
                         const exData = (EXERCISES_DATA as any)[exId];
                         // Same kettlebell override as the "today" card above.
                         const isKettlebellEx = exData?.equipment?.toLowerCase().includes("kettlebell");
