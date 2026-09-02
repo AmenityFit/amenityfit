@@ -15979,6 +15979,7 @@ const StickerShareScreen = ({
             alt=""
             decoding="sync"
             loading="eager"
+            crossOrigin="anonymous"
             style={{ maxWidth: 240, maxHeight: 160, width: "auto", height: "auto", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
           />
         )}
