@@ -15229,6 +15229,27 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // goalDurationSeconds prop (that's reserved for program-linked cardio
   // targets). undefined = not yet chosen; 0 = explicitly open-ended.
   const [chosenGoalDuration, setChosenGoalDuration] = useState<number | undefined>(undefined);
+  // Off by default - screen-on for a full session has a real battery
+  // cost, and defaulting it on for everyone wasn't the right call. One
+  // tap turns it on for anyone who wants the reliability.
+  const [keepScreenOn, setKeepScreenOn] = useState(false);
+  const wakeLockRef = React.useRef<any>(null);
+  const requestWakeLock = async () => {
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
+      }
+    } catch {
+      // Not supported, or permission denied - fails silently, session
+      // tracking itself is unaffected either way.
+    }
+  };
+  const releaseWakeLock = () => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release().catch(() => {});
+      wakeLockRef.current = null;
+    }
+  };
   const [showShareCard, setShowShareCard] = useState(false);
   const [showStickerMode, setShowStickerMode] = useState(false);
   // Progressive stats reveal on the live tracking screen: starts minimal
@@ -15411,6 +15432,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     setElapsedSeconds(0);
     beginWatchAndTimer();
     persistTrackingState();
+    if (keepScreenOn) requestWakeLock();
   };
 
   // On mount, checks for a session that was in progress when the app got
@@ -15450,10 +15472,12 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         pausedAccumMsRef.current += Date.now() - pauseStartedAtRef.current;
         pauseStartedAtRef.current = null;
       }
+      if (keepScreenOn) requestWakeLock();
     } else {
       manuallyPausedRef.current = true;
       setStatus("paused");
       pauseStartedAtRef.current = Date.now();
+      releaseWakeLock();
     }
     persistTrackingState();
   };
@@ -15467,6 +15491,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
+    releaseWakeLock();
     clearPersistedTrackingState();
   };
 
@@ -15732,6 +15757,30 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
               Set
             </button>
           </div>
+
+          <button
+            onClick={() => setKeepScreenOn((v) => !v)}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "16px 18px", borderRadius: 16, border: `1px solid ${COLORS.border}`,
+              background: COLORS.card, cursor: "pointer", marginTop: 4,
+            }}
+          >
+            <div style={{ textAlign: "left" }}>
+              <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>Keep screen on</p>
+              <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>Uses more battery while active</p>
+            </div>
+            <div style={{
+              width: 44, height: 26, borderRadius: 20, position: "relative",
+              background: keepScreenOn ? COLORS.primary : COLORS.border, transition: "background 0.15s",
+            }}>
+              <div style={{
+                position: "absolute", top: 3, left: keepScreenOn ? 21 : 3,
+                width: 20, height: 20, borderRadius: "50%", background: COLORS.white, transition: "left 0.15s",
+              }} />
+            </div>
+          </button>
+
           <button onClick={() => setChosenGoalDuration(0)} style={{ padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: "pointer", marginTop: 8 }}>
             Open-Ended (No Timer)
           </button>
