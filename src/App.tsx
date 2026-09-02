@@ -15850,16 +15850,35 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         onClick={() => { if (!isIndoorActivity) setStatsTier((t) => (t === 0 ? 1 : 0)); }}
         style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 36, cursor: !isIndoorActivity ? "pointer" : "default" }}
       >
-        <div style={{ textAlign: "center", position: "relative" }}>
-          <div style={{
-            position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-            width: 280, height: 160, borderRadius: "50%",
-            background: `radial-gradient(circle, ${COLORS.primary}30 0%, transparent 70%)`,
-            pointerEvents: "none",
-          }} />
-          <p style={{ position: "relative", color: COLORS.textSecondary, fontSize: 13, margin: "0 0 18px", fontWeight: 700, letterSpacing: 2 }}>TIME</p>
-          <h1 style={{ position: "relative", color: COLORS.white, fontSize: 76, fontWeight: 900, margin: 0, lineHeight: 1, letterSpacing: -2, fontVariantNumeric: "tabular-nums", textShadow: `0 0 50px ${COLORS.primary}50` }}>{formatTime(elapsedSeconds)}</h1>
-        </div>
+        {(() => {
+          // With the screen forced awake for a long mind-body session,
+          // the glow effect and full-brightness 76px number are real
+          // OLED power draw for no benefit while just sitting there
+          // counting up - a smaller, dimmer, glow-free display cuts that
+          // down without touching real system brightness (web apps can't
+          // do that), while staying perfectly readable.
+          const isDimmedMode = keepScreenOn && currentActivityIsMindBody && status === "tracking";
+          if (isDimmedMode) {
+            return (
+              <div style={{ textAlign: "center" }}>
+                <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "0 0 10px", fontWeight: 700, letterSpacing: 2, opacity: 0.4 }}>TIME</p>
+                <h1 style={{ color: COLORS.white, fontSize: 44, fontWeight: 700, margin: 0, lineHeight: 1, letterSpacing: -1, fontVariantNumeric: "tabular-nums", opacity: 0.55 }}>{formatTime(elapsedSeconds)}</h1>
+              </div>
+            );
+          }
+          return (
+            <div style={{ textAlign: "center", position: "relative" }}>
+              <div style={{
+                position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+                width: 280, height: 160, borderRadius: "50%",
+                background: `radial-gradient(circle, ${COLORS.primary}30 0%, transparent 70%)`,
+                pointerEvents: "none",
+              }} />
+              <p style={{ position: "relative", color: COLORS.textSecondary, fontSize: 13, margin: "0 0 18px", fontWeight: 700, letterSpacing: 2 }}>TIME</p>
+              <h1 style={{ position: "relative", color: COLORS.white, fontSize: 76, fontWeight: 900, margin: 0, lineHeight: 1, letterSpacing: -2, fontVariantNumeric: "tabular-nums", textShadow: `0 0 50px ${COLORS.primary}50` }}>{formatTime(elapsedSeconds)}</h1>
+            </div>
+          );
+        })()}
         {!isIndoorActivity && statsTier === 1 && (
           <div style={{ display: "flex", gap: 48 }}>
             <div style={{ textAlign: "center" }}>
