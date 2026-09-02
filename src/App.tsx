@@ -15944,7 +15944,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
 
       {effectiveGoalDuration && goalHitPromptShown && status === "tracking" && (
         <div style={{ margin: "0 24px 16px", padding: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16 }}>
-          <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Cardio goal hit — stop here, or keep going?</p>
+          <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>{currentActivityIsMindBody ? "Time's up. Ready to close out, or stay a little longer?" : "Cardio goal hit — stop here, or keep going?"}</p>
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={finishActivity} style={{ flex: 1, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "12px", color: COLORS.white, fontWeight: 700, cursor: "pointer" }}>Stop Here</button>
             <button onClick={() => setGoalHitPromptShown(false)} style={{ flex: 1, background: COLORS.primary, border: "none", borderRadius: 12, padding: "12px", color: COLORS.white, fontWeight: 700, cursor: "pointer" }}>Keep Going</button>
