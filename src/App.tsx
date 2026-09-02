@@ -14893,6 +14893,11 @@ const CARDIO_MET_VALUES: Record<string, number> = {
   basketball: 8.0,
   soccer: 7.0,
   padel: 6.0,
+  // Padel has no entry of its own in the standard MET compendium (too
+  // new a sport) - 6.0 borrows from doubles tennis, the closest
+  // well-documented analog in physical demand.
+  yoga: 2.5, // general/hatha yoga, standard compendium value
+  pilates: 3.0, // general studio-class pilates, standard compendium value
   other: 5.0,
 };
 
