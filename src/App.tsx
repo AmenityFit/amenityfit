@@ -15230,6 +15230,20 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // targets). undefined = not yet chosen; 0 = explicitly open-ended.
   const [chosenGoalDuration, setChosenGoalDuration] = useState<number | undefined>(undefined);
   const [customMinutes, setCustomMinutes] = useState(15);
+  const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
+  const [sessionNotes, setSessionNotes] = useState("");
+  const [notesSaveStatus, setNotesSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const saveSessionNotes = async () => {
+    if (!savedSessionId) return;
+    setNotesSaveStatus("saving");
+    try {
+      await setDoc(doc(db, "workoutSessions", savedSessionId), { notes: sessionNotes }, { merge: true });
+      setNotesSaveStatus("saved");
+    } catch (e) {
+      console.error("saveSessionNotes error:", e);
+      setNotesSaveStatus("idle");
+    }
+  };
   // Off by default - screen-on for a full session has a real battery
   // cost, and defaulting it on for everyone wasn't the right call. One
   // tap turns it on for anyone who wants the reliability.
@@ -15509,7 +15523,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
       // guessing with a default weight.
       const weightLbs = parseFloat(String(profile?.weightLbs || "")) || undefined;
       estimatedCalories = estimateCardioCalories(activityType, elapsedSeconds, weightLbs);
-      await saveCardioActivity(uid, {
+      const savedId = await saveCardioActivity(uid, {
         type: activityType,
         durationSeconds: elapsedSeconds,
         distanceMeters: distanceMeters > 0 ? distanceMeters : undefined,
@@ -15519,6 +15533,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         linkedWorkoutId: linkedWorkoutId,
         goalDurationSeconds: effectiveGoalDuration,
       });
+      setSavedSessionId(savedId);
       const prs = await checkAndUpdateCardioPRs(uid, activityType, {
         distanceMeters: distanceMeters > 0 ? distanceMeters : undefined,
         durationSeconds: elapsedSeconds,
@@ -15623,6 +15638,26 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         </div>
 
         </div>
+
+        {activityMeta?.isMindBody && (
+          <div style={{ padding: "0 24px 20px" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 8px" }}>How did it feel?</p>
+            <textarea
+              value={sessionNotes}
+              onChange={(e) => { setSessionNotes(e.target.value); setNotesSaveStatus("idle"); }}
+              placeholder="Frustrated, couldn't focus... or felt clear and present. Whatever comes to mind."
+              rows={3}
+              style={{ width: "100%", padding: 14, borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", resize: "none" }}
+            />
+            <button
+              onClick={saveSessionNotes}
+              disabled={notesSaveStatus === "saving" || !sessionNotes.trim()}
+              style={{ marginTop: 8, padding: "10px 16px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 13, fontWeight: 700, cursor: notesSaveStatus === "saving" ? "default" : "pointer", opacity: !sessionNotes.trim() ? 0.5 : 1 }}
+            >
+              {notesSaveStatus === "saved" ? "Saved" : notesSaveStatus === "saving" ? "Saving..." : "Save Note"}
+            </button>
+          </div>
+        )}
 
         <div style={{ padding: "0 24px 40px", marginTop: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", gap: 12 }}>
