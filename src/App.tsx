@@ -10,6 +10,8 @@ import iconBikeOutdoor from "./assets/icons/bike_outdoor.png";
 import iconSwim from "./assets/icons/swim.png";
 import iconStairClimber from "./assets/icons/stairclimber.png";
 import amenityfitLogo from "./assets/icons/amenityfit-logo.png";
+import iconPilates from "./assets/icons/pilates.png";
+import iconYoga from "./assets/icons/yoga.png";
 
 // ─── Firebase ─────────────────────────────────────────────────────────────────
 import { initializeApp } from "firebase/app";
@@ -15191,6 +15193,14 @@ const ACTIVITY_TYPES = [
   { key: "basketball", label: "Basketball", icon: BasketballIcon, indoor: true, courtType: "basketball" },
   { key: "soccer", label: "Soccer", iconImage: iconSoccer, indoor: true, courtType: "soccer" },
   { key: "padel", label: "Padel", iconImage: iconPadel, indoor: true, courtType: "padel" },
+  // Mind-body tier: duration-based (count-up or count-down from a chosen
+  // length), pulsating-ring timer visual, and a notes/journal field -
+  // genuinely different from the plain Time+Calories indoor-cardio
+  // template, not just a reskin. isMindBody drives that different
+  // tracking-screen treatment. Meditation and Stretching still need real
+  // traced icons before they can be added the same way.
+  { key: "pilates", label: "Pilates", iconImage: iconPilates, indoor: true, isMindBody: true },
+  { key: "yoga", label: "Yoga", iconImage: iconYoga, indoor: true, isMindBody: true },
   { key: "other", label: "Other", icon: Zap, indoor: false },
 ];
 
