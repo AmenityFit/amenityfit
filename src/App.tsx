@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import html2canvas from "html2canvas";
 import iconRunning from "./assets/icons/running.png";
 import iconWalking from "./assets/icons/walking.png";
@@ -5408,7 +5409,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
               <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>{activityStatsRange === "today" ? "Nothing logged today yet." : "Nothing logged this week yet."}</p>
             )}
 
-            {showActivityShareCard && activityStats && (
+            {showActivityShareCard && activityStats && createPortal(
               <ShareableStatCard
                 title="AmenityFit Activity"
                 subtitle={activityStatsRange === "today" ? "Today" : "This Week"}
@@ -5418,10 +5419,11 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
                   ...(activityStats.cardioCalories > 0 ? [{ label: "Calories (est.)", value: `~${activityStats.cardioCalories}` }] : []),
                 ]}
                 onClose={() => setShowActivityShareCard(false)}
-              />
+              />,
+              document.body
             )}
 
-            {showActivityStickerMode && activityStats && (
+            {showActivityStickerMode && activityStats && createPortal(
               <StickerShareScreen
                 title={activityStatsRange === "today" ? "Today" : "This Week"}
                 icon={Flame}
@@ -5430,7 +5432,8 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
                   ...(activityStats.cardioCalories > 0 ? [{ label: "Calories (est.)", value: `~${activityStats.cardioCalories}` }] : []),
                 ]}
                 onClose={() => setShowActivityStickerMode(false)}
-              />
+              />,
+              document.body
             )}
           </div>
         )}
