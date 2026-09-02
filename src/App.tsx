@@ -15429,6 +15429,38 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     }, 1000);
   };
 
+  // Two soft sine-wave notes (a rising fifth, like a small bell) via the
+  // Web Audio API - no external sound file to load/host, so nothing to
+  // fail on a slow connection or a CORS issue. Only ever called while the
+  // app is genuinely in the foreground (right as someone taps Start),
+  // which is exactly the one moment audio is guaranteed to work reliably
+  // regardless of the background-audio limitations noted elsewhere.
+  const playStartChime = () => {
+    try {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioContextClass();
+      const playNote = (freq: number, startTime: number, duration: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(0.15, startTime + 0.05);
+        gain.gain.linearRampToValueAtTime(0, startTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      };
+      const now = ctx.currentTime;
+      playNote(523.25, now, 0.5); // C5
+      playNote(783.99, now + 0.15, 0.6); // G5
+    } catch {
+      // Web Audio unsupported or blocked - silently skip, never blocks
+      // the session itself from starting.
+    }
+  };
+
   const startTracking = () => {
     if (!isIndoorActivity && !navigator.geolocation) {
       setLocationError("Location isn't available on this device.");
@@ -15448,6 +15480,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     beginWatchAndTimer();
     persistTrackingState();
     if (keepScreenOn) requestWakeLock();
+    if (currentActivityIsMindBody) playStartChime();
   };
 
   // On mount, checks for a session that was in progress when the app got
