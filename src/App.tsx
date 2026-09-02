@@ -11732,20 +11732,6 @@ const WorkoutFlow = ({ profile, onComplete, onBack, onGoHomeSave, onProfileUpdat
   const [workoutFlowWeights, setWorkoutFlowWeights] = useState<Record<string, number>>({});
   const [liftPRs, setLiftPRs] = useState<Record<string, { isPR: boolean; weight: number }>>({});
   const liftPRCheckDoneRef = React.useRef(false);
-
-  // Fires once, exactly when the session actually completes (all groups
-  // done) - not on every render, and not tied to the "Back to Dashboard"
-  // button, since SessionCompleteScreen needs to already show correct PR
-  // state the moment it first appears.
-  React.useEffect(() => {
-    if (phase === "complete" && !liftPRCheckDoneRef.current) {
-      liftPRCheckDoneRef.current = true;
-      const uid = profile?.uid;
-      if (uid && Object.keys(workoutFlowWeights).length > 0) {
-        checkAndUpdateLiftPRs(uid, workoutFlowWeights).then(setLiftPRs);
-      }
-    }
-  }, [phase]);
   const workoutFlowWeightsRef = React.useRef<Record<string, number>>({});
   React.useEffect(() => { workoutFlowWeightsRef.current = {}; setWorkoutFlowWeights({}); }, []);
   const savedProgress = (() => {
@@ -11805,6 +11791,20 @@ const WorkoutFlow = ({ profile, onComplete, onBack, onGoHomeSave, onProfileUpdat
     }).catch(() => {});
   }, []);
   const [phase, setPhase] = useState<"list" | "active" | "complete">(savedProgress ? "list" : "list");
+
+  // Fires once, exactly when the session actually completes (all groups
+  // done) - not on every render, and not tied to the "Back to Dashboard"
+  // button, since SessionCompleteScreen needs to already show correct PR
+  // state the moment it first appears.
+  React.useEffect(() => {
+    if (phase === "complete" && !liftPRCheckDoneRef.current) {
+      liftPRCheckDoneRef.current = true;
+      const uid = profile?.uid;
+      if (uid && Object.keys(workoutFlowWeights).length > 0) {
+        checkAndUpdateLiftPRs(uid, workoutFlowWeights).then(setLiftPRs);
+      }
+    }
+  }, [phase]);
   const [currentGroupIndex, setCurrentGroupIndex] = useState(savedProgress?.currentGroupIndex ?? 0);
   const [totalSetsCompleted, setTotalSetsCompleted] = useState(savedProgress?.totalSetsCompleted ?? 0);
   const [startTime] = useState(() => {
@@ -12170,7 +12170,7 @@ onSaveState={(round: number, exerciseIndex: number, cells?: string[]) => {
       uid={profile?.uid || ""}
       weightsLogged={workoutFlowWeights}
       liftPRs={liftPRs}
-      dayTitle={dayTitle}
+      dayTitle={deriveWorkoutTitle(workoutGroups)}
       // completedProgramDay is passed up alongside the groups so the save
       // path never has to independently recompute "what day was this" from
       // userProfile.programDay at some later point in time. That second,
