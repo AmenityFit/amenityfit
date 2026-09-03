@@ -16648,6 +16648,24 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             </div>
           )}
           <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "8px 0 0", textTransform: "capitalize" }}>{customActivityName || activityType} Complete</h1>
+          {/* Real gap found in this session's audit: this screen never
+              showed a motivational quote at all, unlike SessionCompleteScreen
+              (the lifting equivalent), which always has. Reuses the exact
+              same getMotivationalMessage function/quote bank for full
+              consistency - same per-person randomization (via uid), same
+              in-app-only placement (never passed into ShareableStatCard's
+              stats or the sticker export below, matching how the lifting
+              screen also keeps it out of the shareable image).
+              Deliberately suppressed when linkedWorkoutId is set - a
+              program-linked session (e.g. a legs+cardio day) already ends
+              at SessionCompleteScreen's own quote once the whole session
+              finishes, and showing one here too would mean the same
+              person sees two quotes back-to-back for one day. */}
+          {!linkedWorkoutId && (
+            <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "10px auto 0", lineHeight: 1.6, maxWidth: 280 }}>
+              {getMotivationalMessage(profile?.sessionsCompleted || 0, profile?.uid || "")}
+            </p>
+          )}
         </div>
 
         {mapUrl && (
