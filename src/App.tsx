@@ -11,6 +11,7 @@ import iconSwim from "./assets/icons/swim.png";
 import iconStairClimber from "./assets/icons/stairclimber.png";
 import amenityfitLogo from "./assets/icons/amenityfit-logo.png";
 import iconPilates from "./assets/icons/pilates.png";
+import iconMeditation from "./assets/icons/meditation.png";
 import iconYoga from "./assets/icons/yoga.png";
 
 // ─── Firebase ─────────────────────────────────────────────────────────────────
@@ -15057,6 +15058,7 @@ const CARDIO_MET_VALUES: Record<string, number> = {
   // well-documented analog in physical demand.
   yoga: 2.5, // general/hatha yoga, standard compendium value
   pilates: 3.0, // general studio-class pilates, standard compendium value
+  meditation: 1.3, // seated meditation, near resting metabolic rate, standard compendium value
   other: 5.0,
 };
 
@@ -15364,6 +15366,7 @@ const ACTIVITY_TYPES = [
   // tracking-screen treatment. Meditation and Stretching still need real
   // traced icons before they can be added the same way.
   { key: "pilates", label: "Pilates", iconImage: iconPilates, indoor: true, isMindBody: true },
+  { key: "meditation", label: "Meditation", iconImage: iconMeditation, indoor: true, isMindBody: true },
   // iconDisplayScale compensates for Tree Pose's genuinely narrow
   // silhouette (already cropped as tight as the source image allows) -
   // without this it visibly reads smaller than every other icon in the
