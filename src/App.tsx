@@ -11074,12 +11074,41 @@ const getMotivationalMessage = (sessionCount: number, uid: string = ""): string 
 };
 
 // ─── Session Complete Screen ───────────────────────────────────────────────────
-const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount = 0, uid = "", onDone, weightsLogged = {}, liftPRs = {}, dayTitle = "" }) => {
+const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount = 0, uid = "", onDone, weightsLogged = {}, liftPRs = {}, dayTitle = "", sessionId = "" }) => {
   const mins = Math.floor(timeSeconds / 60);
   const secs = timeSeconds % 60;
   const message = getMotivationalMessage(sessionCount, uid);
   const [showShareCard, setShowShareCard] = useState(false);
   const [showStickerMode, setShowStickerMode] = useState(false);
+  // Real gap this closes: a lift+cardio combined day (e.g. legs+cardio)
+  // saves as two separate workoutSessions documents, and the cardio one
+  // is tagged with linkedWorkoutId pointing back to this lifting
+  // session's id - but until now nothing ever queried for it, so this
+  // screen only ever showed the lifting half even on a combined day.
+  // undefined = still checking, null = checked and none found, object =
+  // the real linked cardio session data - three distinct states, not
+  // collapsed into one, so the loading moment never gets mistaken for
+  // "definitely no cardio today."
+  const [linkedCardioSession, setLinkedCardioSession] = useState<any>(undefined);
+  useEffect(() => {
+    if (!sessionId) { setLinkedCardioSession(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocs(query(collection(db, "workoutSessions"), where("linkedWorkoutId", "==", sessionId)));
+        if (cancelled) return;
+        if (!snap.empty) {
+          setLinkedCardioSession({ id: snap.docs[0].id, ...snap.docs[0].data() });
+        } else {
+          setLinkedCardioSession(null);
+        }
+      } catch (e) {
+        console.error("Failed to check for linked cardio session:", e);
+        if (!cancelled) setLinkedCardioSession(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sessionId]);
 
   // Weight-only PRs (see checkAndUpdateLiftPRs) - real exercise names via
   // EXERCISES_DATA, not raw ids, and only ever the weight actually logged -
@@ -11088,10 +11117,37 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
     .filter(([, v]: any) => v?.isPR)
     .map(([exerciseId, v]: any) => ({ name: (EXERCISES_DATA as any)[exerciseId]?.name || exerciseId, weight: v.weight }));
 
+  // Real completion of the linked-cardio read: a combined lift+cardio day
+  // now presents as one earned, unified story instead of two disconnected
+  // moments. Derived only once linkedCardioSession has actually resolved
+  // (not undefined - the "still checking" state), so this never flashes a
+  // half-built cardio section before the query returns.
+  const cardioMeta = linkedCardioSession ? ACTIVITY_TYPES.find((a) => a.key === linkedCardioSession.type) : null;
+  const cardioHasDistance = (linkedCardioSession?.distanceMeters || 0) > 0;
+  const cardioCourtType = cardioMeta?.courtType;
+  const cardioMapUrl = linkedCardioSession
+    ? (cardioCourtType
+        ? buildCourtIllustrationUrl(cardioCourtType, COLORS.accent)
+        : (linkedCardioSession.route?.length > 1 ? buildRouteMapUrl(linkedCardioSession.route, 640, 360) : null))
+    : null;
+  const cardioPaceLabel = cardioHasDistance && linkedCardioSession?.avgPaceSecondsPerKm
+    ? `${Math.floor(linkedCardioSession.avgPaceSecondsPerKm / 60)}:${String(Math.round(linkedCardioSession.avgPaceSecondsPerKm % 60)).padStart(2, "0")}/km`
+    : null;
+  const cardioDisplayName = linkedCardioSession?.customActivityName || cardioMeta?.label || linkedCardioSession?.type;
+  const cardioMinutes = linkedCardioSession ? Math.round((linkedCardioSession.durationSeconds || 0) / 60) : 0;
+
   const shareStats = [
     { label: "Sets Done", value: String(totalSets) },
     { label: "Time", value: `${mins}m ${secs}s` },
     ...prExercises.map((p) => ({ label: p.name, value: `${p.weight} lbs`, isPR: true })),
+    // Appended only when a real linked cardio session exists, so the
+    // exported sticker/share card tells the whole day's story in one
+    // image rather than only the lifting half.
+    ...(linkedCardioSession ? [
+      ...(cardioHasDistance ? [{ label: `${cardioDisplayName} Distance`, value: `${(linkedCardioSession.distanceMeters / 1000).toFixed(2)} km` }] : []),
+      { label: `${cardioDisplayName} Time`, value: `${cardioMinutes} min` },
+      ...(cardioPaceLabel ? [{ label: `${cardioDisplayName} Pace`, value: cardioPaceLabel }] : []),
+    ] : []),
   ];
 
   return (
@@ -12538,6 +12594,14 @@ onSaveState={(round: number, exerciseIndex: number, cells?: string[]) => {
       weightsLogged={workoutFlowWeights}
       liftPRs={liftPRs}
       dayTitle={deriveWorkoutTitle(workoutGroups)}
+      // Real gap found in this session's audit: a lift+cardio combined
+      // day (e.g. a legs+cardio day) saves as two separate documents, and
+      // the cardio one is tagged with linkedWorkoutId pointing back to
+      // this session - but until now nothing ever read that tag back out,
+      // so a combined day showed no unified completion moment at all.
+      // Passing the real session id lets this screen check for a linked
+      // cardio session and present both halves together.
+      sessionId={activeSessionIdRef.current}
       // completedProgramDay is passed up alongside the groups so the save
       // path never has to independently recompute "what day was this" from
       // userProfile.programDay at some later point in time. That second,
