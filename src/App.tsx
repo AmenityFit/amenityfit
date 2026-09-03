@@ -16137,14 +16137,21 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           // doing anything. Only real (non-open-ended) goals count down;
           // everything else still counts up as always.
           const hasCountdown = currentActivityIsMindBody && !!effectiveGoalDuration;
-          const displaySeconds = hasCountdown ? Math.max(0, effectiveGoalDuration! - elapsedSeconds) : elapsedSeconds;
-          const displayLabel = hasCountdown ? "TIME LEFT" : "TIME";
+          // Once elapsed time passes the goal (person tapped "Keep Going"
+          // past the time's-up prompt), the display needs to switch to
+          // counting up overtime instead of just clamping at 0:00 forever -
+          // the session itself kept tracking correctly the whole time
+          // before this fix, only the on-screen number looked frozen/stuck.
+          const isOvertime = hasCountdown && elapsedSeconds > effectiveGoalDuration!;
+          const displaySeconds = hasCountdown && !isOvertime ? (effectiveGoalDuration! - elapsedSeconds) : elapsedSeconds - (hasCountdown ? effectiveGoalDuration! : 0);
+          const displayLabel = isOvertime ? "OVERTIME" : hasCountdown ? "TIME LEFT" : "TIME";
+          const displayPrefix = isOvertime ? "+" : "";
           const isDimmedMode = keepScreenOn && currentActivityIsMindBody && status === "tracking";
           if (isDimmedMode) {
             return (
               <div style={{ textAlign: "center" }}>
                 <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "0 0 10px", fontWeight: 700, letterSpacing: 2, opacity: 0.4 }}>{displayLabel}</p>
-                <h1 style={{ color: COLORS.white, fontSize: 44, fontWeight: 700, margin: 0, lineHeight: 1, letterSpacing: -1, fontVariantNumeric: "tabular-nums", opacity: 0.55 }}>{formatTime(displaySeconds)}</h1>
+                <h1 style={{ color: COLORS.white, fontSize: 44, fontWeight: 700, margin: 0, lineHeight: 1, letterSpacing: -1, fontVariantNumeric: "tabular-nums", opacity: 0.55 }}>{displayPrefix}{formatTime(displaySeconds)}</h1>
               </div>
             );
           }
@@ -16192,7 +16199,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
                 pointerEvents: "none",
               }} />
               <p style={{ position: "relative", color: COLORS.textSecondary, fontSize: 13, margin: "0 0 18px", fontWeight: 700, letterSpacing: 2 }}>{displayLabel}</p>
-              <h1 style={{ position: "relative", color: COLORS.white, fontSize: 76, fontWeight: 900, margin: 0, lineHeight: 1, letterSpacing: -2, fontVariantNumeric: "tabular-nums", textShadow: `0 0 50px ${COLORS.primary}50` }}>{formatTime(displaySeconds)}</h1>
+              <h1 style={{ position: "relative", color: COLORS.white, fontSize: 76, fontWeight: 900, margin: 0, lineHeight: 1, letterSpacing: -2, fontVariantNumeric: "tabular-nums", textShadow: `0 0 50px ${COLORS.primary}50` }}>{displayPrefix}{formatTime(displaySeconds)}</h1>
             </div>
           );
         })()}
