@@ -935,10 +935,18 @@ const saveCardioActivity = async (uid: string, activity: {
   avgPaceSecondsPerKm?: number;
   linkedWorkoutId?: string;
   goalDurationSeconds?: number;
-}): Promise<string | null> => {
+}, presetId?: string): Promise<string | null> => {
   try {
     const today = getLocalDateString();
-    const id = `${uid}_${Date.now()}`;
+    // presetId lets saveCardioActivityDurable's retry loop target the
+    // SAME document on every attempt, rather than minting a fresh id each
+    // time (the old unconditional behavior) - makes retries genuinely
+    // idempotent. Without this, a rare but real scenario (the write
+    // actually succeeds server-side but the client never receives
+    // confirmation before losing connection) could produce a duplicate
+    // session document on retry, since setDoc would target a brand new id
+    // each time instead of safely overwriting the same one.
+    const id = presetId || `${uid}_${Date.now()}`;
     await setDoc(doc(db, "workoutSessions", id), {
       uid,
       sessionId: id,
@@ -958,6 +966,68 @@ const saveCardioActivity = async (uid: string, activity: {
   } catch (e) {
     console.error("saveCardioActivity error:", e);
     return null;
+  }
+};
+
+// Real durability guarantee for a completed cardio/mind-body/"Other"
+// session - same audit finding as saveWorkoutSessionDurable above, but
+// arguably more urgent here: a GPS route can never be reconstructed if
+// lost, unlike a lifting session's weights which a person could at least
+// theoretically re-enter. Worth noting this one stays properly awaited by
+// its caller (unlike the lifting version's fire-and-forget) since the
+// real session id is genuinely needed downstream for notes/PR attachment
+// - but the localStorage backup below still happens FIRST, instantly,
+// before any network attempt, so the already-collected session data
+// (distance, route, duration) can never be lost to a crash or connection
+// drop during the save/retry window that follows.
+const PENDING_CARDIO_SAVE_KEY = "amenityfit_pending_cardio_save";
+const saveCardioActivityDurable = async (uid: string, activity: Parameters<typeof saveCardioActivity>[1]): Promise<string | null> => {
+  const id = `${uid}_${Date.now()}`;
+  try {
+    localStorage.setItem(PENDING_CARDIO_SAVE_KEY, JSON.stringify({ uid, activity, id }));
+  } catch (e) {
+    // Storage can fail (quota, private mode) - the real save attempt
+    // below still runs regardless; this backup is a safety net, not the
+    // only path to success.
+  }
+
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const result = await saveCardioActivity(uid, activity, id);
+    if (result) {
+      try { localStorage.removeItem(PENDING_CARDIO_SAVE_KEY); } catch {}
+      return result;
+    }
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+    }
+  }
+  console.error("saveCardioActivityDurable: all retry attempts failed, backup retained in localStorage for recovery on next app load");
+  return id; // Return the real id anyway - the document may still get created by recoverPendingCardioSave on next load, so downstream code (notes, PR check) can still reference the right id even though the save hasn't confirmed yet.
+};
+
+// Checked once on every app load, alongside recoverPendingWorkoutSave -
+// see that function for the full explanation of why this pattern exists.
+const recoverPendingCardioSave = async () => {
+  let pending: { uid: string; activity: any; id: string } | null = null;
+  try {
+    const raw = localStorage.getItem(PENDING_CARDIO_SAVE_KEY);
+    if (raw) pending = JSON.parse(raw);
+  } catch {}
+  if (!pending) return;
+  try {
+    localStorage.setItem(PENDING_CARDIO_SAVE_KEY, JSON.stringify(pending));
+  } catch {}
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const result = await saveCardioActivity(pending.uid, pending.activity, pending.id);
+    if (result) {
+      try { localStorage.removeItem(PENDING_CARDIO_SAVE_KEY); } catch {}
+      return;
+    }
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+    }
   }
 };
 
@@ -16201,7 +16271,14 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
       // guessing with a default weight.
       const weightLbs = parseFloat(String(profile?.weightLbs || "")) || undefined;
       estimatedCalories = estimateCardioCalories(activityType, elapsedSeconds, weightLbs);
-      const savedId = await saveCardioActivity(uid, {
+      // Built as a variable, not inline, so saveCardioActivityDurable can
+      // back this up to localStorage BEFORE any network attempt - real
+      // audit fix: this GPS/duration data was previously only ever held
+      // in React state during the save, meaning a crash or connection
+      // loss mid-save could lose an entire tracked session (an
+      // unrecoverable route, unlike lifting data) with no local copy
+      // anywhere.
+      const cardioPayload = {
         type: activityType,
         // Only set for "Other" sessions - undefined here, not stripped
         // downstream, so every consuming display site can fall back to
@@ -16215,7 +16292,8 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         calories: estimatedCalories,
         linkedWorkoutId: linkedWorkoutId,
         goalDurationSeconds: effectiveGoalDuration,
-      });
+      };
+      const savedId = await saveCardioActivityDurable(uid, cardioPayload);
       setSavedSessionId(savedId);
       const prs = await checkAndUpdateCardioPRs(uid, activityType, {
         distanceMeters: distanceMeters > 0 ? distanceMeters : undefined,
@@ -23345,6 +23423,10 @@ export default function App() {
             // and authenticated again. See saveWorkoutSessionDurable for
             // the full real-durability chain this is the recovery half of.
             recoverPendingWorkoutSave();
+            // Same recovery pattern, for a cardio/mind-body/"Other"
+            // session's route/distance/duration data - see
+            // saveCardioActivityDurable above.
+            recoverPendingCardioSave();
             // A resident manually deactivated by their building manager
             // (moved out, etc.) still has a fully working Firebase Auth
             // login, since deleting someone else's login requires the
