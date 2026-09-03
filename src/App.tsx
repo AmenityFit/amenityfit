@@ -15236,6 +15236,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // the activity-grid's early return like the previous attempt had it.
   const effectiveGoalDuration = chosenGoalDuration !== undefined ? (chosenGoalDuration || undefined) : goalDurationSeconds;
   const [customMinutes, setCustomMinutes] = useState(15);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [sessionNotes, setSessionNotes] = useState("");
   const [notesSaveStatus, setNotesSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -15870,26 +15871,48 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // presetActivityType (the workout-linked "Track This Cardio" flow), there
   // never was a picker to return to, so onBack() straight to the caller is
   // correct there.
-  const handleExitTracking = () => {
-    const goBack = () => {
-      if (presetActivityType) {
-        onBack();
-      } else {
-        setActivityType(null);
-      }
-    };
-    if (elapsedSeconds > 0) {
-      if (window.confirm("Discard this activity? Your progress so far won't be saved.")) {
-        stopTrackingInternals();
-        goBack();
-      }
+  const goBackFromTracking = () => {
+    if (presetActivityType) {
+      onBack();
     } else {
-      goBack();
+      setActivityType(null);
+    }
+  };
+  // window.confirm was the previous approach here - native confirm
+  // dialogs are known to behave unreliably inside embedded WebViews
+  // (sometimes not resolving as expected even when tapped), which likely
+  // explains reports of this screen appearing stuck/frozen. A real in-app
+  // modal sidesteps that class of issue entirely, and looks like the rest
+  // of the app instead of a bare browser dialog.
+  const handleExitTracking = () => {
+    if (elapsedSeconds > 0) {
+      setShowDiscardConfirm(true);
+    } else {
+      goBackFromTracking();
     }
   };
 
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
+      {showDiscardConfirm && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: 24, maxWidth: 340, width: "100%" }}>
+            <p style={{ color: COLORS.white, fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>Discard this activity?</p>
+            <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 20px" }}>Your progress so far won't be saved.</p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setShowDiscardConfirm(false)} style={{ flex: 1, padding: "14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.white, fontWeight: 700, cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowDiscardConfirm(false); stopTrackingInternals(); goBackFromTracking(); }}
+                style={{ flex: 1, padding: "14px", borderRadius: 14, border: "none", background: COLORS.danger || "#ff4444", color: COLORS.white, fontWeight: 700, cursor: "pointer" }}
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={handleExitTracking} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
