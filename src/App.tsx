@@ -15642,6 +15642,43 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     }
   };
 
+  const playEndChime = () => {
+    try {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioContextClass();
+      const playNote = (freq: number, startTime: number, duration: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(0.15, startTime + 0.05);
+        gain.gain.linearRampToValueAtTime(0, startTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      };
+      const now = ctx.currentTime;
+      // Descending - opposite of the rising start chime - so the two are
+      // distinguishable by ear alone (start = going up, end = coming down).
+      playNote(783.99, now, 0.5); // G5
+      playNote(523.25, now + 0.15, 0.6); // C5
+    } catch {
+      // Web Audio unsupported or blocked - fails silently.
+    }
+  };
+  // Vibration API has no effect on iOS Safari/WKWebView at all (a
+  // long-standing platform limitation, not something fixable from web
+  // code) - included defensively for any Android usage, but this is a
+  // no-op on the iPhone this has all been tested on tonight. Real haptic
+  // feedback on iOS would need native code in the AmenityFitApp wrapper.
+  const triggerEndVibration = () => {
+    try {
+      if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
+    } catch {}
+  };
+
   const startTracking = () => {
     if (!isIndoorActivity && !navigator.geolocation) {
       setLocationError("Location isn't available on this device.");
@@ -15770,6 +15807,10 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   useEffect(() => {
     if (effectiveGoalDuration && !goalHitPromptShown && elapsedSeconds >= effectiveGoalDuration && status === "tracking") {
       setGoalHitPromptShown(true);
+      if (currentActivityIsMindBody) {
+        playEndChime();
+        triggerEndVibration();
+      }
     }
   }, [elapsedSeconds, effectiveGoalDuration, goalHitPromptShown, status]);
 
