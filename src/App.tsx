@@ -15403,12 +15403,15 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [sessionNotes, setSessionNotes] = useState("");
   const [notesSaveStatus, setNotesSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [showNotesToast, setShowNotesToast] = useState(false);
   const saveSessionNotes = async () => {
     if (!savedSessionId) return;
     setNotesSaveStatus("saving");
     try {
       await setDoc(doc(db, "workoutSessions", savedSessionId), { notes: sessionNotes }, { merge: true });
       setNotesSaveStatus("saved");
+      setShowNotesToast(true);
+      setTimeout(() => setShowNotesToast(false), 2000);
     } catch (e) {
       console.error("saveSessionNotes error:", e);
       setNotesSaveStatus("idle");
@@ -15795,6 +15798,25 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     const activityMeta = ACTIVITY_TYPES.find((a) => a.key === activityType);
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
+        {/* Matches the existing "Saved to Notes" toast used elsewhere in
+            the app exactly, for visual consistency. */}
+        {showNotesToast && (
+          <div style={{
+            position: "fixed", bottom: 120, left: "50%", transform: "translateX(-50%)", zIndex: 9999,
+            background: "rgba(30,30,30,0.92)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+            border: "1px solid rgba(255,255,255,0.12)", borderRadius: 50, padding: "10px 20px",
+            display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+            whiteSpace: "nowrap", transition: "opacity 0.2s ease",
+          }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="8" fill="#34C759"/>
+              <path d="M4.5 8L7 10.5L11.5 6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span style={{ color: "#fff", fontSize: 14, fontWeight: 600, fontFamily: "'Inter', sans-serif" }}>
+              Note Saved
+            </span>
+          </div>
+        )}
         {/* Centers the header/map/stats block vertically in whatever space
             remains above the bottom-anchored buttons, rather than pinning
             it to the top and leaving an oversized empty gap for indoor
