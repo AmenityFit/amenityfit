@@ -13856,6 +13856,108 @@ const formatTime = (secs: number) => {
 // were built entirely around lifting-day data (groups/dayTitle/dayFocus),
 // so a cardio session rendered blank there (no exercises to show). This
 // is a genuinely separate template, not a patch on the lifting one.
+// Multi-session trend chart - roadmap item #3's "buildable now" piece,
+// since it only needs the aggregate numbers already saved on every session
+// (no per-point GPS timing required, unlike a real single-run pace graph).
+// Built as a hand-rolled SVG rather than pulling in a charting library
+// (recharts, etc.) - the app's bundle is already flagged oversized by the
+// build output, and this is simple enough (a handful of points, one line)
+// that a real dependency isn't worth the extra weight on every resident's
+// download. Smooth curve via Catmull-Rom-to-bezier conversion, not
+// straight line segments - genuinely matches the polish level of the
+// PR-glow treatment used elsewhere, not a bare debug-style line graph.
+const TrendChart = ({ points, unit, showBest, higherIsBetter }: { points: { label: string; value: number }[]; unit: string; showBest: boolean; higherIsBetter: boolean }) => {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  if (points.length < 3) return null;
+
+  const width = 320;
+  const height = 120;
+  const padX = 12;
+  const padY = 20;
+  const values = points.map((p) => p.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  // Guards a flat/all-identical line (e.g. every session exactly 20:00) -
+  // without this, range = 0 and every y computation below divides by zero.
+  const range = max - min || 1;
+
+  const coords = points.map((p, i) => {
+    const x = padX + (i / (points.length - 1)) * (width - padX * 2);
+    // SVG y grows downward, so invert - a higher value should sit higher
+    // on screen (closer to y=padY) regardless of what "higher" means
+    // semantically (better pace = lower number, better distance = higher
+    // number) - higherIsBetter only affects which point gets the PR-style
+    // highlight below, never the raw plotting math itself.
+    const y = padY + (1 - (p.value - min) / range) * (height - padY * 2);
+    return { x, y };
+  });
+
+  // Catmull-Rom to cubic-bezier conversion - standard technique for a
+  // smooth curve that actually passes through every real data point
+  // (unlike a simple smoothing average, which would visually lie about
+  // where sessions actually landed).
+  const linePath = coords.reduce((path, point, i) => {
+    if (i === 0) return `M ${point.x},${point.y}`;
+    const p0 = coords[Math.max(0, i - 2)];
+    const p1 = coords[i - 1];
+    const p2 = point;
+    const p3 = coords[Math.min(coords.length - 1, i + 1)];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    return `${path} C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  }, "");
+
+  const fillPath = `${linePath} L ${coords[coords.length - 1].x},${height - padY} L ${coords[0].x},${height - padY} Z`;
+
+  // Only pace trends have a real "better/worse" direction (lower pace is
+  // genuinely faster) - duration trends have no such thing (a longer
+  // meditation isn't a worse one, a longer easy run isn't a worse one
+  // either), so showBest=false means -1, which never matches any real
+  // index below, meaning no dot ever gets the "Best" highlight treatment.
+  const bestIndex = showBest
+    ? (higherIsBetter ? values.indexOf(max) : values.indexOf(min))
+    : -1;
+
+  return (
+    <div style={{ margin: "14px 24px 0", padding: "16px 16px 8px", borderRadius: 16, background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", display: "block" }}>
+        <defs>
+          <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={COLORS.accent} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={COLORS.accent} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={fillPath} fill="url(#trendFill)" />
+        <path d={linePath} fill="none" stroke={COLORS.accent} strokeWidth={2.5} strokeLinecap="round" />
+        {coords.map((c, i) => (
+          <circle
+            key={i}
+            cx={c.x}
+            cy={c.y}
+            r={i === activeIndex ? 6 : (i === bestIndex ? 4.5 : 3)}
+            fill={i === bestIndex ? COLORS.success : COLORS.accent}
+            stroke={COLORS.background}
+            strokeWidth={i === activeIndex ? 2 : 1}
+            onClick={() => setActiveIndex(activeIndex === i ? null : i)}
+            style={{ cursor: "pointer" }}
+          />
+        ))}
+      </svg>
+      {activeIndex !== null && (
+        <p style={{ color: COLORS.white, fontSize: 13, fontWeight: 700, textAlign: "center", margin: "4px 0 8px" }}>
+          {points[activeIndex].label}: {points[activeIndex].value.toFixed(1)}{unit}
+          {activeIndex === bestIndex && <span style={{ color: COLORS.success }}> · Best</span>}
+        </p>
+      )}
+      {activeIndex === null && (
+        <p style={{ color: COLORS.textSecondary, fontSize: 11, textAlign: "center", margin: "4px 0 8px" }}>Tap a point for details</p>
+      )}
+    </div>
+  );
+};
+
 const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { session: any; sessionHistory: any[]; profile: any; onClose: () => void }) => {
   const [showShareCard, setShowShareCard] = useState(false);
   const [showStickerMode, setShowStickerMode] = useState(false);
@@ -13897,6 +13999,33 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
   if (paceLabel) stats.push({ label: "Pace", value: paceLabel });
   if (session.calories) stats.push({ label: "Calories", value: `~${session.calories}` });
 
+  // Multi-session trend - last 10 sessions of the same type, oldest-to-newest
+  // (natural left-to-right reading of "progress over time"), including this
+  // one so it's visible on its own trend, not just the sessions before it.
+  // Cardio with real pace data trends pace (the metric people actually care
+  // about improving); everything else (mind-body, or cardio sessions
+  // without a pace, e.g. indoor machines with no distance) trends duration
+  // instead, since pace never applies there.
+  const sameTypeChronological = sessionHistory
+    .filter((s) => s.type === session.type)
+    .sort((a: any, b: any) => {
+      const aTime = a.completedAt?.toMillis ? a.completedAt.toMillis() : new Date(a.completedAt || 0).getTime();
+      const bTime = b.completedAt?.toMillis ? b.completedAt.toMillis() : new Date(b.completedAt || 0).getTime();
+      return aTime - bTime;
+    });
+  const trendSource = sameTypeChronological.slice(-10);
+  const trendUsesPace = !isMindBody && trendSource.some((s) => s.avgPaceSecondsPerKm);
+  const trendPoints = trendSource
+    .map((s) => {
+      const dateLabel = s.completedAt?.toDate ? s.completedAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+      if (trendUsesPace) {
+        if (!s.avgPaceSecondsPerKm) return null;
+        return { label: dateLabel, value: s.avgPaceSecondsPerKm / 60 };
+      }
+      return { label: dateLabel, value: (s.durationSeconds || 0) / 60 };
+    })
+    .filter((p): p is { label: string; value: number } => p !== null);
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 700, background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
       <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", gap: 12 }}>
@@ -13936,6 +14065,24 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
         <div style={{ margin: "14px 24px 0", padding: "12px 16px", borderRadius: 14, background: `${COLORS.accent}15`, border: `1px solid ${COLORS.accent}40` }}>
           <p style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700, margin: 0, textAlign: "center" }}>{comparisonLabel}</p>
         </div>
+      )}
+
+      {trendPoints.length >= 3 && (
+        <>
+          <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "20px 24px 0" }}>
+            {trendUsesPace ? "Pace" : "Duration"} Trend
+          </p>
+          <TrendChart
+            points={trendPoints}
+            unit={trendUsesPace ? " min/km" : " min"}
+            // Only pace has a real better/worse direction - duration
+            // trends (mind-body, or cardio with no distance) show the
+            // shape of the data with no "Best" claim attached, since
+            // longer isn't inherently better or worse there.
+            showBest={trendUsesPace}
+            higherIsBetter={false}
+          />
+        </>
       )}
 
       {session.notes && (
