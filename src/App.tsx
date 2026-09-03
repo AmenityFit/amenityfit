@@ -12116,6 +12116,31 @@ const WorkoutFlow = ({ profile, onComplete, onBack, onGoHomeSave, onProfileUpdat
   const [savedCompletedCells, setSavedCompletedCells] = useState<string[]>(savedProgress?.completedCells ?? []);
 const savedCompletedCellsRef = React.useRef<string[]>(savedProgress?.completedCells ?? []);
 
+  // Real audit finding, scoped proportionately to actual risk: this is a
+  // pure resume-position bookmark (which round/exercise/cells someone was
+  // on), not the actual recorded exercise data - the real weights already
+  // have full durability via saveWeightsToFirestoreDurable, and the final
+  // session record via saveWorkoutSessionDurable. If THIS specific save
+  // fails, worst case is reopening the workout at an earlier resume point
+  // and re-tapping through some already-completed checkmarks - annoying,
+  // never actual data loss. Given that lower stakes plus this firing at
+  // high frequency (every single set), a single-slot durable backup is the
+  // right shape here, not the full multi-entry array used for weight
+  // saves - only the LATEST progress position ever matters, so each new
+  // save simply overwrites whatever was pending before it, rather than
+  // needing to track several simultaneously.
+  const PENDING_PROGRESS_SAVE_KEY = "amenityfit_pending_progress_save";
+  // Guards against a real ordering risk that retries introduce: this fires
+  // at high frequency (every set), and without this guard, an OLDER call
+  // that's still retrying (slow connection) could finish AFTER a NEWER
+  // call for a more recent set and silently overwrite genuinely more
+  // complete progress with stale data - meaning a later set could
+  // visually "revert" on reload. Every call gets its own sequence number;
+  // a call whose sequence no longer matches the latest one (checked both
+  // before each attempt AND again immediately after the write returns,
+  // since a newer call could start while this one is still in flight)
+  // simply abandons itself rather than risking a stale write.
+  const progressSaveSeqRef = React.useRef(0);
   const saveProgressToFirestore = async (updates: Record<string, any>) => {
     if (!profile?.uid || isReview) return;
     const progressData = {
@@ -12125,13 +12150,67 @@ const savedCompletedCellsRef = React.useRef<string[]>(savedProgress?.completedCe
       startTime,
       ...updates,
     };
+    const mySeq = ++progressSaveSeqRef.current;
     try {
-      await setDoc(doc(db, "users", profile.uid), {
-        workoutProgress: progressData,
-      }, { merge: true });
-      onProfileUpdate?.({ workoutProgress: progressData });
-    } catch (e) { console.error("Failed to save workout progress:", e); }
+      localStorage.setItem(PENDING_PROGRESS_SAVE_KEY, JSON.stringify({ uid: profile.uid, progressData, seq: mySeq }));
+    } catch (e) {
+      // Storage can fail (quota, private mode) - the real save attempt
+      // below still runs regardless.
+    }
+    const maxAttempts = 2;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (mySeq !== progressSaveSeqRef.current) return; // superseded by a newer save - abandon
+      try {
+        await setDoc(doc(db, "users", profile.uid), {
+          workoutProgress: progressData,
+        }, { merge: true });
+        if (mySeq !== progressSaveSeqRef.current) return; // superseded while this write was in flight
+        onProfileUpdate?.({ workoutProgress: progressData });
+        try {
+          const raw = localStorage.getItem(PENDING_PROGRESS_SAVE_KEY);
+          const current = raw ? JSON.parse(raw) : null;
+          // Only clear the backup if it's still THIS call's entry - a
+          // newer call may have already written its own pending entry,
+          // which must never get deleted by an older call finishing late.
+          if (current?.seq === mySeq) localStorage.removeItem(PENDING_PROGRESS_SAVE_KEY);
+        } catch {}
+        return;
+      } catch (e) {
+        console.error("Failed to save workout progress:", e);
+        if (attempt < maxAttempts - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+    }
+    // Both attempts failed - backup deliberately left in place (if it's
+    // still this call's own entry - see the same seq check above applied
+    // implicitly by simply not deleting it here); the next set logged
+    // will simply try again with a newer position anyway, and the
+    // mount-time recovery effect below covers the case where the app
+    // closes before that happens.
   };
+  // Checked once when this screen mounts (someone opening/resuming a
+  // workout) - if a previous session's progress bookmark never actually
+  // confirmed as saved, this finishes writing it now, silently, before
+  // anything else. Placed AFTER saveProgressToFirestore's own declaration,
+  // not before it - same precaution as the weight-save recovery effect,
+  // eliminating any possibility of referencing it before it's assigned.
+  useEffect(() => {
+    (async () => {
+      let pending: { uid: string; progressData: any } | null = null;
+      try {
+        const raw = localStorage.getItem(PENDING_PROGRESS_SAVE_KEY);
+        if (raw) pending = JSON.parse(raw);
+      } catch {}
+      if (!pending || pending.uid !== profile?.uid) return;
+      try {
+        await setDoc(doc(db, "users", pending.uid), { workoutProgress: pending.progressData }, { merge: true });
+        localStorage.removeItem(PENDING_PROGRESS_SAVE_KEY);
+      } catch (e) {
+        console.error("Failed to recover pending workout progress:", e);
+      }
+    })();
+  }, []);
 
   const sessionLength = Number(profile?.sessionLength) || 45;
   // In review mode, programDay has already incremented to the next day.
