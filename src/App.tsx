@@ -9359,6 +9359,7 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
                     <p key={i} style={{ color: line.startsWith("•") ? COLORS.white : COLORS.textSecondary, fontSize: 13, margin: "0 0 4px", lineHeight: 1.5 }}>{line}</p>
                   ));
                 })()}
+                <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "8px 0 0", fontStyle: "italic" }}>Choose your activity</p>
               </div>
               </div>
             ) : (
@@ -10557,7 +10558,7 @@ if (showRest) {
         </button>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
           <div style={{ width: 80, height: 80, borderRadius: 99, background: "#1DB95420", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24, boxShadow: "0 8px 32px rgba(29,185,84,0.2)" }}>
-            <span style={{ fontSize: 36 }}>🏃</span>
+            <Watch size={36} color="#1DB954" strokeWidth={1.75} />
           </div>
           <h2 style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: "0 0 12px" }}>Cardio Time</h2>
           <p style={{ color: "#1DB954", fontSize: 18, fontWeight: 700, margin: "0 0 16px" }}>{group.cardioMinutes} minutes</p>
@@ -10575,7 +10576,7 @@ if (showRest) {
             reads as an optional extra rather than competing with the
             primary "Cardio Complete" action beneath it. */}
         <button onClick={() => setShowCardioTracker(true)} style={{ width: "100%", padding: "16px", borderRadius: 16, border: `1px solid #1DB95440`, background: "#1DB95415", color: "#1DB954", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>
-          🏃 Track This Cardio
+          Track Cardio
         </button>
         <button onClick={onGroupComplete} style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 17, fontWeight: 700, cursor: "pointer", boxShadow: `0 8px 30px ${COLORS.primary}40` }}>
           Cardio Complete ✓
@@ -16037,7 +16038,16 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // in the function), so this must exist before that hook does, not after
   // the activity-grid's early return like the previous attempt had it.
   const effectiveGoalDuration = chosenGoalDuration !== undefined ? (chosenGoalDuration || undefined) : goalDurationSeconds;
-  const [customMinutes, setCustomMinutes] = useState(15);
+  // Real fix, prompted by a real audit: this now pre-populates from the
+  // program's actual suggested duration when this session is linked to a
+  // program day (goalDurationSeconds is the group's cardioMinutes*60, or
+  // a mind-body program's target) - so the wheel picker below starts at
+  // the RIGHT number for someone to simply confirm, rather than an
+  // unrelated hardcoded 15. They can still scroll to change it either
+  // way - this only affects the starting point, never removes control.
+  const [customMinutes, setCustomMinutes] = useState(() =>
+    linkedWorkoutId && goalDurationSeconds ? Math.round(goalDurationSeconds / 60) : 15
+  );
   // "Other" custom activity name - null = not yet entered (name-entry
   // screen still showing, same early-return pattern as the mind-body
   // duration screen above). Entered once, before Start, so it's available
@@ -16750,7 +16760,21 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // Skipped entirely for program-linked sessions (linkedWorkoutId already
   // supplies a real goalDurationSeconds from the program itself).
   const currentActivityIsMindBody = ACTIVITY_TYPES.find((a) => a.key === activityType)?.isMindBody;
-  if (currentActivityIsMindBody && !linkedWorkoutId && chosenGoalDuration === undefined) {
+  // Real audit fix: previously this screen only ever showed for
+  // standalone mind-body sessions - ANY program-linked session
+  // (linkedWorkoutId set) with a real programmed duration skipped it
+  // entirely, silently locking the person into whatever the program said
+  // with zero visibility or control before tracking started. This
+  // matters just as much for regular cardio (a legs+cardio day's
+  // programmed minutes) as it does for mind-body. Standalone regular
+  // cardio (no link at all) deliberately still skips this and starts
+  // open-ended immediately - that's correct, unchanged behavior for a
+  // normal untracked-goal run.
+  const showDurationPicker = chosenGoalDuration === undefined && (
+    (currentActivityIsMindBody && !linkedWorkoutId) ||
+    (!!linkedWorkoutId && typeof goalDurationSeconds === "number")
+  );
+  if (showDurationPicker) {
     const presets = [
       { label: "5 min", seconds: 5 * 60 },
       { label: "10 min", seconds: 10 * 60 },
@@ -16765,6 +16789,11 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           <h1 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: 0 }}>How long?</h1>
         </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px 40px", gap: 12 }}>
+          {linkedWorkoutId && goalDurationSeconds && (
+            <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 4px", textAlign: "center" }}>
+              Today's program suggests {Math.round(goalDurationSeconds / 60)} min - adjust below if you'd like
+            </p>
+          )}
           {presets.map((p) => (
             <button key={p.label} onClick={() => setChosenGoalDuration(p.seconds)} style={{ padding: "20px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
               {p.label}
