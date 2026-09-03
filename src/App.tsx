@@ -17546,7 +17546,12 @@ const StickerShareScreen = ({
       const dist = getPinchDistance();
       if (dist) {
         const ratio = dist / pinchStartDist.current;
-        setScale(Math.max(0.6, Math.min(2.5, pinchStartScale.current * ratio)));
+        // Widened from 0.6-2.5 - that range felt too tight in real use.
+        // Real guardrails still kept, not removed entirely: below 0.4 the
+        // sticker becomes genuinely illegible clutter, and above 4 it can
+        // clip outside the visible frame or lose sharpness once exported
+        // at the fixed 2x/3x scale used by html2canvas below.
+        setScale(Math.max(0.4, Math.min(4, pinchStartScale.current * ratio)));
       }
       return;
     }
