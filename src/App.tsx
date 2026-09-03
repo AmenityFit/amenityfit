@@ -15829,6 +15829,18 @@ const buildRouteMapUrl = (route: { lat: number; lng: number }[], width: number, 
 //   the detail that keeps it from reading as a generic tennis court.
 // Returned as a data: URL so it can be used as a plain <img src> exactly
 // like buildRouteMapUrl's output, with no change needed anywhere it's used.
+//
+// Real bug found via a live sticker share (confirmed with side-by-side
+// screenshots): every court SVG here only ever had a viewBox, no explicit
+// width/height attributes. The live in-app screen (a normal browser
+// render) displayed these correctly, full court visible - but the actual
+// EXPORTED sticker file (captured via html2canvas) showed the court
+// cropped to roughly 65% of its width once posted to Instagram. This is a
+// known html2canvas limitation: it can't always reliably derive an SVG
+// data-URI's intrinsic aspect ratio from viewBox alone when rasterizing,
+// and falls back to a wrong assumed size - explicit width/height on every
+// <svg> tag below removes that ambiguity entirely, for any consumer, not
+// just the live DOM.
 const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel" | "pickleball", accentColor: string): string => {
   // Bug fix: this previously pre-encoded "#" to "%23" here, then the WHOLE
   // svg string got passed through encodeURIComponent() again below, which
@@ -15843,7 +15855,7 @@ const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel" 
     // Full court now (not half), traced from a real full-court reference:
     // both baskets, both keys with free-throw circles, both three-point
     // arcs, center line and center circle. ViewBox at 5px/ft (94x50ft).
-    svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 250">
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" width="470" height="250" viewBox="0 0 470 250">
       <rect x="5" y="5" width="460" height="240" fill="none" stroke="${stroke}" stroke-width="3"/>
       <line x1="235" y1="5" x2="235" y2="245" stroke="${stroke}" stroke-width="3"/>
       <circle cx="235" cy="125" r="30" fill="none" stroke="${stroke}" stroke-width="3"/>
@@ -15859,7 +15871,7 @@ const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel" 
     // frames poking outside the end lines, traced from a real reference -
     // both were missing before despite being immediately recognizable
     // details on any real pitch diagram.
-    svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 525 340">
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" width="525" height="340" viewBox="0 0 525 340">
       <rect x="10" y="10" width="505" height="320" fill="none" stroke="${stroke}" stroke-width="3"/>
       <line x1="262.5" y1="10" x2="262.5" y2="330" stroke="${stroke}" stroke-width="3"/>
       <circle cx="262.5" cy="170" r="46" fill="none" stroke="${stroke}" stroke-width="3"/>
@@ -15889,7 +15901,7 @@ const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel" 
     // 15ft-deep area on each side of the kitchen is split by a center
     // service line, but that line only spans the outer zones, stopping
     // exactly at the kitchen boundary rather than crossing into it.
-    svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 230 110">
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" width="230" height="110" viewBox="0 0 230 110">
       <rect x="5" y="5" width="220" height="100" fill="none" stroke="${stroke}" stroke-width="3"/>
       <rect x="80" y="5" width="70" height="100" fill="${stroke}" opacity="0.25"/>
       <line x1="115" y1="-2" x2="115" y2="5" stroke="${stroke}" stroke-width="3"/>
@@ -15904,7 +15916,7 @@ const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel" 
     // a dashed center line running the full court height (the net, dashed
     // per Senz's request), and symmetric service lines above/below the
     // net within the two main playing zones only.
-    svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200">
       <rect x="6" y="6" width="388" height="188" fill="none" stroke="${stroke}" stroke-width="3"/>
       <rect x="12" y="12" width="376" height="176" fill="none" stroke="${stroke}" stroke-width="1.5" opacity="0.5"/>
       <line x1="70" y1="6" x2="70" y2="194" stroke="${stroke}" stroke-width="2"/>
