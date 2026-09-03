@@ -15945,44 +15945,60 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           // counting up - a smaller, dimmer, glow-free display cuts that
           // down without touching real system brightness (web apps can't
           // do that), while staying perfectly readable.
+          // A chosen duration should visibly count DOWN to it, not just
+          // silently trigger a prompt once elapsed time passes it while
+          // still showing an ordinary count-up clock - that mismatch is
+          // exactly what made the duration picker feel like it wasn't
+          // doing anything. Only real (non-open-ended) goals count down;
+          // everything else still counts up as always.
+          const hasCountdown = currentActivityIsMindBody && !!effectiveGoalDuration;
+          const displaySeconds = hasCountdown ? Math.max(0, effectiveGoalDuration! - elapsedSeconds) : elapsedSeconds;
+          const displayLabel = hasCountdown ? "TIME LEFT" : "TIME";
           const isDimmedMode = keepScreenOn && currentActivityIsMindBody && status === "tracking";
           if (isDimmedMode) {
             return (
               <div style={{ textAlign: "center" }}>
-                <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "0 0 10px", fontWeight: 700, letterSpacing: 2, opacity: 0.4 }}>TIME</p>
-                <h1 style={{ color: COLORS.white, fontSize: 44, fontWeight: 700, margin: 0, lineHeight: 1, letterSpacing: -1, fontVariantNumeric: "tabular-nums", opacity: 0.55 }}>{formatTime(elapsedSeconds)}</h1>
+                <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "0 0 10px", fontWeight: 700, letterSpacing: 2, opacity: 0.4 }}>{displayLabel}</p>
+                <h1 style={{ color: COLORS.white, fontSize: 44, fontWeight: 700, margin: 0, lineHeight: 1, letterSpacing: -1, fontVariantNumeric: "tabular-nums", opacity: 0.55 }}>{formatTime(displaySeconds)}</h1>
               </div>
             );
           }
           const showPulsingRing = currentActivityIsMindBody && status === "tracking";
+          // Multiple staggered, radiating rings rather than one thin
+          // outline - each ring is the same animation offset in time, so
+          // they visually pulse outward one after another like a real
+          // meditation-app breathing animation, not a single static circle.
+          const ringSizes = [180, 260, 340, 420];
           return (
             <div style={{ textAlign: "center", position: "relative" }}>
               {showPulsingRing && (
                 <style>{`
                   @keyframes mindBodyPulse {
-                    0% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.55; }
-                    50% { transform: translate(-50%, -50%) scale(1.05); opacity: 0.15; }
-                    100% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.55; }
+                    0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.7; }
+                    70% { opacity: 0; }
+                    100% { transform: translate(-50%, -50%) scale(1.15); opacity: 0; }
                   }
                 `}</style>
               )}
-              {showPulsingRing && (
-                <div style={{
+              {showPulsingRing && ringSizes.map((size, i) => (
+                <div key={size} style={{
                   position: "absolute", top: "50%", left: "50%",
-                  width: 240, height: 240, borderRadius: "50%",
+                  width: size, height: size, borderRadius: "50%",
                   border: `2px solid ${COLORS.accent}`,
-                  animation: "mindBodyPulse 3.2s ease-in-out infinite",
+                  boxShadow: `0 0 30px 4px ${COLORS.accent}60, inset 0 0 30px 4px ${COLORS.accent}30`,
+                  animation: `mindBodyPulse 3.6s ease-out infinite`,
+                  animationDelay: `${i * 0.9}s`,
                   pointerEvents: "none",
                 }} />
-              )}
+              ))}
               <div style={{
                 position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
                 width: 280, height: 160, borderRadius: "50%",
                 background: `radial-gradient(circle, ${COLORS.primary}30 0%, transparent 70%)`,
                 pointerEvents: "none",
               }} />
-              <p style={{ position: "relative", color: COLORS.textSecondary, fontSize: 13, margin: "0 0 18px", fontWeight: 700, letterSpacing: 2 }}>TIME</p>
-              <h1 style={{ position: "relative", color: COLORS.white, fontSize: 76, fontWeight: 900, margin: 0, lineHeight: 1, letterSpacing: -2, fontVariantNumeric: "tabular-nums", textShadow: `0 0 50px ${COLORS.primary}50` }}>{formatTime(elapsedSeconds)}</h1>
+              <p style={{ position: "relative", color: COLORS.textSecondary, fontSize: 13, margin: "0 0 18px", fontWeight: 700, letterSpacing: 2 }}>{displayLabel}</p>
+              <h1 style={{ position: "relative", color: COLORS.white, fontSize: 76, fontWeight: 900, margin: 0, lineHeight: 1, letterSpacing: -2, fontVariantNumeric: "tabular-nums", textShadow: `0 0 50px ${COLORS.primary}50` }}>{formatTime(displaySeconds)}</h1>
             </div>
           );
         })()}
