@@ -134,6 +134,7 @@ const firebaseConfig = {
 // ─── Anthropic API Key ─────────────────────────────────────────────────────────
 // Paste your Anthropic API key below. Get one at console.anthropic.com
 const ANTHROPIC_PROXY_URL = "https://anthropicproxy-ts7bxpsabq-uc.a.run.app";
+const MODERATE_ACTIVITY_NAME_URL = "https://us-central1-amenityfit-31276.cloudfunctions.net/moderateActivityName";
 
 
     // ─── Wearable Integration ─────────────────────────────────────────────────────
@@ -15453,6 +15454,9 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     setChosenGoalDuration(undefined);
     setCustomMinutes(15);
     setCustomActivityName(null);
+    setOtherNameDraft("");
+    setOtherNameError(null);
+    setOtherNameChecking(false);
     setShowDiscardConfirm(false);
     setSavedSessionId(null);
     setSessionNotes("");
@@ -16151,8 +16155,9 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // card) rather than only captured at the end.
   const [otherNameDraft, setOtherNameDraft] = useState("");
   const [otherNameError, setOtherNameError] = useState<string | null>(null);
+  const [otherNameChecking, setOtherNameChecking] = useState(false);
   if (activityType === "other" && customActivityName === null) {
-    const submitOtherName = () => {
+    const submitOtherName = async () => {
       const trimmed = otherNameDraft.trim();
       if (!trimmed) {
         setOtherNameError("Enter a name for this activity");
@@ -16162,11 +16167,40 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         setOtherNameError("Keep it under 20 characters");
         return;
       }
+      // Layer 1: instant client-side word-list check. Layer 2 (below) is
+      // the real language-understanding check - this is just a fast, free
+      // first gate so obvious cases never need the round-trip at all.
       if (filterHasProfanity(trimmed)) {
         setOtherNameError("Please choose a different name");
         return;
       }
-      setCustomActivityName(trimmed);
+      setOtherNameChecking(true);
+      try {
+        const response = await fetch(MODERATE_ACTIVITY_NAME_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-proxy-secret": "af-proxy-2026-xK9mQ3rL",
+          },
+          body: JSON.stringify({ uid: profile?.uid || null, name: trimmed }),
+        });
+        const data = await response.json();
+        if (response.ok && data?.approved) {
+          setCustomActivityName(trimmed);
+        } else if (response.status === 429) {
+          setOtherNameError("Too many attempts. Give it a moment and try again.");
+        } else {
+          setOtherNameError("Please choose a different name");
+        }
+      } catch (e) {
+        // Network/server failure, not a rejection - a real, retryable
+        // problem distinct from the name itself being disallowed, so this
+        // gets its own message rather than reusing "choose a different name".
+        console.error("Activity name moderation request failed:", e);
+        setOtherNameError("Couldn't check that name - check your connection and try again");
+      } finally {
+        setOtherNameChecking(false);
+      }
     };
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
@@ -16182,17 +16216,18 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             value={otherNameDraft}
             maxLength={20}
             autoFocus
+            disabled={otherNameChecking}
             onChange={(e) => { setOtherNameDraft(e.target.value); if (otherNameError) setOtherNameError(null); }}
-            onKeyDown={(e) => { if (e.key === "Enter") submitOtherName(); }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !otherNameChecking) submitOtherName(); }}
             placeholder="e.g. Boxing, Jiu Jitsu"
-            style={{ padding: "18px", borderRadius: 16, border: `1px solid ${otherNameError ? (COLORS.danger || "#ff4444") : COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 17, fontWeight: 700 }}
+            style={{ padding: "18px", borderRadius: 16, border: `1px solid ${otherNameError ? (COLORS.danger || "#ff4444") : COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 17, fontWeight: 700, opacity: otherNameChecking ? 0.6 : 1 }}
           />
           <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "-4px 0 0", textAlign: "right" }}>{otherNameDraft.length}/20</p>
           {otherNameError && (
             <p style={{ color: COLORS.danger || "#ff4444", fontSize: 13, fontWeight: 600, margin: 0 }}>{otherNameError}</p>
           )}
-          <button onClick={submitOtherName} style={{ padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: "pointer", marginTop: 8 }}>
-            Continue
+          <button onClick={submitOtherName} disabled={otherNameChecking} style={{ padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: otherNameChecking ? "default" : "pointer", marginTop: 8, opacity: otherNameChecking ? 0.7 : 1 }}>
+            {otherNameChecking ? "Checking..." : "Continue"}
           </button>
         </div>
       </div>
