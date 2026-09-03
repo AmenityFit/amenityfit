@@ -15968,7 +15968,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [sessionNotes, setSessionNotes] = useState("");
-  const [notesSaveStatus, setNotesSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [notesSaveStatus, setNotesSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [showNotesToast, setShowNotesToast] = useState(false);
   // Every exit-to-picker point (the "How long?" back button, the "Other"
   // name-entry back button, and discard-then-back) was previously calling
@@ -16003,18 +16003,39 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     setShowShareCard(false);
     setShowStickerMode(false);
   };
+  // Real audit finding, lighter-touch fix than the GPS/weight-save cases:
+  // this already never faked a "Saved" confirmation on failure - it
+  // correctly fell back to "idle" - but that fallback looked visually
+  // IDENTICAL to never having tapped Save at all, with zero error message,
+  // so a real failure could go unnoticed. A short note also stays fully
+  // visible in the textarea regardless of save outcome (nothing is lost
+  // from the UI the way a GPS route or exercise weights would be), so a
+  // full localStorage-backup-and-recover system like the other save paths
+  // isn't warranted here - the person can always just see it failed and
+  // tap Save again. Added: a couple of automatic retries first (so a
+  // transient blip resolves invisibly, same pattern used everywhere else
+  // tonight), and a genuine, visible "error" state - distinct from
+  // "idle" - if every retry still fails, so a real failure is never
+  // silently indistinguishable from simply not having saved yet.
   const saveSessionNotes = async () => {
     if (!savedSessionId) return;
     setNotesSaveStatus("saving");
-    try {
-      await setDoc(doc(db, "workoutSessions", savedSessionId), { notes: sessionNotes }, { merge: true });
-      setNotesSaveStatus("saved");
-      setShowNotesToast(true);
-      setTimeout(() => setShowNotesToast(false), 2000);
-    } catch (e) {
-      console.error("saveSessionNotes error:", e);
-      setNotesSaveStatus("idle");
+    const maxAttempts = 2;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        await setDoc(doc(db, "workoutSessions", savedSessionId), { notes: sessionNotes }, { merge: true });
+        setNotesSaveStatus("saved");
+        setShowNotesToast(true);
+        setTimeout(() => setShowNotesToast(false), 2000);
+        return;
+      } catch (e) {
+        console.error("saveSessionNotes error:", e);
+        if (attempt < maxAttempts - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
     }
+    setNotesSaveStatus("error");
   };
   // Off by default - screen-on for a full session has a real battery
   // cost, and defaulting it on for everyone wasn't the right call. One
@@ -16554,9 +16575,9 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             <button
               onClick={saveSessionNotes}
               disabled={notesSaveStatus === "saving" || !sessionNotes.trim()}
-              style={{ marginTop: 8, padding: "10px 16px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 13, fontWeight: 700, cursor: notesSaveStatus === "saving" ? "default" : "pointer", opacity: !sessionNotes.trim() ? 0.5 : 1 }}
+              style={{ marginTop: 8, padding: "10px 16px", borderRadius: 12, border: `1px solid ${notesSaveStatus === "error" ? (COLORS.danger || "#ff4444") : COLORS.border}`, background: COLORS.card, color: notesSaveStatus === "error" ? (COLORS.danger || "#ff4444") : COLORS.white, fontSize: 13, fontWeight: 700, cursor: notesSaveStatus === "saving" ? "default" : "pointer", opacity: !sessionNotes.trim() ? 0.5 : 1 }}
             >
-              {notesSaveStatus === "saved" ? "Saved" : notesSaveStatus === "saving" ? "Saving..." : "Save Note"}
+              {notesSaveStatus === "saved" ? "Saved" : notesSaveStatus === "saving" ? "Saving..." : notesSaveStatus === "error" ? "Couldn't save - tap to retry" : "Save Note"}
             </button>
           </div>
         )}
