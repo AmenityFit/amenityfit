@@ -497,6 +497,26 @@ const fetchAllBuildings = async () => {
   }
 };
 
+// Real usage threshold from the roadmap ("~15-20 users") - a name below
+// this hasn't shown a real pattern yet, so it's filtered out here rather
+// than shown at every count and left for a human to mentally filter.
+// Everything ABOVE the threshold is real signal worth Senz's attention;
+// nothing below it is noise-reduced out, not lost - still in Firestore,
+// just not surfaced until it crosses the line.
+const OTHER_ACTIVITY_TREND_THRESHOLD = 15;
+const fetchOtherActivityTrends = async () => {
+  try {
+    const snap = await getDocs(collection(db, "otherActivityTrends"));
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() } as any))
+      .filter(t => (t.uniqueUserCount || 0) >= OTHER_ACTIVITY_TREND_THRESHOLD)
+      .sort((a, b) => (b.uniqueUserCount || 0) - (a.uniqueUserCount || 0));
+  } catch (e) {
+    console.error("fetchOtherActivityTrends error:", e);
+    return [];
+  }
+};
+
 const fetchCompanyBuildings = async (companyId: string) => {
   try {
     const snap = await getDocs(query(collection(db, "buildings"), where("companyId", "==", companyId)));
@@ -18552,7 +18572,9 @@ const SuperAdminLogin = ({ onLogin, onBack }) => {
 };
 
 const SuperAdminDashboard = ({ onSignOut }) => {
-  const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "queue" | "revenue">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "queue" | "revenue" | "trending">("overview");
+  const [otherActivityTrends, setOtherActivityTrends] = useState<any[]>([]);
+  const [trendsLoaded, setTrendsLoaded] = useState(false);
   const [selectedBuilding, setSelectedBuilding] = useState<any>(null);
   const [buildingSearch, setBuildingSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "at_risk" | "churned">("all");
@@ -18748,6 +18770,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
     { id: "queue", label: "Activation Queue" },
     { id: "batch", label: "Batch Activate" },
     { id: "revenue", label: "Revenue" },
+    { id: "trending", label: "Other Activities" },
   ];
 
   return (
@@ -20242,6 +20265,59 @@ const SuperAdminDashboard = ({ onSignOut }) => {
             </>
           );
         })()}
+
+        {/* ── OTHER ACTIVITIES TRENDING ── */}
+        {activeTab === "trending" && (
+          <>
+            <div style={{ marginBottom: 20 }}>
+              <h2 style={{ color: COLORS.white, fontSize: 18, fontWeight: 800, margin: "0 0 4px" }}>Trending "Other" Activities</h2>
+              <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+                Custom names residents typed under "Other" that at least {OTHER_ACTIVITY_TREND_THRESHOLD} different people have logged - a real signal for what might deserve its own dedicated activity category.
+              </p>
+            </div>
+
+            {!trendsLoaded && (
+              <button
+                onClick={async () => {
+                  const results = await fetchOtherActivityTrends();
+                  setOtherActivityTrends(results);
+                  setTrendsLoaded(true);
+                }}
+                style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 20 }}
+              >
+                Load Trends
+              </button>
+            )}
+
+            {trendsLoaded && (
+              <>
+                <button
+                  onClick={async () => {
+                    const results = await fetchOtherActivityTrends();
+                    setOtherActivityTrends(results);
+                  }}
+                  style={{ padding: "8px 14px", borderRadius: 99, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, marginBottom: 20 }}
+                >
+                  ↻ Refresh
+                </button>
+
+                <div style={{ background: COLORS.card, borderRadius: 18, padding: "4px 20px", border: `1px solid ${COLORS.border}` }}>
+                  {otherActivityTrends.length === 0 && (
+                    <p style={{ color: COLORS.textSecondary, fontSize: 13, textAlign: "center", padding: "20px 0", margin: 0 }}>
+                      Nothing has crossed {OTHER_ACTIVITY_TREND_THRESHOLD} unique users yet.
+                    </p>
+                  )}
+                  {otherActivityTrends.map((t: any, i: number) => (
+                    <div key={t.id} style={{ padding: "14px 0", borderBottom: i < otherActivityTrends.length - 1 ? `1px solid ${COLORS.border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: 0, textTransform: "capitalize" }}>{t.displayName}</p>
+                      <p style={{ color: COLORS.accent, fontSize: 14, fontWeight: 700, margin: 0 }}>{t.uniqueUserCount} users</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
