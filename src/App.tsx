@@ -6,6 +6,7 @@ import iconWalking from "./assets/icons/walking.png";
 import iconRowing from "./assets/icons/rowing.png";
 import iconSoccer from "./assets/icons/soccer.png";
 import iconPadel from "./assets/icons/padel.png";
+import iconPickleball from "./assets/icons/pickleball.png";
 import iconBikeOutdoor from "./assets/icons/bike_outdoor.png";
 import iconSwim from "./assets/icons/swim.png";
 import iconStairClimber from "./assets/icons/stairclimber.png";
@@ -15764,7 +15765,7 @@ const buildRouteMapUrl = (route: { lat: number; lng: number }[], width: number, 
 //   the detail that keeps it from reading as a generic tennis court.
 // Returned as a data: URL so it can be used as a plain <img src> exactly
 // like buildRouteMapUrl's output, with no change needed anywhere it's used.
-const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel", accentColor: string): string => {
+const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel" | "pickleball", accentColor: string): string => {
   // Bug fix: this previously pre-encoded "#" to "%23" here, then the WHOLE
   // svg string got passed through encodeURIComponent() again below, which
   // re-encoded that literal "%" into "%25" - mangling every color into
@@ -15811,6 +15812,27 @@ const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel",
       <path d="M 515 322 A 8 8 0 0 1 507 330" fill="none" stroke="${stroke}" stroke-width="2"/>
       <rect x="2" y="150" width="8" height="40" fill="none" stroke="${stroke}" stroke-width="1.5"/>
       <rect x="515" y="150" width="8" height="40" fill="none" stroke="${stroke}" stroke-width="1.5"/>
+    </svg>`;
+  } else if (courtType === "pickleball") {
+    // Real regulation dimensions (USA Pickleball official rules), traced
+    // from Senz's own reference diagram, not approximated: 44x20ft court
+    // at 5px/ft (220x100). Net runs down the center (vertical line here,
+    // with small post-mark ticks extending past the court's top/bottom
+    // edges). A 7ft non-volley zone ("kitchen") sits on each side of the
+    // net - shown as the shaded band flanking the centerline, spanning
+    // the full court height, with NO dividing line through it (matching
+    // real rules - the kitchen itself is never split). The remaining
+    // 15ft-deep area on each side of the kitchen is split by a center
+    // service line, but that line only spans the outer zones, stopping
+    // exactly at the kitchen boundary rather than crossing into it.
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 230 110">
+      <rect x="5" y="5" width="220" height="100" fill="none" stroke="${stroke}" stroke-width="3"/>
+      <rect x="80" y="5" width="70" height="100" fill="${stroke}" opacity="0.25"/>
+      <line x1="115" y1="-2" x2="115" y2="5" stroke="${stroke}" stroke-width="3"/>
+      <line x1="115" y1="105" x2="115" y2="112" stroke="${stroke}" stroke-width="3"/>
+      <line x1="115" y1="5" x2="115" y2="105" stroke="${stroke}" stroke-width="2.5"/>
+      <line x1="5" y1="55" x2="80" y2="55" stroke="${stroke}" stroke-width="2"/>
+      <line x1="150" y1="55" x2="225" y2="55" stroke="${stroke}" stroke-width="2"/>
     </svg>`;
   } else {
     // Padel - rebuilt from Senz's own reference diagram: open end-zones
@@ -15992,6 +16014,14 @@ const ACTIVITY_TYPES = [
   // a real map that has nothing to show or no visual at all.
   { key: "basketball", label: "Basketball", icon: BasketballIcon, indoor: true, courtType: "basketball" },
   { key: "soccer", label: "Soccer", iconImage: iconSoccer, indoor: true, courtType: "soccer" },
+  // Pickleball placed before Padel - genuinely different sports (own
+  // regulation court/rules, not a stand-in name for the same game), and
+  // ordered first here since it's dramatically more played in the US
+  // right now (SFIA 2025: ~24.3M US pickleball players vs ~1M padel) -
+  // padel's real strength is international, which fits AmenityFit's
+  // later expansion, but shouldn't outrank the sport more residents will
+  // actually be reaching for today.
+  { key: "pickleball", label: "Pickleball", iconImage: iconPickleball, indoor: true, courtType: "pickleball" },
   { key: "padel", label: "Padel", iconImage: iconPadel, indoor: true, courtType: "padel" },
   // Mind-body tier: duration-based (count-up or count-down from a chosen
   // length), pulsating-ring timer visual, and a notes/journal field -
