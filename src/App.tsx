@@ -15205,7 +15205,11 @@ const ACTIVITY_TYPES = [
   // tracking-screen treatment. Meditation and Stretching still need real
   // traced icons before they can be added the same way.
   { key: "pilates", label: "Pilates", iconImage: iconPilates, indoor: true, isMindBody: true },
-  { key: "yoga", label: "Yoga", iconImage: iconYoga, indoor: true, isMindBody: true },
+  // iconDisplayScale compensates for Tree Pose's genuinely narrow
+  // silhouette (already cropped as tight as the source image allows) -
+  // without this it visibly reads smaller than every other icon in the
+  // grid, since a narrow subject fills less width even at 100% height.
+  { key: "yoga", label: "Yoga", iconImage: iconYoga, indoor: true, isMindBody: true, iconDisplayScale: 1.4 },
   { key: "other", label: "Other", icon: Zap, indoor: false },
 ];
 
@@ -15773,7 +15777,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
               }}
             >
               {a.iconImage
-                ? <img src={a.iconImage} alt="" style={{ width: 40, height: 40, objectFit: "contain" }} />
+                ? <img src={a.iconImage} alt="" style={{ width: 40 * (a.iconDisplayScale || 1), height: 40 * (a.iconDisplayScale || 1), objectFit: "contain" }} />
                 : <a.icon size={40} color={COLORS.white} strokeWidth={1.6} />}
               <span style={{ color: COLORS.white, fontSize: 15, fontWeight: 700 }}>{a.label}</span>
             </button>
