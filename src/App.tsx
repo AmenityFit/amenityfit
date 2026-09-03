@@ -13806,6 +13806,143 @@ const LogStatsModal = ({ onSave, onClose, unit, isBaseline = false, wellnessMode
   );
 };
 
+const formatTime = (secs: number) => {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+    : `${m}:${String(s).padStart(2, "0")}`;
+};
+
+// Dedicated detail view for a cardio/mind-body session in history - the
+// existing selectedSession detail views in ProgressScreen/HistoryScreen
+// were built entirely around lifting-day data (groups/dayTitle/dayFocus),
+// so a cardio session rendered blank there (no exercises to show). This
+// is a genuinely separate template, not a patch on the lifting one.
+const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { session: any; sessionHistory: any[]; profile: any; onClose: () => void }) => {
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [showStickerMode, setShowStickerMode] = useState(false);
+  const meta = ACTIVITY_TYPES.find((a) => a.key === session.type);
+  const isMindBody = !!meta?.isMindBody;
+  const hasDistance = (session.distanceMeters || 0) > 0;
+  const courtType = meta?.courtType;
+  const mapUrl = courtType
+    ? buildCourtIllustrationUrl(courtType, COLORS.accent)
+    : (session.route?.length > 1 ? buildRouteMapUrl(session.route, 640, 360) : null);
+  const paceLabel = hasDistance && session.avgPaceSecondsPerKm
+    ? `${Math.floor(session.avgPaceSecondsPerKm / 60)}:${String(Math.round(session.avgPaceSecondsPerKm % 60)).padStart(2, "0")}/km`
+    : null;
+  const dateLabel = session.completedAt?.toDate
+    ? session.completedAt.toDate().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
+    : "";
+
+  // Comparison stat - cardio only, deliberately never shown for mind-body
+  // (see the roadmap note: "beat your last one" framing doesn't fit a
+  // restorative practice). Compares this session's pace against the
+  // average of the person's other sessions of the same activity type.
+  let comparisonLabel: string | null = null;
+  if (!isMindBody && hasDistance && session.avgPaceSecondsPerKm) {
+    const sameType = sessionHistory.filter((s) => s.type === session.type && s.id !== session.id && s.avgPaceSecondsPerKm);
+    if (sameType.length > 0) {
+      const avgPace = sameType.reduce((sum, s) => sum + s.avgPaceSecondsPerKm, 0) / sameType.length;
+      const diffPct = Math.round(((avgPace - session.avgPaceSecondsPerKm) / avgPace) * 100);
+      if (Math.abs(diffPct) >= 2) {
+        comparisonLabel = diffPct > 0
+          ? `${diffPct}% faster than your recent ${meta?.label || session.type} average`
+          : `${Math.abs(diffPct)}% slower than your recent ${meta?.label || session.type} average`;
+      }
+    }
+  }
+
+  const stats: { label: string; value: string }[] = [];
+  if (hasDistance) stats.push({ label: "Distance", value: `${(session.distanceMeters / 1000).toFixed(2)} km` });
+  stats.push({ label: "Time", value: formatTime(session.durationSeconds || 0) });
+  if (paceLabel) stats.push({ label: "Pace", value: paceLabel });
+  if (session.calories) stats.push({ label: "Calories", value: `~${session.calories}` });
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 700, background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
+      <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={onClose} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <ArrowLeft size={16} color={COLORS.white} />
+        </button>
+        <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600 }}>{dateLabel}</span>
+      </div>
+
+      <div style={{ padding: "8px 24px 0", textAlign: "center" }}>
+        {(meta?.icon || meta?.iconImage) && (
+          <div style={{ width: 64, height: 64, borderRadius: 18, background: `linear-gradient(135deg, ${COLORS.primary}22, ${COLORS.accent}22)`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
+            {meta.iconImage
+              ? <img src={meta.iconImage} alt="" style={{ width: 32, height: 32, objectFit: "contain" }} />
+              : <meta.icon size={32} color={COLORS.white} strokeWidth={1.75} />}
+          </div>
+        )}
+        <h1 style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: "10px 0 0" }}>{meta?.label || session.type}</h1>
+      </div>
+
+      {mapUrl && (
+        <div style={{ margin: "16px 24px 0", borderRadius: 20, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
+          <img src={mapUrl} alt="" style={{ width: "100%", display: "block" }} />
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${stats.length}, 1fr)`, gap: 10, margin: "20px 24px 0" }}>
+        {stats.map((s) => (
+          <div key={s.label} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 8px", textAlign: "center" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>{s.label}</p>
+            <p style={{ color: COLORS.white, fontSize: 18, fontWeight: 900, margin: 0 }}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {comparisonLabel && (
+        <div style={{ margin: "14px 24px 0", padding: "12px 16px", borderRadius: 14, background: `${COLORS.accent}15`, border: `1px solid ${COLORS.accent}40` }}>
+          <p style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700, margin: 0, textAlign: "center" }}>{comparisonLabel}</p>
+        </div>
+      )}
+
+      {session.notes && (
+        <div style={{ margin: "14px 24px 0", padding: 16, borderRadius: 14, background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+          <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 8px" }}>{isMindBody ? "How it felt" : "Notes"}</p>
+          <p style={{ color: COLORS.white, fontSize: 14, margin: 0, lineHeight: 1.5 }}>{session.notes}</p>
+        </div>
+      )}
+
+      <div style={{ padding: "24px", marginTop: "auto", display: "flex", gap: 12 }}>
+        <button onClick={() => setShowShareCard(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+          Share
+        </button>
+        <button onClick={() => setShowStickerMode(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+          Sticker
+        </button>
+      </div>
+
+      {showShareCard && (
+        <ShareableStatCard
+          title={`${meta?.label || session.type} on AmenityFit`}
+          subtitle={dateLabel}
+          icon={meta?.icon}
+          iconImage={meta?.iconImage}
+          mapUrl={mapUrl}
+          stats={stats}
+          onClose={() => setShowShareCard(false)}
+        />
+      )}
+      {showStickerMode && (
+        <StickerShareScreen
+          title={meta?.label || session.type}
+          icon={meta?.icon}
+          iconImage={meta?.iconImage}
+          mapUrl={mapUrl}
+          stats={stats}
+          onClose={() => setShowStickerMode(false)}
+        />
+      )}
+    </div>
+  );
+};
+
 const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p) => {} }) => {
   const [activeMetric, setActiveMetric] = useState("weight");
   const [showLogModal, setShowLogModal] = useState(false);
@@ -14019,6 +14156,17 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
   // container instead of being double-nested inside Progress's own
   // scrolling area, which was causing this specific view to scroll
   // sluggishly even though Progress itself scrolled fine.
+  if (selectedSession && selectedSession.type && selectedSession.type !== "gym") {
+    return (
+      <ActivityDetailView
+        session={selectedSession}
+        sessionHistory={sessionHistory}
+        profile={profile}
+        onClose={() => setSelectedSession(null)}
+      />
+    );
+  }
+
   if (selectedSession) {
     const groups = selectedSession.groups || [];
     const realMuscles: string[] = [];
@@ -14485,6 +14633,17 @@ const HistoryScreen = ({ profile, onBack, onNavigate = (s: string) => {} }) => {
       });
     }
   }, [profile?.uid]);
+
+  if (selectedSession && selectedSession.type && selectedSession.type !== "gym") {
+    return (
+      <ActivityDetailView
+        session={selectedSession}
+        sessionHistory={sessions}
+        profile={profile}
+        onClose={() => setSelectedSession(null)}
+      />
+    );
+  }
 
   if (selectedSession) {
     const groups = selectedSession.groups || [];
