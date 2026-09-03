@@ -16148,6 +16148,18 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // to every downstream screen (header, completion, share card) via
   // effectiveActivityName below, not recomputed piecemeal in each one.
   const [customActivityName, setCustomActivityName] = useState<string | null>(null);
+  // Declared here, not down near the "Other" name-entry block that uses
+  // them, specifically because this component has multiple conditional
+  // early returns (the mind-body/program-linked duration picker, the
+  // "finished" status screen) between here and there - a hook declared
+  // after ANY of those returns only runs on renders that don't take that
+  // return, which is a genuine Rules-of-Hooks violation (confirmed by a
+  // real production crash, React error #310, when switching from an
+  // activity that took one of those early returns to one that didn't
+  // within the same mounted CardioTrackingScreen instance).
+  const [otherNameDraft, setOtherNameDraft] = useState("");
+  const [otherNameError, setOtherNameError] = useState<string | null>(null);
+  const [otherNameChecking, setOtherNameChecking] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [sessionNotes, setSessionNotes] = useState("");
@@ -16963,10 +16975,19 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // before this screen's normal ready/tracking UI, same early-return shape
   // as the mind-body duration screen above. Entered before Start so the
   // name is available everywhere downstream (header, completion, share
-  // card) rather than only captured at the end.
-  const [otherNameDraft, setOtherNameDraft] = useState("");
-  const [otherNameError, setOtherNameError] = useState<string | null>(null);
-  const [otherNameChecking, setOtherNameChecking] = useState(false);
+  // card) rather than only captured at the end. The three hooks this
+  // block uses (otherNameDraft/otherNameError/otherNameChecking) are
+  // declared up near customActivityName instead of here - see the real
+  // production crash this fixed: they were originally declared right
+  // here, AFTER the showDurationPicker early return above. Any render
+  // that took that early return (mind-body or program-linked cardio)
+  // skipped these three hooks entirely, while a render for an activity
+  // like Padel or Pickleball (never mind-body, never linked) reached
+  // past it and called them - a genuine hook-count mismatch between
+  // renders of the same mounted instance, which is exactly what crashed
+  // in production (React error #310). Moving them before every early
+  // return in this component guarantees they run identically on every
+  // render regardless of which branch is taken.
   if (activityType === "other" && customActivityName === null) {
     const submitOtherName = async () => {
       const trimmed = otherNameDraft.trim();
