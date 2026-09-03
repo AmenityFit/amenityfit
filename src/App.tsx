@@ -14,6 +14,17 @@ import iconPilates from "./assets/icons/pilates.png";
 import iconMeditation from "./assets/icons/meditation.png";
 import iconStretching from "./assets/icons/stretching.png";
 import iconYoga from "./assets/icons/yoga.png";
+import leoProfanity from "leo-profanity";
+
+// "Other" custom activity naming - client-side, instant word-list check.
+// This is layer 1 of 2 (see roadmap): catches obvious profanity immediately
+// on submit, before anything is saved. Layer 2 (server-side, real
+// language-understanding check for creative/euphemistic phrasing a
+// word-list can't catch) happens in the Cloud Function on save - this
+// function does NOT replace that, it's just the instant client-side gate.
+const filterHasProfanity = (name: string): boolean => {
+  return leoProfanity.check(name);
+};
 
 // ─── Firebase ─────────────────────────────────────────────────────────────────
 import { initializeApp } from "firebase/app";
@@ -837,6 +848,7 @@ const saveWorkoutSession = async (uid: string, session: any, sessionId?: string)
 // to track on their own, unconnected to any programmed day.
 const saveCardioActivity = async (uid: string, activity: {
   type: string;
+  customActivityName?: string;
   durationSeconds: number;
   distanceMeters?: number;
   route?: { lat: number; lng: number; timestamp: number }[];
@@ -853,6 +865,7 @@ const saveCardioActivity = async (uid: string, activity: {
       sessionId: id,
       date: today,
       type: activity.type,
+      customActivityName: activity.customActivityName ?? null,
       durationSeconds: activity.durationSeconds,
       distanceMeters: activity.distanceMeters ?? null,
       route: activity.route ?? null,
@@ -15407,11 +15420,47 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // the activity-grid's early return like the previous attempt had it.
   const effectiveGoalDuration = chosenGoalDuration !== undefined ? (chosenGoalDuration || undefined) : goalDurationSeconds;
   const [customMinutes, setCustomMinutes] = useState(15);
+  // "Other" custom activity name - null = not yet entered (name-entry
+  // screen still showing, same early-return pattern as the mind-body
+  // duration screen above). Entered once, before Start, so it's available
+  // to every downstream screen (header, completion, share card) via
+  // effectiveActivityName below, not recomputed piecemeal in each one.
+  const [customActivityName, setCustomActivityName] = useState<string | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [sessionNotes, setSessionNotes] = useState("");
   const [notesSaveStatus, setNotesSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [showNotesToast, setShowNotesToast] = useState(false);
+  // Every exit-to-picker point (the "How long?" back button, the "Other"
+  // name-entry back button, and discard-then-back) was previously calling
+  // setActivityType(null) bare, leaving elapsedSeconds/chosenGoalDuration/
+  // customActivityName/etc. stale from whatever was picked last - a real
+  // reported bug (e.g. Meditation reopening still showing an old session's
+  // elapsed time). elapsedSeconds itself was only ever reset inside the
+  // actual Start action, not on any exit path. keepScreenOn is deliberately
+  // excluded - it's a real user preference, not per-session state, and
+  // should carry over to the next activity picked.
+  const resetForNewPick = () => {
+    setActivityType(null);
+    setStatus("ready");
+    setElapsedSeconds(0);
+    setDistanceMeters(0);
+    setIsAutoPaused(false);
+    setGoalHitPromptShown(false);
+    setLocationError(null);
+    setFinalCalories(undefined);
+    setSessionPRs({ distance: false, pace: false, duration: false });
+    setChosenGoalDuration(undefined);
+    setCustomMinutes(15);
+    setCustomActivityName(null);
+    setShowDiscardConfirm(false);
+    setSavedSessionId(null);
+    setSessionNotes("");
+    setNotesSaveStatus("idle");
+    setShowNotesToast(false);
+    setShowShareCard(false);
+    setShowStickerMode(false);
+  };
   const saveSessionNotes = async () => {
     if (!savedSessionId) return;
     setNotesSaveStatus("saving");
@@ -15776,6 +15825,11 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
       estimatedCalories = estimateCardioCalories(activityType, elapsedSeconds, weightLbs);
       const savedId = await saveCardioActivity(uid, {
         type: activityType,
+        // Only set for "Other" sessions - undefined here, not stripped
+        // downstream, so every consuming display site can fall back to
+        // the normal ACTIVITY_TYPES label for every other activity type
+        // without needing an extra type check of its own.
+        customActivityName: activityType === "other" ? (customActivityName || undefined) : undefined,
         durationSeconds: elapsedSeconds,
         distanceMeters: distanceMeters > 0 ? distanceMeters : undefined,
         route: routeRef.current.length > 1 ? routeRef.current : undefined,
@@ -16031,7 +16085,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => setActivityType(null)} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <button onClick={resetForNewPick} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <ArrowLeft size={16} color={COLORS.white} />
           </button>
           <h1 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: 0 }}>How long?</h1>
@@ -16090,6 +16144,61 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     );
   }
 
+  // "Other" custom name entry - shown once, right after picking "Other",
+  // before this screen's normal ready/tracking UI, same early-return shape
+  // as the mind-body duration screen above. Entered before Start so the
+  // name is available everywhere downstream (header, completion, share
+  // card) rather than only captured at the end.
+  const [otherNameDraft, setOtherNameDraft] = useState("");
+  const [otherNameError, setOtherNameError] = useState<string | null>(null);
+  if (activityType === "other" && customActivityName === null) {
+    const submitOtherName = () => {
+      const trimmed = otherNameDraft.trim();
+      if (!trimmed) {
+        setOtherNameError("Enter a name for this activity");
+        return;
+      }
+      if (trimmed.length > 20) {
+        setOtherNameError("Keep it under 20 characters");
+        return;
+      }
+      if (filterHasProfanity(trimmed)) {
+        setOtherNameError("Please choose a different name");
+        return;
+      }
+      setCustomActivityName(trimmed);
+    };
+    return (
+      <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={resetForNewPick} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <ArrowLeft size={16} color={COLORS.white} />
+          </button>
+          <h1 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: 0 }}>Name this activity</h1>
+        </div>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px 40px", gap: 12 }}>
+          <input
+            type="text"
+            value={otherNameDraft}
+            maxLength={20}
+            autoFocus
+            onChange={(e) => { setOtherNameDraft(e.target.value); if (otherNameError) setOtherNameError(null); }}
+            onKeyDown={(e) => { if (e.key === "Enter") submitOtherName(); }}
+            placeholder="e.g. Boxing, Jiu Jitsu"
+            style={{ padding: "18px", borderRadius: 16, border: `1px solid ${otherNameError ? (COLORS.danger || "#ff4444") : COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 17, fontWeight: 700 }}
+          />
+          <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "-4px 0 0", textAlign: "right" }}>{otherNameDraft.length}/20</p>
+          {otherNameError && (
+            <p style={{ color: COLORS.danger || "#ff4444", fontSize: 13, fontWeight: 600, margin: 0 }}>{otherNameError}</p>
+          )}
+          <button onClick={submitOtherName} style={{ padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: "pointer", marginTop: 8 }}>
+            Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Mind-body sessions use the locally-chosen duration; every other
   // activity keeps using whatever the caller passed in (program-linked
   // cardio). 0 = explicitly open-ended, treated the same as no goal.
@@ -16109,7 +16218,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     if (presetActivityType) {
       onBack();
     } else {
-      setActivityType(null);
+      resetForNewPick();
     }
   };
   // window.confirm was the previous approach here - native confirm
