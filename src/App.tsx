@@ -9873,9 +9873,17 @@ const weightOptions = (() => {
   return opts;
 })();
 
-const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any, sessionId?: string, notes?: Record<string, string>) => {
-  if (!profile?.uid) return;
+const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any, sessionId?: string, notes?: Record<string, string>): Promise<boolean> => {
+  if (!profile?.uid) return false;
   const today = getLocalDateString();
+  // Tracks whether the CORE write (weights/notes into workoutSessions)
+  // actually succeeded - previously this function had no way at all to
+  // signal success/failure to its caller (errors were caught and
+  // swallowed right here, silently), so the caller's own try/catch around
+  // calling this was effectively dead code, and the "Saved" confirmation
+  // showed unconditionally regardless of whether anything real happened.
+  // See saveWeightsToFirestoreDurable below for what actually uses this.
+  let coreWriteSucceeded = true;
   // Write weights into today's workoutSession so Progress screen can show them.
   // This is the only part the caller actually awaits - it drives the "Saved"
   // confirmation and lets the workout flow advance, so it needs to stay fast.
@@ -9934,6 +9942,7 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
     }
   } catch (e) {
     console.error("Failed to write weights to session:", e);
+    coreWriteSucceeded = false;
   }
 
   // Historical weightLog entries and personal-record notifications require a
@@ -9947,7 +9956,106 @@ const saveWeightsToFirestore = async (weights: Record<string, number>, grp: any,
   logWeightHistoryInBackground(weights, profile.uid, profile?.programKey, profile?.programDay, today, !!profile?.heightFt).catch((e) => {
     console.error("Background weight history logging failed:", e);
   });
+  return coreWriteSucceeded;
 };
+
+// Real durability fix, prompted by an audit finding: this fires per
+// EXERCISE GROUP (potentially several times across one workout), and the
+// caller previously showed an unconditional "Saved" checkmark regardless
+// of whether the write actually succeeded - saveWeightsToFirestore had no
+// way to report failure at all, so the caller's try/catch around it never
+// once actually caught anything real. Worse, onWeightsSaved only updates
+// in-memory React state for the rest of THIS session - if an early
+// group's write silently failed and the app then closed before the final
+// workout-completion save, that group's weights would be permanently
+// missing (the final save deliberately omits weightsLogged/weightNotes,
+// treating this function as the sole source of truth for both fields -
+// see saveWorkoutSession above), while the toast the whole time confidently
+// said "Saved."
+//
+// Multiple entries can be pending at once here, unlike the single-slot
+// backups above (finishing several groups in quick succession on a bad
+// connection is a real possibility) - so this maintains a real array in
+// localStorage, not a single fixed key, each entry removed only once its
+// own write is confirmed.
+const PENDING_WEIGHT_SAVES_KEY = "amenityfit_pending_weight_saves";
+type PendingWeightSave = { id: string; weights: Record<string, number>; grp: any; sessionId?: string; notes?: Record<string, string> };
+const readPendingWeightSaves = (): PendingWeightSave[] => {
+  try {
+    const raw = localStorage.getItem(PENDING_WEIGHT_SAVES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+const writePendingWeightSaves = (list: PendingWeightSave[]) => {
+  try { localStorage.setItem(PENDING_WEIGHT_SAVES_KEY, JSON.stringify(list)); } catch {}
+};
+
+const saveWeightsToFirestoreDurable = async (
+  weights: Record<string, number>,
+  grp: any,
+  sessionId: string | undefined,
+  notes: Record<string, string> | undefined
+): Promise<boolean> => {
+  const entryId = `${sessionId || "nosession"}_${Date.now()}`;
+  const list = readPendingWeightSaves();
+  list.push({ id: entryId, weights, grp, sessionId, notes });
+  writePendingWeightSaves(list);
+
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const succeeded = await saveWeightsToFirestore(weights, grp, sessionId, notes);
+    if (succeeded) {
+      writePendingWeightSaves(readPendingWeightSaves().filter((e) => e.id !== entryId));
+      return true;
+    }
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1200 * (attempt + 1)));
+    }
+  }
+  // All retries failed - entry deliberately stays in the array for
+  // recoverPendingWeightSaves to pick up on next app load.
+  return false;
+};
+
+// Checked once on every app load, alongside the workout/cardio recovery
+// functions - flushes every still-pending group save, in order, retrying
+// each on the next load if it still fails rather than giving up after one
+// more attempt (a genuinely offline device might need several app opens
+// before connectivity returns).
+const recoverPendingWeightSaves = async () => {
+  const list = readPendingWeightSaves();
+  for (const entry of list) {
+    const succeeded = await saveWeightsToFirestore(entry.weights, entry.grp, entry.sessionId, entry.notes);
+    if (succeeded) {
+      writePendingWeightSaves(readPendingWeightSaves().filter((e) => e.id !== entry.id));
+    }
+  }
+};
+
+// Real recovery check, run once whenever this screen mounts (i.e.
+// whenever someone is actively logging weights again) - flushes any
+// per-group weight save that was backed up to localStorage but never
+// actually confirmed as saved (app closed mid-retry, connection lost
+// entirely). Deliberately placed here, in the same component body as
+// recoverPendingWeightSaves itself, rather than the top-level app auth
+// listener (where the analogous cardio/workout-completion recovery checks
+// live) - saveWeightsToFirestore needs `profile` in scope, which only
+// exists at this component level. Also deliberately placed AFTER
+// recoverPendingWeightSaves's own declaration, not before it - this
+// codebase has hit a real crash twice already from a hook referencing a
+// component-level const declared later in the same render, and while this
+// particular effect's callback only actually executes after React
+// commits (by which point a normal render would have already reached this
+// point), placing it after removes any possibility of that class of bug
+// entirely rather than relying on there being no early return between the
+// two. Each pending entry carries its own original sessionId, so recovery
+// always writes to the correct (possibly now-past) session regardless of
+// which workout is open right now.
+useEffect(() => {
+  recoverPendingWeightSaves();
+}, []);
 
 const logWeightHistoryInBackground = async (
   weights: Record<string, number>,
@@ -10367,20 +10475,30 @@ if (showWeightLogger && pendingWeightGroup) {
             setSessionWeights(toSave);
             onWeightsSaved(toSave);
             setWeightSaved(true);
-            try {
-              await saveWeightsToFirestore(toSave, pendingWeightGroup, sessionId || undefined, noteValues);
-            } catch (e) {
-              // Never let a flaky save block the workout flow - the weights are
-              // already reflected locally via onWeightsSaved above regardless.
-              console.error("saveWeightsToFirestore failed, continuing anyway:", e);
-            } finally {
-              setTimeout(() => {
-                setShowWeightLogger(false);
-                setPendingWeightGroup(null);
-                setWeightSaved(false);
-                onGroupComplete();
-              }, 600);
-            }
+            // Real audit fix: saveWeightsToFirestore previously had no way
+            // to report failure at all (it caught its own errors
+            // internally), so the try/catch that used to wrap this call
+            // was dead code, and "Saved" showed unconditionally regardless
+            // of whether the write actually happened. Deliberately NOT
+            // awaited here, matching the same non-blocking philosophy the
+            // original code intended ("never let a flaky save block the
+            // workout flow") - but now backed by real durability instead
+            // of just hoping: saveWeightsToFirestoreDurable writes this
+            // group's weights to localStorage instantly, before any
+            // network attempt, retries the real save automatically, and
+            // - if every retry fails - leaves it for
+            // recoverPendingWeightSaves to finish silently on next app
+            // load. The immediate "Saved" feedback below is honest in the
+            // sense that matters: the data is now genuinely safe the
+            // moment this line runs, regardless of what the network does
+            // next.
+            saveWeightsToFirestoreDurable(toSave, pendingWeightGroup, sessionId || undefined, noteValues);
+            setTimeout(() => {
+              setShowWeightLogger(false);
+              setPendingWeightGroup(null);
+              setWeightSaved(false);
+              onGroupComplete();
+            }, 600);
           }}
           style={{ flex: 2, padding: "16px", borderRadius: 14, border: "none", background: weightSaved ? COLORS.success : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter', sans-serif", boxShadow: `0 6px 20px ${COLORS.primary}40`, transition: "background 0.3s ease" }}
         >
