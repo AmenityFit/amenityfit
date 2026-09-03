@@ -15987,6 +15987,15 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
               {showPulsingRing && ringSizes.map((size, i) => (
                 <div key={size} style={{
                   position: "absolute", top: "50%", left: "50%",
+                  // Base transform set here too, not just inside the
+                  // keyframes - during each ring's staggered delay before
+                  // its animation actually starts, an element renders at
+                  // its plain inline transform (or none at all), not
+                  // whatever the keyframes eventually specify. Without
+                  // this, delayed rings briefly rendered uncentered
+                  // (top-left corner at screen-center instead of the
+                  // ring's actual center) until their animation kicked in.
+                  transform: "translate(-50%, -50%)",
                   width: size, height: size, borderRadius: "50%",
                   border: `2px solid ${COLORS.accent}`,
                   boxShadow: `0 0 30px 4px ${COLORS.accent}60, inset 0 0 30px 4px ${COLORS.accent}30`,
