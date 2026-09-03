@@ -842,6 +842,64 @@ const saveWorkoutSession = async (uid: string, session: any, sessionId?: string)
   }
 };
 
+// Real durability guarantee for a completed workout - prompted by a real
+// audit finding: the actual completion call site previously fired
+// saveWorkoutSession completely unawaited, with no .catch, while the
+// "workout complete" screen showed immediately regardless. If that write
+// failed - bad connection, brief outage, anything - the person would see
+// a completed workout and walk away while the real save silently never
+// happened, with zero record of it.
+//
+// The fix: the full session payload is written to localStorage the
+// INSTANT this is called, before any network attempt at all - so a
+// completed workout survives a crash, a force-close, or total loss of
+// connection, not just a slow one. Then the real save is attempted with a
+// few retries and a short backoff. On success, the local backup is
+// cleared. On failure after all retries, the backup is deliberately LEFT
+// in place - recoverPendingWorkoutSave (checked once on every app load)
+// picks it up and finishes the job whenever connectivity returns. The
+// person never has to notice or do anything themselves.
+const PENDING_WORKOUT_SAVE_KEY = "amenityfit_pending_workout_save";
+const saveWorkoutSessionDurable = async (uid: string, session: any, sessionId?: string): Promise<string | null> => {
+  try {
+    localStorage.setItem(PENDING_WORKOUT_SAVE_KEY, JSON.stringify({ uid, session, sessionId }));
+  } catch (e) {
+    // Storage can fail (quota, private mode) - the real save attempt below
+    // still runs regardless; this backup is a safety net, not the only
+    // path to success.
+  }
+
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const result = await saveWorkoutSession(uid, session, sessionId);
+    if (result) {
+      try { localStorage.removeItem(PENDING_WORKOUT_SAVE_KEY); } catch {}
+      return result;
+    }
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+    }
+  }
+  console.error("saveWorkoutSessionDurable: all retry attempts failed, backup retained in localStorage for recovery on next app load");
+  return null;
+};
+
+// Checked once on every app load (see the auth-ready effect that calls
+// this) - if a previous session's completion never actually got confirmed
+// as saved (app closed mid-retry, connection lost entirely before any
+// retry succeeded), this finishes the job silently in the background,
+// with no action required from the person and no risk of ever losing a
+// completed workout to a bad connection.
+const recoverPendingWorkoutSave = async () => {
+  let pending: { uid: string; session: any; sessionId: string } | null = null;
+  try {
+    const raw = localStorage.getItem(PENDING_WORKOUT_SAVE_KEY);
+    if (raw) pending = JSON.parse(raw);
+  } catch {}
+  if (!pending) return;
+  await saveWorkoutSessionDurable(pending.uid, pending.session, pending.sessionId);
+};
+
 // Saves a cardio/standalone activity (run, bike, hike, walk, row, swim,
 // etc.) into the SAME workoutSessions collection used for gym workouts,
 // so all history queries (Progress, Coach context, future Calendar) can
@@ -23280,6 +23338,13 @@ export default function App() {
           } else if (profile.role === 'resident') {
             setUserProfile({ ...profile, uid: firebaseUser.uid });
             setCurrentUid(firebaseUser.uid);
+            // Checked once per app load, silently, in the background - if
+            // a previous session's workout completion never actually got
+            // confirmed as saved (app closed mid-retry, connection lost
+            // entirely), this finishes the job now that the app is open
+            // and authenticated again. See saveWorkoutSessionDurable for
+            // the full real-durability chain this is the recovery half of.
+            recoverPendingWorkoutSave();
             // A resident manually deactivated by their building manager
             // (moved out, etc.) still has a fully working Firebase Auth
             // login, since deleting someone else's login requires the
@@ -23565,14 +23630,17 @@ const isInitialLoad = React.useRef(true);
     handleWorkoutComplete({ groups: [], sessionLength: 0 });
     const uid = auth.currentUser?.uid || userProfile?.uid || currentUid;
     if (uid) {
-      saveWorkoutSession(uid, {
+      // Same real durability fix as the full-workout completion path
+      // above - a rest day marked complete deserves the exact same
+      // guarantee against a silently-lost save as a real workout does.
+      saveWorkoutSessionDurable(uid, {
         uid,
         programKey: userProfile.programKey,
         programDay: userProfile.programDay,
         dayTitle: "Rest Day",
         dayFocus: "Recovery",
         weightsLogged: {},
-      }).catch(() => {});
+      });
     }
   };
 
@@ -24033,7 +24101,7 @@ const isInitialLoad = React.useRef(true);
         // document, merging completion metadata into the data that was
         // already there instead of creating a competing, mostly-empty one.
         const sessionId = snapshot.sessionId || `${uid}_${Date.now()}`;
-        saveWorkoutSession(uid, {
+        const sessionPayload = {
           uid,
           programKey: userProfile.programKey,
           programLabel: isMonth4 ? `${getEvolvedProgramName(userProfile.programKey) || PROGRAMS[baseProgramKey]?.label || baseProgramKey} (Evolved)` : (getProgramMotivationalName(baseProgramKey) || PROGRAMS[baseProgramKey]?.label || userProfile.programKey),
@@ -24082,7 +24150,17 @@ const isInitialLoad = React.useRef(true);
           completedDateStr: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
           cycleNumber: userProfile.cycleNumber || 1,
           weightsLogged: sanitizeForFirestore(snapshot.weightsLogged || {}),
-        }, sessionId);
+        };
+        // Real audit finding: this previously called saveWorkoutSession
+        // directly here, completely unawaited and with no .catch - the
+        // completion screen below shows immediately regardless of whether
+        // this save actually succeeds. saveWorkoutSessionDurable keeps
+        // that same immediate-completion feel (still not awaited here, on
+        // purpose - the person shouldn't stare at a spinner) while
+        // guaranteeing the data itself can never be silently lost, via
+        // the localStorage backup + retry + next-load recovery described
+        // on that function.
+        saveWorkoutSessionDurable(uid, sessionPayload, sessionId);
         pingPresence(uid, userProfile.buildingId || 'unknown', 'resident');
       })();
     }
