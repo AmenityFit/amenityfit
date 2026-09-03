@@ -13866,8 +13866,32 @@ const formatTime = (secs: number) => {
 // download. Smooth curve via Catmull-Rom-to-bezier conversion, not
 // straight line segments - genuinely matches the polish level of the
 // PR-glow treatment used elsewhere, not a bare debug-style line graph.
+const TREND_CHART_HINT_SEEN_KEY = "amenityfit_trend_chart_hint_seen";
 const TrendChart = ({ points, unit, showBest, higherIsBetter }: { points: { label: string; value: number }[]; unit: string; showBest: boolean; higherIsBetter: boolean }) => {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  // First-time-only discoverability hint - a person's first trend chart
+  // ever, across every activity type (not per-chart, so this doesn't
+  // re-trigger for their second different activity's chart), gets a
+  // genuinely noticeable pulsing callout instead of just the quiet static
+  // caption every visit after gets. Read once on mount, not on every
+  // render, so tapping a point during this first view doesn't cause the
+  // hint to flicker back on.
+  const [showFirstTimeHint, setShowFirstTimeHint] = useState(() => {
+    try {
+      return !localStorage.getItem(TREND_CHART_HINT_SEEN_KEY);
+    } catch {
+      return false; // localStorage unavailable (private mode, quota) - default to the quiet version, never block rendering over this
+    }
+  });
+  // Guarded by points.length >= 3 - this component returns null just below
+  // for a too-short trend, and that null render is never actually shown to
+  // the person, so it must never burn the one-time "seen" flag. Marking
+  // the hint seen only happens on a render that genuinely displayed it.
+  useEffect(() => {
+    if (showFirstTimeHint && points.length >= 3) {
+      try { localStorage.setItem(TREND_CHART_HINT_SEEN_KEY, "true"); } catch {}
+    }
+  }, []);
   if (points.length < 3) return null;
 
   const width = 320;
@@ -13951,7 +13975,20 @@ const TrendChart = ({ points, unit, showBest, higherIsBetter }: { points: { labe
           {activeIndex === bestIndex && <span style={{ color: COLORS.success }}> · Best</span>}
         </p>
       )}
-      {activeIndex === null && (
+      {activeIndex === null && showFirstTimeHint && (
+        <>
+          <style>{`
+            @keyframes trendHintPulse {
+              0%, 100% { opacity: 0.6; }
+              50% { opacity: 1; }
+            }
+          `}</style>
+          <p style={{ color: COLORS.accent, fontSize: 12, fontWeight: 700, textAlign: "center", margin: "4px 0 8px", animation: "trendHintPulse 1.6s ease-in-out infinite" }}>
+            👆 Tap any point to see the exact value
+          </p>
+        </>
+      )}
+      {activeIndex === null && !showFirstTimeHint && (
         <p style={{ color: COLORS.textSecondary, fontSize: 11, textAlign: "center", margin: "4px 0 8px" }}>Tap a point for details</p>
       )}
     </div>
@@ -15268,15 +15305,81 @@ const MAPBOX_ACCESS_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
 // tracked run/hike can accumulate hundreds of GPS points, and a static
 // map image doesn't need every single ping's precision to look right,
 // just a faithful approximation of the path's actual shape).
+// Perpendicular distance from a point to the line segment between two
+// other points, in raw lat/lng space - fine for this purpose (deciding
+// which points visually define the route's shape), since a real tracked
+// route rarely spans enough degrees for lat/lng's non-uniform real-world
+// distance-per-degree to visibly distort which points get kept.
+const perpendicularDistance = (
+  point: { lat: number; lng: number },
+  lineStart: { lat: number; lng: number },
+  lineEnd: { lat: number; lng: number }
+): number => {
+  const dx = lineEnd.lat - lineStart.lat;
+  const dy = lineEnd.lng - lineStart.lng;
+  if (dx === 0 && dy === 0) {
+    return Math.sqrt((point.lat - lineStart.lat) ** 2 + (point.lng - lineStart.lng) ** 2);
+  }
+  const t = ((point.lat - lineStart.lat) * dx + (point.lng - lineStart.lng) * dy) / (dx * dx + dy * dy);
+  const clampedT = Math.max(0, Math.min(1, t));
+  const projLat = lineStart.lat + clampedT * dx;
+  const projLng = lineStart.lng + clampedT * dy;
+  return Math.sqrt((point.lat - projLat) ** 2 + (point.lng - projLng) ** 2);
+};
+
+// Standard Douglas-Peucker line simplification - recursively keeps only
+// the points that actually define the route's shape (a real turn),
+// discarding points on stretches that are already nearly straight between
+// their neighbors. First and last point of any segment are always kept,
+// so a route's real start and end are never lost.
+const douglasPeucker = (points: { lat: number; lng: number }[], epsilon: number): { lat: number; lng: number }[] => {
+  if (points.length < 3) return points;
+  let maxDist = 0;
+  let splitIndex = 0;
+  const end = points.length - 1;
+  for (let i = 1; i < end; i++) {
+    const dist = perpendicularDistance(points[i], points[0], points[end]);
+    if (dist > maxDist) {
+      maxDist = dist;
+      splitIndex = i;
+    }
+  }
+  if (maxDist > epsilon) {
+    const left = douglasPeucker(points.slice(0, splitIndex + 1), epsilon);
+    const right = douglasPeucker(points.slice(splitIndex), epsilon);
+    // splitIndex's point appears as the last of "left" and first of
+    // "right" - drop the duplicate at the join.
+    return [...left.slice(0, -1), ...right];
+  }
+  return [points[0], points[end]];
+};
+
+// Real shape-preserving simplification for the route shown on the map and
+// every sticker/share card - replaces a previous version that kept every
+// Nth point regardless of the route's actual shape, which could flatten a
+// sharp turn just as aggressively as a straight stretch, meaning a shared
+// route could visually misrepresent where someone actually turned. Douglas-
+// Peucker doesn't take a target point count directly (it takes a tolerance,
+// with no closed-form relationship to the resulting count), so a binary
+// search finds a tolerance that lands at or under maxPoints - a real
+// route's real corners survive; only genuinely redundant points on already-
+// straight stretches get dropped.
 const simplifyRoute = (route: { lat: number; lng: number }[], maxPoints: number): { lat: number; lng: number }[] => {
   if (route.length <= maxPoints) return route;
-  const step = route.length / maxPoints;
-  const simplified: { lat: number; lng: number }[] = [];
-  for (let i = 0; i < maxPoints; i++) {
-    simplified.push(route[Math.floor(i * step)]);
+
+  let low = 0;
+  let high = 1; // degrees - generously wide upper bound; real routes converge well under this
+  let result = route;
+  for (let iter = 0; iter < 20; iter++) {
+    const mid = (low + high) / 2;
+    result = douglasPeucker(route, mid);
+    if (result.length > maxPoints) {
+      low = mid;
+    } else {
+      high = mid;
+    }
   }
-  simplified.push(route[route.length - 1]);
-  return simplified;
+  return result;
 };
 
 // Builds a Mapbox Static Images API URL rendering the given route as a
@@ -15403,11 +15506,33 @@ const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel",
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 };
 
+// A GPS fix with an uncertainty radius wider than this is rejected
+// outright, before it ever reaches the route array or the distance total -
+// a poor fix (tall buildings, dense tree cover, just-acquired signal) can
+// report accuracy of 100m+, meaning the true position could genuinely be
+// anywhere within that radius. Deliberately generous - real GPS under open
+// sky is typically 5-15m - so this only discards fixes that are genuinely
+// unreliable, not merely imperfect.
+const GPS_ACCURACY_REJECT_METERS = 50;
+
 // A GPS fix implying faster than this is almost certainly a bad reading
 // (satellite jump, urban canyon reflection) rather than real movement -
-// discarded entirely rather than added to the distance total, since a
-// single bad jump can otherwise add hundreds of meters of phantom distance.
-const MAX_PLAUSIBLE_SPEED_MPS = 12.5; // ~45 km/h, well above realistic run/bike-commute speed
+// discarded entirely rather than added to the distance total or the route,
+// since a single bad jump can otherwise add hundreds of meters of phantom
+// distance and show up as a visible teleport on a shared map.
+//
+// Activity-aware rather than one flat number: outdoor cycling needs real
+// headroom for legitimate high speed - a pro-level descent can genuinely
+// approach 100+ km/h, which the old flat 45 km/h ceiling would have
+// wrongly discarded as implausible, silently undercounting a real ride's
+// distance. Every other activity keeps the tighter 45 km/h ceiling, since
+// no human being covering ground on foot can approach that regardless of
+// skill level - a reading above it there is virtually certain to be a bad
+// GPS fix, not a fast athlete.
+const getMaxPlausibleSpeedMps = (activityType: string | null): number => {
+  if (activityType === "bike") return 36.1; // ~130 km/h - comfortable headroom above even an extreme pro descent
+  return 12.5; // ~45 km/h - well above realistic run/walk/hike speed
+};
 
 // Custom icons for sports lucide genuinely doesn't have (verified by
 // listing its full icon set, not assumed) - drawn in the same stroke-based,
@@ -15699,18 +15824,38 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   const pauseStartedAtRef = React.useRef<number | null>(null);
 
   const handlePosition = (pos: GeolocationPosition) => {
-    const { latitude, longitude } = pos.coords;
+    const { latitude, longitude, accuracy } = pos.coords;
     const now = pos.timestamp;
-    routeRef.current.push({ lat: latitude, lng: longitude, timestamp: now });
+
+    // Reject a low-confidence fix outright, before it ever reaches the
+    // route array or the distance total - see GPS_ACCURACY_REJECT_METERS
+    // above. Accuracy was previously never checked at all.
+    if (typeof accuracy === "number" && accuracy > GPS_ACCURACY_REJECT_METERS) {
+      return;
+    }
 
     const last = lastAcceptedPointRef.current;
+    // Previously the route array was pushed to unconditionally, and
+    // lastAcceptedPointRef was updated unconditionally, regardless of
+    // whether the plausibility check below passed - meaning a speed-spike
+    // point correctly excluded from the distance total could still (a)
+    // render as a visible teleport-looking jump on a shared route map, and
+    // (b) become the new "last known good" reference point, corrupting the
+    // speed calculation for the NEXT real point too. Both the route array
+    // and lastAcceptedPointRef now only ever get updated once a point is
+    // judged plausible below - same single source of truth as distance.
+    let pointIsPlausible = true;
+
     if (last) {
       const dtSeconds = (now - last.timestamp) / 1000;
       if (dtSeconds > 0.5) {
         const d = haversineDistanceMeters(last.lat, last.lng, latitude, longitude);
         const speedMps = d / dtSeconds;
+        const maxSpeed = getMaxPlausibleSpeedMps(activityType);
 
-        if (speedMps <= MAX_PLAUSIBLE_SPEED_MPS) {
+        if (speedMps > maxSpeed) {
+          pointIsPlausible = false;
+        } else {
           const sinceStartSeconds = startTimeRef.current ? (now - startTimeRef.current) / 1000 : Infinity;
           const pastGracePeriod = sinceStartSeconds >= AUTO_PAUSE_GRACE_PERIOD_SECONDS;
 
@@ -15764,7 +15909,11 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         }
       }
     }
-    lastAcceptedPointRef.current = { lat: latitude, lng: longitude, timestamp: now };
+
+    if (pointIsPlausible) {
+      routeRef.current.push({ lat: latitude, lng: longitude, timestamp: now });
+      lastAcceptedPointRef.current = { lat: latitude, lng: longitude, timestamp: now };
+    }
   };
 
   // Indoor activities (rowing machine, elliptical, treadmill, indoor bike)
