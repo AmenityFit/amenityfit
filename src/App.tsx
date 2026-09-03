@@ -13893,7 +13893,7 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
               : <meta.icon size={32} color={COLORS.white} strokeWidth={1.75} />}
           </div>
         )}
-        <h1 style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: "10px 0 0" }}>{meta?.label || session.type}</h1>
+        <h1 style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: "10px 0 0" }}>{session.customActivityName || meta?.label || session.type}</h1>
       </div>
 
       {mapUrl && (
@@ -13935,7 +13935,7 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
 
       {showShareCard && (
         <ShareableStatCard
-          title={`${meta?.label || session.type} on AmenityFit`}
+          title={`${session.customActivityName || meta?.label || session.type} on AmenityFit`}
           subtitle={dateLabel}
           icon={meta?.icon}
           iconImage={meta?.iconImage}
@@ -13946,7 +13946,7 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
       )}
       {showStickerMode && (
         <StickerShareScreen
-          title={meta?.label || session.type}
+          title={session.customActivityName || meta?.label || session.type}
           icon={meta?.icon}
           iconImage={meta?.iconImage}
           mapUrl={mapUrl}
@@ -14578,7 +14578,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
                                 <Check size={14} color={COLORS.success} strokeWidth={3} />
                               </div>
                               <div style={{ flex: 1 }}>
-                                <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 600, margin: "0 0 1px", lineHeight: 1.3 }}>{session.type && session.type !== "gym" ? (ACTIVITY_TYPES.find((a) => a.key === session.type)?.label || session.type) : (deriveWorkoutTitle(session.groups || [], undefined, session.dayFocus) || session.programName || session.dayTitle || "Workout")}</p>
+                                <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 600, margin: "0 0 1px", lineHeight: 1.3 }}>{session.type && session.type !== "gym" ? (session.customActivityName || ACTIVITY_TYPES.find((a) => a.key === session.type)?.label || session.type) : (deriveWorkoutTitle(session.groups || [], undefined, session.dayFocus) || session.programName || session.dayTitle || "Workout")}</p>
                                 <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "0 0 4px" }}>{session.completedAt?.toDate ? session.completedAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : `Day ${session.programDay || "—"}`}</p>
 
                               </div>
@@ -14803,7 +14803,7 @@ const HistoryScreen = ({ profile, onBack, onNavigate = (s: string) => {} }) => {
                               <Check size={14} color={COLORS.success} strokeWidth={3} />
                             </div>
                             <div style={{ flex: 1 }}>
-                              <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 600, margin: "0 0 1px", lineHeight: 1.3 }}>{session.type && session.type !== "gym" ? (ACTIVITY_TYPES.find((a) => a.key === session.type)?.label || session.type) : (deriveWorkoutTitle(session.groups || [], undefined, session.dayFocus) || session.programName || session.dayTitle || "Workout")}</p>
+                              <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 600, margin: "0 0 1px", lineHeight: 1.3 }}>{session.type && session.type !== "gym" ? (session.customActivityName || ACTIVITY_TYPES.find((a) => a.key === session.type)?.label || session.type) : (deriveWorkoutTitle(session.groups || [], undefined, session.dayFocus) || session.programName || session.dayTitle || "Workout")}</p>
                               <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>{session.completedAt?.toDate ? session.completedAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : `Day ${session.programDay || "—"}`}</p>
                             </div>
                             <ChevronRight size={15} color={COLORS.border} />
@@ -15933,7 +15933,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
                 : <activityMeta.icon size={36} color={COLORS.white} strokeWidth={1.75} />}
             </div>
           )}
-          <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "8px 0 0", textTransform: "capitalize" }}>{activityType} Complete</h1>
+          <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "8px 0 0", textTransform: "capitalize" }}>{customActivityName || activityType} Complete</h1>
         </div>
 
         {mapUrl && (
@@ -16003,7 +16003,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
 
         {showShareCard && (
           <ShareableStatCard
-            title={`${activityType} on AmenityFit`}
+            title={`${customActivityName || activityType} on AmenityFit`}
             subtitle={new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             icon={activityMeta?.icon}
             iconImage={activityMeta?.iconImage}
@@ -16022,7 +16022,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
 
         {showStickerMode && (
           <StickerShareScreen
-            title={activityType}
+            title={customActivityName || activityType}
             icon={activityMeta?.icon}
             iconImage={activityMeta?.iconImage}
             mapUrl={mapUrl}
@@ -16263,7 +16263,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           </button>
           <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 600, textTransform: "capitalize", display: "flex", alignItems: "center", gap: 6 }}>
             {(() => { const meta = ACTIVITY_TYPES.find((a) => a.key === activityType); if (meta?.iconImage) return <img src={meta.iconImage} alt="" style={{ width: 15, height: 15, objectFit: "contain" }} />; const HeaderIcon = meta?.icon; return HeaderIcon ? <HeaderIcon size={15} color={COLORS.textSecondary} strokeWidth={2} /> : null; })()}
-            {activityType}
+            {customActivityName || activityType}
           </span>
         </div>
         {isAutoPaused && status === "tracking" && (
