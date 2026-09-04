@@ -21423,8 +21423,125 @@ const SuperAdminLogin = ({ onLogin, onBack }) => {
   );
 };
 
+// Real dev/QA tool for previewing every milestone/celebration tier
+// (volume: 10/25/50/100/250/500/1000/1500..., Active Weeks: Spark/Ember/
+// Blaze/Inferno at 4/12/26/52 weeks) without needing to actually
+// complete that many real sessions. Writes real Firestore documents via
+// seedActivityVolumeMilestoneTestData/seedActiveWeeksTestData - the
+// real trigger logic (isActivityMilestone, checkAndUpdateActiveWeeksTier)
+// then fires exactly as it would for a real resident once one more real
+// session is completed through the actual app. See those functions'
+// own comments for the full design rationale.
+//
+// Safety, by construction rather than just a warning label: the uid is
+// always manually typed (never a picker/dropdown of real residents, so
+// it can't be selected by accident), and every action is disabled until
+// the literal phrase "SEED CONFIRM" is typed - both are real gates on
+// the buttons themselves, not just advisory copy.
+const DevToolsPanel = () => {
+  const [targetUid, setTargetUid] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const isConfirmed = confirmText.trim() === "SEED CONFIRM";
+  const canAct = targetUid.trim().length > 0 && isConfirmed && !busy;
+
+  const runAction = async (label: string, action: () => Promise<void>) => {
+    if (!canAct) return;
+    setBusy(true);
+    setStatus(`${label}...`);
+    try {
+      await action();
+      setStatus(`✓ ${label} complete.`);
+    } catch (e: any) {
+      console.error(`${label} failed:`, e);
+      setStatus(`✗ ${label} failed: ${e?.message || "unknown error"}`);
+    }
+    setBusy(false);
+  };
+
+  const volumeThresholds = [10, 25, 50, 100, 250, 500, 1000, 1500];
+  const tierWeeksOptions: { label: string; weeks: number }[] = [
+    { label: "Spark (4wk)", weeks: 4 },
+    { label: "Ember (12wk)", weeks: 12 },
+    { label: "Blaze (26wk)", weeks: 26 },
+    { label: "Inferno (52wk)", weeks: 52 },
+  ];
+
+  return (
+    <div style={{ padding: 20 }}>
+      <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}40`, borderRadius: 14, padding: 16, marginBottom: 20 }}>
+        <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 6px" }}>Real Firestore writes</p>
+        <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+          This writes and deletes real workoutSessions documents for whatever uid is entered below.
+          Only ever use a dedicated test account - never a real resident's uid. Every seed action
+          clears all previously seeded test data for that uid first, so re-running is always
+          predictable and never double-counts.
+        </p>
+      </div>
+
+      <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 8px" }}>Target UID</p>
+      <input
+        value={targetUid}
+        onChange={(e) => setTargetUid(e.target.value)}
+        placeholder="Paste a TEST account's uid - never a real resident"
+        style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, marginBottom: 16, boxSizing: "border-box" }}
+      />
+
+      <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 8px" }}>Type SEED CONFIRM to enable actions</p>
+      <input
+        value={confirmText}
+        onChange={(e) => setConfirmText(e.target.value)}
+        placeholder="SEED CONFIRM"
+        style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${isConfirmed ? COLORS.success : COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, marginBottom: 20, boxSizing: "border-box" }}
+      />
+
+      {status && (
+        <p style={{ color: status.startsWith("✓") ? COLORS.success : status.startsWith("✗") ? "#ff6b6b" : COLORS.textSecondary, fontSize: 13, margin: "0 0 16px", fontWeight: 600 }}>{status}</p>
+      )}
+
+      <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 10px" }}>Seed Volume Milestone (activity: run)</p>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+        {volumeThresholds.map((n) => (
+          <button
+            key={n}
+            disabled={!canAct}
+            onClick={() => runAction(`Seed to just before ${n}`, () => seedActivityVolumeMilestoneTestData(targetUid.trim(), "run", n))}
+            style={{ padding: "8px 14px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: canAct ? COLORS.card : `${COLORS.border}50`, color: canAct ? COLORS.white : COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: canAct ? "pointer" : "not-allowed", opacity: canAct ? 1 : 0.5 }}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+
+      <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 10px" }}>Seed Active Weeks Tier</p>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+        {tierWeeksOptions.map((t) => (
+          <button
+            key={t.weeks}
+            disabled={!canAct}
+            onClick={() => runAction(`Seed to just before ${t.label}`, () => seedActiveWeeksTestData(targetUid.trim(), t.weeks))}
+            style={{ padding: "8px 14px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: canAct ? COLORS.card : `${COLORS.border}50`, color: canAct ? COLORS.white : COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: canAct ? "pointer" : "not-allowed", opacity: canAct ? 1 : 0.5 }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <button
+        disabled={!canAct}
+        onClick={() => runAction("Clear test data", () => clearSeededTestData(targetUid.trim()))}
+        style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none", background: canAct ? "#ff6b6b" : `${COLORS.border}50`, color: COLORS.white, fontSize: 14, fontWeight: 800, cursor: canAct ? "pointer" : "not-allowed", opacity: canAct ? 1 : 0.5 }}
+      >
+        Clear All Seeded Test Data For This UID
+      </button>
+    </div>
+  );
+};
+
 const SuperAdminDashboard = ({ onSignOut }) => {
-  const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "queue" | "revenue" | "trending">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "queue" | "revenue" | "trending" | "devtools">("overview");
   const [otherActivityTrends, setOtherActivityTrends] = useState<any[]>([]);
   const [trendsLoaded, setTrendsLoaded] = useState(false);
   const [selectedBuilding, setSelectedBuilding] = useState<any>(null);
@@ -21623,6 +21740,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
     { id: "batch", label: "Batch Activate" },
     { id: "revenue", label: "Revenue" },
     { id: "trending", label: "Other Activities" },
+    { id: "devtools", label: "Dev Tools" },
   ];
 
   return (
@@ -23170,6 +23288,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
             )}
           </>
         )}
+        {activeTab === "devtools" && <DevToolsPanel />}
       </div>
     </div>
   );
