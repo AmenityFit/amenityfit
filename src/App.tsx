@@ -16898,7 +16898,17 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             remains above the bottom-anchored buttons, rather than pinning
             it to the top and leaving an oversized empty gap for indoor
             activities that have no map to fill that space. */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 0 }}>
+        {/* Real bug found via real-device testing: justifyContent "center"
+            worked fine when this block was short, but once RPE grew its
+            total height, centering pushed the top (icon/header) up above
+            the viewport, clipped under the status bar/notch - the exact
+            same overflow either direction. Anchored to the top instead,
+            matching every other screen's safe-area-inset-top pattern in
+            this app (this was the one screen with none at all). Trade-off:
+            short/indoor sessions with no map now leave empty space at the
+            bottom instead of being perfectly centered - a fair trade for
+            never clipping the header again regardless of future growth. */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-start", minHeight: 0, paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <div style={{ padding: "36px 24px 8px", textAlign: "center" }}>
           {(activityMeta?.icon || activityMeta?.iconImage) && (
             <div style={{ width: 72, height: 72, borderRadius: 20, background: `linear-gradient(135deg, ${COLORS.primary}22, ${COLORS.accent}22)`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
@@ -17760,9 +17770,9 @@ const StickerShareScreen = ({
           <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 13, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>{title}</span>
         </div>
         {visibleStats.map((s, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: i === 0 ? 58 : 28, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1.5 : -0.3 }}>{s.value}</span>
-            <span style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.85 }}>{s.isPR ? "PR" : s.label}</span>
+          <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8, whiteSpace: "nowrap" }}>
+            <span style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: i === 0 ? 58 : 28, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1.5 : -0.3, whiteSpace: "nowrap" }}>{s.value}</span>
+            <span style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.85, whiteSpace: "nowrap" }}>{s.isPR ? "PR" : s.label}</span>
           </div>
         ))}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
@@ -18104,6 +18114,17 @@ const StickerShareScreen = ({
             position: "absolute",
             left: `${pos.x * 100}%`, top: `${pos.y * 100}%`,
             transform: `translate(-50%, -50%) scale(${scale})`,
+            // Real bug found via real-device testing: an absolutely
+            // positioned element with no explicit width shrink-to-fits
+            // based on the distance from `left` to the container's edge -
+            // NOT based on the translate() that visually re-centers it.
+            // That distance changes on every drag, so the stat text
+            // (e.g. "0.00 km") was silently wrapping/reflowing differently
+            // depending on where the sticker sat, even though visually it
+            // should always have the same room. max-content makes the
+            // box's size depend only on its own content, fully independent
+            // of position.
+            width: "max-content",
             cursor: "grab", touchAction: "none", userSelect: "none",
           }}
         >
