@@ -18570,6 +18570,8 @@ const ShareableStatCard = ({
   subtitle,
   stats,
   mapUrl,
+  outlineMapUrl,
+  locationLabel,
   icon: Icon,
   iconImage,
   onClose,
@@ -18578,6 +18580,17 @@ const ShareableStatCard = ({
   subtitle: string;
   stats: { label: string; value: string; isPR?: boolean }[];
   mapUrl?: string | null;
+  // Transparent, route-outline-only variant of mapUrl (no satellite
+  // imagery) - matches the plain route-silhouette style real trackers
+  // offer as an alternative to a full photo-style map. Only present when
+  // this share is for a real GPS route (undefined for lifting sessions,
+  // court sports, etc.), and only ever shown if the person taps to
+  // switch to it - Satellite stays the default.
+  outlineMapUrl?: string | null;
+  // Opt-in city/country label (offline-derived, never a live geocoding
+  // call) - never shown by default, only added if the person explicitly
+  // taps to include it.
+  locationLabel?: string | null;
   icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   iconImage?: string;
   onClose: () => void;
@@ -18585,6 +18598,16 @@ const ShareableStatCard = ({
   const cardRef = React.useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [useOutlineMap, setUseOutlineMap] = useState(false);
+  const [showLocation, setShowLocation] = useState(false);
+  const displayMapUrl = (useOutlineMap && outlineMapUrl) ? outlineMapUrl : mapUrl;
+  // Location is appended as a real extra stat, not a separate UI
+  // element - so it participates in the exact same grid layout, sizing,
+  // and PR-styling logic as every other stat, rather than needing its
+  // own bespoke display treatment.
+  const effectiveStats = (showLocation && locationLabel)
+    ? [...stats, { label: "Location", value: locationLabel }]
+    : stats;
 
   const captureCard = async (): Promise<Blob | null> => {
     if (!cardRef.current) return null;
@@ -18665,31 +18688,45 @@ const ShareableStatCard = ({
             visual dominance rather than sitting equal-sized in a grid with
             everything else. This is the number the whole card exists to
             show off. */}
-        {stats.length > 0 && (
+        {effectiveStats.length > 0 && (
           <div style={{ position: "relative", textAlign: "center", padding: "4px 24px 20px" }}>
-            {stats[0].isPR && (
+            {effectiveStats[0].isPR && (
               <span style={{ display: "inline-block", background: COLORS.accent, color: "#0A0A0A", fontSize: 10, fontWeight: 900, letterSpacing: 0.8, padding: "3px 8px", borderRadius: 20, marginBottom: 8 }}>NEW PR</span>
             )}
             <h1 style={{
               color: COLORS.white, fontSize: 56, fontWeight: 900, margin: 0, lineHeight: 1,
               letterSpacing: -1.5,
-              textShadow: stats[0].isPR ? `0 0 50px ${COLORS.accent}90` : `0 0 40px ${COLORS.primary}60`,
-            }}>{stats[0].value}</h1>
-            <p style={{ color: COLORS.accent, fontSize: 13, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", margin: "8px 0 0" }}>{stats[0].label}</p>
+              textShadow: effectiveStats[0].isPR ? `0 0 50px ${COLORS.accent}90` : `0 0 40px ${COLORS.primary}60`,
+            }}>{effectiveStats[0].value}</h1>
+            <p style={{ color: COLORS.accent, fontSize: 13, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", margin: "8px 0 0" }}>{effectiveStats[0].label}</p>
           </div>
         )}
 
         <h2 style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: "0 24px 20px", textAlign: "center", textTransform: "capitalize" }}>{title}</h2>
 
-        {mapUrl && (
-          <div style={{ margin: "0 20px 20px", borderRadius: 16, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
-            <img src={mapUrl} alt="" style={{ width: "100%", display: "block" }} crossOrigin="anonymous" />
+        {displayMapUrl && (
+          <div style={{ margin: "0 20px 8px", borderRadius: 16, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
+            <img src={displayMapUrl} alt="" style={{ width: "100%", display: "block" }} crossOrigin="anonymous" />
+          </div>
+        )}
+        {(outlineMapUrl || (locationLabel && !showLocation)) && (
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", margin: "0 20px 20px", flexWrap: "wrap" }}>
+            {outlineMapUrl && (
+              <button onClick={() => setUseOutlineMap((v) => !v)} style={{ background: "transparent", border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: "5px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                {useOutlineMap ? "Satellite" : "Outline Only"}
+              </button>
+            )}
+            {locationLabel && !showLocation && (
+              <button onClick={() => setShowLocation(true)} style={{ background: "transparent", border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: "5px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                + Add Location
+              </button>
+            )}
           </div>
         )}
 
-        {stats.length > 1 && (
-          <div style={{ padding: "0 24px 28px", display: "grid", gridTemplateColumns: stats.length > 3 ? "1fr 1fr" : `repeat(${stats.length - 1}, 1fr)`, gap: 14 }}>
-            {stats.slice(1).map((s, i) => (
+        {effectiveStats.length > 1 && (
+          <div style={{ padding: "0 24px 28px", display: "grid", gridTemplateColumns: effectiveStats.length > 3 ? "1fr 1fr" : `repeat(${effectiveStats.length - 1}, 1fr)`, gap: 14 }}>
+            {effectiveStats.slice(1).map((s, i) => (
               <div key={i} style={{ background: s.isPR ? `${COLORS.accent}18` : `${COLORS.white}08`, border: s.isPR ? `1px solid ${COLORS.accent}60` : "none", borderRadius: 14, padding: "12px 8px", textAlign: "center" }}>
                 <p style={{ color: s.isPR ? COLORS.accent : COLORS.textSecondary, fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", margin: "0 0 4px" }}>{s.isPR ? "PR" : s.label}</p>
                 <p style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: 0 }}>{s.value}</p>
@@ -18731,6 +18768,8 @@ const StickerShareScreen = ({
   iconImage,
   onClose,
   mapUrl,
+  outlineMapUrl,
+  locationLabel,
 }: {
   title: string;
   stats: { label: string; value: string; isPR?: boolean }[];
@@ -18738,11 +18777,23 @@ const StickerShareScreen = ({
   iconImage?: string;
   onClose: () => void;
   mapUrl?: string | null;
+  // Transparent, route-outline-only variant of mapUrl - see
+  // ShareableStatCard for the full explanation. Only shown if the
+  // person explicitly taps to switch to it.
+  outlineMapUrl?: string | null;
+  // Opt-in city/country label - never shown by default.
+  locationLabel?: string | null;
 }) => {
   // Density tier for the stat stack - 0 shows just the hero stat, 1 shows
   // everything. Shared across both sticker-only and photo-overlay modes so
   // tapping either one behaves identically.
   const [overlayTier, setOverlayTier] = useState<0 | 1>(0);
+  const [useOutlineMap, setUseOutlineMap] = useState(false);
+  const [showLocation, setShowLocation] = useState(false);
+  const displayMapUrl = (useOutlineMap && outlineMapUrl) ? outlineMapUrl : mapUrl;
+  const effectiveStats = (showLocation && locationLabel)
+    ? [...stats, { label: "Location", value: locationLabel }]
+    : stats;
 
   // Shared renderer for both sticker-only and photo-overlay modes, so the
   // two can't visually drift apart again the way dark/light styling once
@@ -18750,7 +18801,7 @@ const StickerShareScreen = ({
   // card/box, ever), with a real hero/support font hierarchy and an
   // optional, properly-sized route thumbnail above the stack.
   const renderStatOverlay = (fontColor: "white" | "black", routeMapUrl?: string | null) => {
-    const visibleStats = overlayTier === 0 ? stats.slice(0, 1) : stats;
+    const visibleStats = overlayTier === 0 ? effectiveStats.slice(0, 1) : effectiveStats;
     const textColor = fontColor === "white" ? "#FFFFFF" : "#0A0A0A";
     const textShadowStyle = fontColor === "white"
       ? "0 2px 10px rgba(0,0,0,0.65), 0 1px 3px rgba(0,0,0,0.9)"
@@ -19057,7 +19108,7 @@ const StickerShareScreen = ({
           backgroundSize: "20px 20px", backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
         }}>
           <div ref={stickerOnlyRef} onClick={() => setOverlayTier((t) => (t === 0 ? 1 : 0))} style={{ padding: 8, cursor: "pointer" }}>
-            {renderStatOverlay(stickerFontColor, mapUrl)}
+            {renderStatOverlay(stickerFontColor, displayMapUrl)}
           </div>
         </div>
 
@@ -19076,6 +19127,20 @@ const StickerShareScreen = ({
               }}>{m} text</button>
             ))}
           </div>
+          {(outlineMapUrl || (locationLabel && !showLocation)) && (
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+              {outlineMapUrl && (
+                <button onClick={() => setUseOutlineMap((v) => !v)} style={{ background: "transparent", border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: "6px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                  {useOutlineMap ? "Satellite" : "Outline Only"}
+                </button>
+              )}
+              {locationLabel && !showLocation && (
+                <button onClick={() => setShowLocation(true)} style={{ background: "transparent", border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: "6px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                  + Add Location
+                </button>
+              )}
+            </div>
+          )}
           <button onClick={handleShareStickerOnly} disabled={sharing} style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: sharing ? "default" : "pointer", opacity: sharing ? 0.7 : 1 }}>
             {sharing ? "Preparing..." : "Share Sticker"}
           </button>
@@ -19132,7 +19197,7 @@ const StickerShareScreen = ({
             cursor: "grab", touchAction: "none", userSelect: "none",
           }}
         >
-          {renderStatOverlay(stickerFontColor, mapUrl)}
+          {renderStatOverlay(stickerFontColor, displayMapUrl)}
         </div>
       </div>
 
@@ -19154,6 +19219,20 @@ const StickerShareScreen = ({
           </div>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
         </div>
+        {(outlineMapUrl || (locationLabel && !showLocation)) && (
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+            {outlineMapUrl && (
+              <button onClick={() => setUseOutlineMap((v) => !v)} style={{ background: "transparent", border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: "6px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                {useOutlineMap ? "Satellite" : "Outline Only"}
+              </button>
+            )}
+            {locationLabel && !showLocation && (
+              <button onClick={() => setShowLocation(true)} style={{ background: "transparent", border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: "6px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                + Add Location
+              </button>
+            )}
+          </div>
+        )}
         <button onClick={handleShare} disabled={sharing} style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: sharing ? "default" : "pointer", opacity: sharing ? 0.7 : 1 }}>
           {sharing ? "Preparing..." : "Share"}
         </button>
