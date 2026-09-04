@@ -15467,6 +15467,10 @@ const ActiveWeeksCard = ({ streak, bestStreak, thisWeekCount, weeklyBlocks }: {
 
 const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p) => {} }) => {
   const [activeMetric, setActiveMetric] = useState("weight");
+  // Time-range filter for the body-measurement charts below - "All" by
+  // default (matches existing behavior exactly, nothing changes unless
+  // someone taps a different range).
+  const [chartRange, setChartRange] = useState<"1M" | "3M" | "6M" | "All">("All");
   const [showLogModal, setShowLogModal] = useState(false);
   // Workout history state — must live at component top level (React hooks rules)
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -15597,13 +15601,22 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
   const completionPct = Math.round((totalSessions / 30) * 100);
   const streak = profile?.streak || 0;
 
-  const weightData = logs.filter(l => l.weight != null).map(l => ({ value: l.weight, label: l.label, date: l.date }));
-  const waistData = logs.filter(l => l.waist).map(l => ({ value: l.waist, label: l.label, date: l.date }));
-  const hipsData = logs.filter(l => l.hips).map(l => ({ value: l.hips, label: l.label, date: l.date }));
-  const armsData = logs.filter(l => l.arms).map(l => ({ value: l.arms, label: l.label, date: l.date }));
-  const chestData = logs.filter(l => l.chest).map(l => ({ value: l.chest, label: l.label, date: l.date }));
-  const neckData = logs.filter(l => l.neck).map(l => ({ value: l.neck, label: l.label, date: l.date }));
-  const thighsData = logs.filter(l => l.thighs).map(l => ({ value: l.thighs, label: l.label, date: l.date }));
+  const isWithinChartRange = (dateStr: string): boolean => {
+    if (chartRange === "All" || !dateStr) return true;
+    const days = chartRange === "1M" ? 30 : chartRange === "3M" ? 90 : 180;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const d = new Date(dateStr);
+    return !isNaN(d.getTime()) && d >= cutoff;
+  };
+  const rangeLogs = logs.filter(l => isWithinChartRange(l.date));
+  const weightData = rangeLogs.filter(l => l.weight != null).map(l => ({ value: l.weight, label: l.label, date: l.date }));
+  const waistData = rangeLogs.filter(l => l.waist).map(l => ({ value: l.waist, label: l.label, date: l.date }));
+  const hipsData = rangeLogs.filter(l => l.hips).map(l => ({ value: l.hips, label: l.label, date: l.date }));
+  const armsData = rangeLogs.filter(l => l.arms).map(l => ({ value: l.arms, label: l.label, date: l.date }));
+  const chestData = rangeLogs.filter(l => l.chest).map(l => ({ value: l.chest, label: l.label, date: l.date }));
+  const neckData = rangeLogs.filter(l => l.neck).map(l => ({ value: l.neck, label: l.label, date: l.date }));
+  const thighsData = rangeLogs.filter(l => l.thighs).map(l => ({ value: l.thighs, label: l.label, date: l.date }));
 
   const getActiveData = () => {
     if (activeMetric === "weight") return weightData;
@@ -15868,6 +15881,29 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
               );
             })}
           </div>
+
+          {/* Time-range filter for the chart view specifically - the
+              Numbers list right above stays a complete, unfiltered
+              audit trail, since "did I ever log this?" is a different
+              question than "how has this trended recently?" */}
+          {!showMetricDetail && (
+            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              {(["1M", "3M", "6M", "All"] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setChartRange(r)}
+                  style={{
+                    flex: 1, padding: "6px 0", borderRadius: 8, border: "none",
+                    background: chartRange === r ? MUSCLE_COLORS[activeMetric] : COLORS.border,
+                    color: chartRange === r ? COLORS.white : COLORS.textSecondary,
+                    fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  }}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Numbers detail view — all logged entries for this metric */}
           {showMetricDetail ? (
