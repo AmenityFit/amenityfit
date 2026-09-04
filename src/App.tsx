@@ -23650,14 +23650,6 @@ class ErrorBoundary extends React.Component {
   }
 }
 export default function App() {
-  // Takes over the entire screen, before anything else, whenever a Firebase
-  // password reset link is opened - completely independent of login state,
-  // since the person clicking it isn't signed in yet.
-  const resetParams = new URLSearchParams(window.location.search);
-  if (resetParams.get("mode") === "resetPassword" && resetParams.get("oobCode")) {
-    return <CustomPasswordResetScreen oobCode={resetParams.get("oobCode")!} />;
-  }
-
   const [screen, setScreen] = useState("splash");
 
   // Reset scroll position to the very top on every screen change. Individual
@@ -24338,6 +24330,24 @@ const isInitialLoad = React.useRef(true);
       }
     }
   }, [userProfile?.uid, userProfile?.progressionPhase, userProfile?.generatedDays, userProfile?.programKey, userProfile?.equipmentPreference, userProfile?.frequency, userProfile?.sessionLength, liveBuildingEquipmentFingerprint]);
+
+  // Takes over the entire screen, before anything else, whenever a Firebase
+  // password reset link is opened - completely independent of login state,
+  // since the person clicking it isn't signed in yet. Moved here from the
+  // very top of this component (a real, if latent, Rules-of-Hooks
+  // violation - this early return previously sat BEFORE every hook
+  // declared below it, meaning any render that took it would skip all of
+  // them). In practice this never caused a visible crash, because
+  // window.location.search doesn't change without a full page reload, so
+  // the condition is stable for a given mount rather than toggling
+  // between renders the way real state does - but "happens to be safe in
+  // practice" isn't the same as being correct, and this removes the
+  // ambiguity entirely, matching the same standard applied everywhere
+  // else this session after the real CardioTrackingScreen crash.
+  const resetParams = new URLSearchParams(window.location.search);
+  if (resetParams.get("mode") === "resetPassword" && resetParams.get("oobCode")) {
+    return <CustomPasswordResetScreen oobCode={resetParams.get("oobCode")!} />;
+  }
 
   const workoutDoneToday = userProfile?.lastSessionDate === new Date().toDateString();
 
