@@ -15129,6 +15129,15 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
     })
     .filter((p): p is { label: string; value: number } => p !== null);
 
+  // Real per-kilometer splits, using this session's own route - not
+  // cardio/pace estimate, genuine GPS-segment math (see
+  // computeKilometerSplits). Only shown once there are at least 2 real
+  // splits - a single split is just the overall pace already shown
+  // above, so a "Splits" section with one bar adds nothing.
+  const splitPoints = (!isMindBody && hasDistance && session.route?.length > 1)
+    ? computeKilometerSplits(session.route).map((s) => ({ label: `KM ${s.km}`, value: s.paceSecondsPerKm / 60 }))
+    : [];
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 700, background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
       <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", gap: 12 }}>
@@ -15177,6 +15186,20 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
         <div style={{ margin: "14px 24px 0", padding: "12px 16px", borderRadius: 14, background: `${COLORS.accent}15`, border: `1px solid ${COLORS.accent}40` }}>
           <p style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700, margin: 0, textAlign: "center" }}>{comparisonLabel}</p>
         </div>
+      )}
+
+      {splitPoints.length >= 2 && (
+        <>
+          <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "20px 24px 0" }}>
+            Splits
+          </p>
+          <TrendChart
+            points={splitPoints}
+            unit=" min/km"
+            showBest={true}
+            higherIsBetter={false}
+          />
+        </>
       )}
 
       {trendPoints.length >= 3 && (
@@ -16915,6 +16938,44 @@ const computeElevationGainMeters = (route: { lat: number; lng: number; altitude?
     if (delta > MIN_ELEVATION_DELTA_METERS) gain += delta;
   }
   return Math.round(gain);
+};
+
+// Real per-kilometer split breakdown - genuine GPS-segment math, not an
+// estimate. Walks the route summing real haversine distance between
+// consecutive points; the instant cumulative distance crosses each
+// 1000m boundary, the exact crossing moment is linearly interpolated
+// within that GPS segment (not just "whichever point happened to be
+// closest"), giving a real per-km pace rather than a rough
+// approximation. Only emits COMPLETE kilometers - a session that ran
+// 3.4km correctly shows 3 splits, not a misleading partial 4th one.
+const computeKilometerSplits = (route: { lat: number; lng: number; timestamp: number }[] | null | undefined): { km: number; paceSecondsPerKm: number }[] => {
+  if (!route || route.length < 2) return [];
+  const splits: { km: number; paceSecondsPerKm: number }[] = [];
+  let cumulativeMeters = 0;
+  let currentKmStartTimestamp = route[0].timestamp;
+  let nextKmBoundary = 1000;
+
+  for (let i = 1; i < route.length; i++) {
+    const prev = route[i - 1];
+    const curr = route[i];
+    const segmentMeters = haversineDistanceMeters(prev.lat, prev.lng, curr.lat, curr.lng);
+    const segmentTimeMs = curr.timestamp - prev.timestamp;
+
+    if (segmentMeters > 0 && cumulativeMeters + segmentMeters >= nextKmBoundary) {
+      const metersIntoSegment = nextKmBoundary - cumulativeMeters;
+      const fraction = metersIntoSegment / segmentMeters;
+      const boundaryTimestamp = prev.timestamp + segmentTimeMs * fraction;
+
+      const splitSeconds = (boundaryTimestamp - currentKmStartTimestamp) / 1000;
+      splits.push({ km: splits.length + 1, paceSecondsPerKm: splitSeconds });
+
+      currentKmStartTimestamp = boundaryTimestamp;
+      nextKmBoundary += 1000;
+    }
+    cumulativeMeters += segmentMeters;
+  }
+
+  return splits;
 };
 
 // Court/field illustrations for basketball, soccer, and padel - used in
