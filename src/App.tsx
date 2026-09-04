@@ -16172,6 +16172,18 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   const [otherNameDraft, setOtherNameDraft] = useState("");
   const [otherNameError, setOtherNameError] = useState<string | null>(null);
   const [otherNameChecking, setOtherNameChecking] = useState(false);
+  // Real fix, prompted by real feedback: "Other" previously always
+  // requested GPS and showed Distance/Pace regardless of what the person
+  // actually typed - showing Distance for something like "Fishing" is
+  // nonsensical. Defaults to false (no distance) since most real "Other"
+  // entries (fishing, bowling, boxing training, etc.) aren't genuinely
+  // GPS-distance activities - the person explicitly opts in only when it
+  // really is one (e.g. "Frisbee in the park", "Ultimate"). This is the
+  // ONLY new state needed: every stat display already checks
+  // distanceMeters > 0 before showing Distance/Pace, so simply never
+  // requesting GPS when this is false means those stats correctly never
+  // appear anywhere, with no changes needed to any display code.
+  const [otherTracksDistance, setOtherTracksDistance] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [sessionNotes, setSessionNotes] = useState("");
@@ -16202,6 +16214,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     setOtherNameDraft("");
     setOtherNameError(null);
     setOtherNameChecking(false);
+    setOtherTracksDistance(false);
     setShowDiscardConfirm(false);
     setSavedSessionId(null);
     setSessionNotes("");
@@ -16394,7 +16407,18 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // have no meaningful GPS movement - requesting location for them would
   // both be pointless and prompt for a permission the activity doesn't
   // need. Time and estimated calories still track normally.
-  const isIndoorActivity = !!ACTIVITY_TYPES.find((a) => a.key === activityType)?.indoor;
+  // "Other" is hardcoded indoor:false in ACTIVITY_TYPES (it has to be
+  // SOME default), but its real GPS/distance need varies entirely by what
+  // the person actually typed - fishing and boxing training aren't
+  // distance activities, but something like "Frisbee" genuinely might be.
+  // otherTracksDistance (captured on the name-entry screen, default off)
+  // overrides the fixed indoor flag specifically for "other," so GPS is
+  // only ever requested when the person actually said this involves real
+  // movement - every other activity type keeps using its fixed indoor
+  // value unchanged.
+  const isIndoorActivity = activityType === "other"
+    ? !otherTracksDistance
+    : !!ACTIVITY_TYPES.find((a) => a.key === activityType)?.indoor;
 
   // Persists the tracking session's real wall-clock timestamps (not just
   // in-memory React state) so that if iOS suspends or kills the app mid-
@@ -17070,6 +17094,36 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           {otherNameError && (
             <p style={{ color: COLORS.danger || "#ff4444", fontSize: 13, fontWeight: 600, margin: 0 }}>{otherNameError}</p>
           )}
+
+          {/* Real fix, prompted by real feedback: without this, "Other"
+              always requested GPS and showed Distance/Pace regardless of
+              content - nonsensical for something like "Fishing." Defaults
+              off, matching the common case (most "Other" entries aren't
+              genuinely GPS-distance activities) - same toggle visual
+              pattern as "Keep screen on" below for consistency. */}
+          <button
+            onClick={() => setOtherTracksDistance((v) => !v)}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "16px 18px", borderRadius: 16, border: `1px solid ${COLORS.border}`,
+              background: COLORS.card, cursor: "pointer", marginTop: 4,
+            }}
+          >
+            <div style={{ textAlign: "left" }}>
+              <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>This covers real distance</p>
+              <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>Turn on for outdoor movement - off for most activities</p>
+            </div>
+            <div style={{
+              width: 44, height: 26, borderRadius: 20, position: "relative",
+              background: otherTracksDistance ? COLORS.primary : COLORS.border, transition: "background 0.15s", flexShrink: 0,
+            }}>
+              <div style={{
+                position: "absolute", top: 3, left: otherTracksDistance ? 21 : 3,
+                width: 20, height: 20, borderRadius: "50%", background: COLORS.white, transition: "left 0.15s",
+              }} />
+            </div>
+          </button>
+
           <button onClick={submitOtherName} disabled={otherNameChecking} style={{ padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: otherNameChecking ? "default" : "pointer", marginTop: 8, opacity: otherNameChecking ? 0.7 : 1 }}>
             {otherNameChecking ? "Checking..." : "Continue"}
           </button>
