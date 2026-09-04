@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import html2canvas from "html2canvas";
+import * as maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import iconRunning from "./assets/icons/running.png";
 import iconWalking from "./assets/icons/walking.png";
 import iconRowing from "./assets/icons/rowing.png";
@@ -14815,6 +14817,168 @@ const TrendChart = ({ points, unit, showBest, higherIsBetter }: { points: { labe
   );
 };
 
+// Real replacement for the old Mapbox Static Images API - that service
+// required a paid, metered API key past its free tier and legally
+// required a permanent Mapbox logo watermark on every image, both real
+// problems as this app scales toward hundreds of buildings. MapLibre GL
+// JS is a fully open-source (BSD-3) library with no usage billing at
+// all - the JS is bundled into this app's own code, not fetched from a
+// tracked third-party service. Paired with Esri's free World Imagery
+// tiles (pure satellite photography, no street/place-name labels at
+// all - the same deliberate privacy property the old satellite-v9 style
+// was chosen for, preserved exactly), this gives an equivalent visual
+// result with zero recurring cost and no logo requirement.
+//
+// Esri's World Imagery is a free, unauthenticated public service with
+// no published SLA or rate-limit guarantee - reliable in practice, but
+// not contractually guaranteed the way a paid API would be. The
+// fallback below (a clean route-line-only render with no imagery,
+// triggered if tiles don't load within a short timeout or the source
+// reports real load errors) means a rare Esri hiccup never surfaces as
+// a broken or blank map to the person using the app - just, on a very
+// unlucky occasion, a plain but still fully accurate route line. This
+// is purely a RENDERING layer - it never touches how GPS points are
+// recorded, simplified, or how distance/pace are calculated; it only
+// changes how the already-recorded route array gets drawn on screen.
+const ESRI_WORLD_IMAGERY_TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+
+const InteractiveRouteMap = ({
+  route,
+  interactive = true,
+  height = 240,
+  strokeColor,
+}: {
+  route: { lat: number; lng: number }[];
+  interactive?: boolean;
+  height?: number;
+  strokeColor?: string;
+}) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [fallback, setFallback] = useState(false);
+  const accentColor = strokeColor || COLORS.accent;
+
+  useEffect(() => {
+    if (!containerRef.current || !route || route.length < 2) return;
+    let cancelled = false;
+    // Plain local variable, not React state - deliberately, so the
+    // timeout and error handlers below (closures created once, at this
+    // effect's setup) always see the real, current value rather than a
+    // stale snapshot from the render that first created them. React
+    // state's setter doesn't update an already-captured closure's view
+    // of the old value, which would make this timer fire unconditionally
+    // regardless of whether the map genuinely finished loading.
+    let hasLoaded = false;
+
+    const fallbackTimer = setTimeout(() => {
+      if (!cancelled && !hasLoaded) setFallback(true);
+    }, 6000);
+
+    const coordinates = route.map((p) => [p.lng, p.lat] as [number, number]);
+    const lngs = coordinates.map((c) => c[0]);
+    const lats = coordinates.map((c) => c[1]);
+    const bounds: [[number, number], [number, number]] = [
+      [Math.min(...lngs), Math.min(...lats)],
+      [Math.max(...lngs), Math.max(...lats)],
+    ];
+
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: {
+        version: 8,
+        sources: {
+          "esri-satellite": {
+            type: "raster",
+            tiles: [ESRI_WORLD_IMAGERY_TILE_URL],
+            tileSize: 256,
+            attribution: "Tiles © Esri",
+          },
+        },
+        layers: [{ id: "esri-satellite", type: "raster", source: "esri-satellite" }],
+      },
+      interactive,
+      attributionControl: false,
+      preserveDrawingBuffer: true,
+    });
+
+    map.on("error", () => {
+      if (!cancelled && !hasLoaded) setFallback(true);
+    });
+
+    map.on("load", () => {
+      if (cancelled) return;
+      map.addSource("route-line", {
+        type: "geojson",
+        data: { type: "Feature", geometry: { type: "LineString", coordinates }, properties: {} },
+      });
+      // Same double-stroke technique as the old static image - a wider
+      // dark outline first, then the accent-colored line on top, so the
+      // route stays readable regardless of what's underneath it.
+      map.addLayer({
+        id: "route-outline", type: "line", source: "route-line",
+        paint: { "line-color": "#000000", "line-width": 7, "line-opacity": 0.55 },
+        layout: { "line-cap": "round", "line-join": "round" },
+      });
+      map.addLayer({
+        id: "route-line-accent", type: "line", source: "route-line",
+        paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.95 },
+        layout: { "line-cap": "round", "line-join": "round" },
+      });
+      map.fitBounds(bounds, { padding: 40, animate: false });
+      hasLoaded = true;
+    });
+
+    if (!interactive) {
+      map.dragPan.disable();
+      map.scrollZoom.disable();
+      map.boxZoom.disable();
+      map.dragRotate.disable();
+      map.keyboard.disable();
+      map.doubleClickZoom.disable();
+      map.touchZoomRotate.disable();
+    }
+
+    return () => {
+      cancelled = true;
+      clearTimeout(fallbackTimer);
+      map.remove();
+    };
+  }, [route]);
+
+  if (!route || route.length < 2) return null;
+
+  if (fallback) {
+    // Guaranteed-to-render fallback - a plain SVG route line on a
+    // neutral background, the same simplification/scaling technique
+    // already proven in MiniGraph elsewhere in this file. No external
+    // request of any kind, so this can never itself fail to render.
+    const simplified = simplifyRoute(route, 120);
+    const fLats = simplified.map((p) => p.lat);
+    const fLngs = simplified.map((p) => p.lng);
+    const minLat = Math.min(...fLats), maxLat = Math.max(...fLats);
+    const minLng = Math.min(...fLngs), maxLng = Math.max(...fLngs);
+    const latRange = maxLat - minLat || 1;
+    const lngRange = maxLng - minLng || 1;
+    const w = 400, h = height, pad = 20;
+    const points = simplified.map((p) => {
+      const x = pad + ((p.lng - minLng) / lngRange) * (w - pad * 2);
+      const y = h - pad - ((p.lat - minLat) / latRange) * (h - pad * 2);
+      return `${x},${y}`;
+    });
+    return (
+      <div style={{ width: "100%", height, background: COLORS.card, borderRadius: 20, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
+          <polyline points={points.join(" ")} fill="none" stroke="#000000" strokeOpacity={0.55} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
+          <polyline points={points.join(" ")} fill="none" stroke={accentColor} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={containerRef} style={{ width: "100%", height, borderRadius: 20, overflow: "hidden" }} />
+  );
+};
+
 const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { session: any; sessionHistory: any[]; profile: any; onClose: () => void }) => {
   const [showShareCard, setShowShareCard] = useState(false);
   const [showStickerMode, setShowStickerMode] = useState(false);
@@ -14905,7 +15069,16 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
         <h1 style={{ color: COLORS.white, fontSize: 22, fontWeight: 900, margin: "10px 0 0" }}>{session.customActivityName || meta?.label || session.type}</h1>
       </div>
 
-      {mapUrl && (
+      {/* Real GPS route (no courtType) gets the new interactive
+          MapLibre+Esri map - pan/zoom, no Mapbox billing/watermark.
+          Court sports keep the existing hand-drawn SVG illustration
+          exactly as before (not GPS-based, nothing to replace here). */}
+      {!courtType && session.route?.length > 1 && (
+        <div style={{ margin: "16px 24px 0", border: `1px solid ${COLORS.border}`, borderRadius: 20, overflow: "hidden" }}>
+          <InteractiveRouteMap route={session.route} interactive={true} height={240} />
+        </div>
+      )}
+      {courtType && mapUrl && (
         <div style={{ margin: "16px 24px 0", borderRadius: 20, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
           <img src={mapUrl} alt="" style={{ width: "100%", display: "block" }} />
         </div>
