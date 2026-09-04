@@ -16700,7 +16700,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             where("type", "==", activityType)
           ));
           const realCount = countSnap.docs.filter((d) => !!d.data().completedAt).length;
-          if (ACTIVITY_MILESTONES.includes(realCount)) {
+          if (isActivityMilestone(realCount)) {
             const meta = ACTIVITY_TYPES.find((a) => a.key === activityType);
             // "Row (machine)" style labels don't pluralize cleanly with a
             // bare +s - falls back to a safe generic label rather than
@@ -17995,14 +17995,38 @@ const StickerShareScreen = ({
   );
 };
 
-// Real activity-count milestones (10/25/50/100/250/500), scoped
-// deliberately to fixed activity types + lifting sessions for now, not yet
-// "Other" custom names - correctly counting those would need the same
-// per-person name normalization already built for the "Other" trending
-// feature, a real separate piece of work. Not shown for anything more
-// frequent than this ladder - the whole point is staying rare enough to
-// feel earned, not becoming routine.
-const ACTIVITY_MILESTONES = [10, 25, 50, 100, 250, 500];
+// Real activity-count milestones, scoped deliberately to fixed activity
+// types + lifting sessions for now, not yet "Other" custom names -
+// correctly counting those would need the same per-person name
+// normalization already built for the "Other" trending feature, a real
+// separate piece of work.
+//
+// A fixed list alone would eventually run out - someone riding nearly
+// every day for a few years reaches 1000+ rides, and stopping
+// celebrations after 500 forever would mean the MOST loyal, most engaged
+// people get the least recognition over time, exactly backwards. Named
+// milestones stay dense early (10/25/50/100/250/500), since early
+// progress differentiation matters most for motivation - beyond that,
+// every 500 continues indefinitely (1000, 1500, 2000...) with no ceiling
+// to guess at, so this scales correctly for anyone, however far they go.
+const isActivityMilestone = (count: number): boolean => {
+  const namedMilestones = [10, 25, 50, 100, 250, 500];
+  if (namedMilestones.includes(count)) return true;
+  return count > 500 && count % 500 === 0;
+};
+
+// Same real Bronze/Silver/Gold/Platinum tier names, colors, and icons
+// already established by getMasteryBadge (the lifting cycle-badge system)
+// - reused verbatim rather than inventing a second, inconsistent tier
+// language. Escalates visually with the tier (bigger ring, stronger glow),
+// so a 1000-count milestone genuinely feels like more of an occasion than
+// a 10-count one, not just the same card with a different number.
+const getMilestoneTier = (count: number) => {
+  if (count >= 1000) return { label: "Platinum", tierIcon: Crown, color: "#FFFFFF", ringSize: 104, glow: 64 };
+  if (count >= 250) return { label: "Gold", tierIcon: Trophy, color: "#FFD166", ringSize: 98, glow: 56 };
+  if (count >= 50) return { label: "Silver", tierIcon: Shield, color: "#A8B8CC", ringSize: 94, glow: 48 };
+  return { label: "Bronze", tierIcon: Flame, color: "#E8A87C", ringSize: 90, glow: 40 };
+};
 
 // Genuinely distinct visual identity from both the regular completion
 // screen and the regular sticker, per real product direction - reuses
@@ -18029,10 +18053,14 @@ const MilestoneUnlockedScreen = ({
   const [visible, setVisible] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
   const [showStickerMode, setShowStickerMode] = useState(false);
-  // Gold, not the app's usual blue accent - deliberately distinct so this
-  // reads as its own real occasion, not just another activity completion
-  // screen in a different color.
-  const milestoneColor = "#FFD166";
+  // Real Bronze/Silver/Gold/Platinum tier (see getMilestoneTier) - not the
+  // app's usual blue accent, and not a flat single color regardless of
+  // count either. A 1000-count milestone should genuinely feel like more
+  // of an occasion than a 10-count one, not just the same card with a
+  // different number.
+  const tier = getMilestoneTier(count);
+  const TierIcon = tier.tierIcon;
+  const isPlatinum = tier.label === "Platinum";
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 100);
@@ -18048,31 +18076,56 @@ const MilestoneUnlockedScreen = ({
       flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
       padding: "48px 28px 40px", textAlign: "center", overflowY: "auto",
     }}>
+      {/* Platinum-only shimmer sweep - a real, tasteful "extra dopamine"
+          touch for the top tier specifically, not applied to every
+          milestone (which would cheapen it for the lower tiers). A
+          diagonal gradient animated across its own background-position,
+          the standard lightweight technique for this kind of shine
+          effect - no new asset or heavy animation library needed. */}
+      {isPlatinum && (
+        <style>{`
+          @keyframes platinumShimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+        `}</style>
+      )}
       <div style={{
-        width: 90, height: 90, borderRadius: 99, marginBottom: 20,
-        background: `${milestoneColor}18`,
-        border: `2px solid ${milestoneColor}50`,
+        position: "relative",
+        width: tier.ringSize, height: tier.ringSize, borderRadius: 99, marginBottom: 20,
+        background: `${tier.color}18`,
+        border: `2px solid ${tier.color}50`,
         display: "flex", alignItems: "center", justifyContent: "center",
-        boxShadow: `0 0 48px ${milestoneColor}25`,
+        boxShadow: `0 0 ${tier.glow}px ${tier.color}30`,
         opacity: visible ? 1 : 0,
         transform: visible ? "scale(1)" : "scale(0.85)",
         transition: "all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)",
+        overflow: "hidden",
       }}>
+        {isPlatinum && (
+          <div style={{
+            position: "absolute", inset: 0,
+            background: `linear-gradient(100deg, transparent 30%, ${tier.color}40 50%, transparent 70%)`,
+            backgroundSize: "300% 100%",
+            animation: "platinumShimmer 2.5s ease-in-out infinite",
+          }} />
+        )}
         {iconImage
-          ? <img src={iconImage} alt="" style={{ width: 44, height: 44, objectFit: "contain" }} />
-          : Icon && <Icon size={40} color={milestoneColor} strokeWidth={1.5} />}
+          ? <img src={iconImage} alt="" style={{ width: 44, height: 44, objectFit: "contain", position: "relative" }} />
+          : Icon && <Icon size={40} color={tier.color} strokeWidth={1.5} style={{ position: "relative" }} />}
       </div>
 
       <div style={{
-        display: "inline-flex", alignItems: "center",
-        background: `${milestoneColor}18`, borderRadius: 99,
+        display: "inline-flex", alignItems: "center", gap: 6,
+        background: `${tier.color}18`, borderRadius: 99,
         padding: "4px 14px", marginBottom: 14,
         opacity: visible ? 1 : 0,
         transform: visible ? "translateY(0)" : "translateY(10px)",
         transition: "all 0.5s ease 0.2s",
       }}>
-        <span style={{ color: milestoneColor, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
-          Milestone Unlocked
+        <TierIcon size={12} color={tier.color} strokeWidth={2} />
+        <span style={{ color: tier.color, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
+          {tier.label} Milestone
         </span>
       </div>
 
@@ -18122,10 +18175,10 @@ const MilestoneUnlockedScreen = ({
         onClick={onContinue}
         style={{
           width: "100%", padding: "18px", borderRadius: 16, border: "none",
-          background: `linear-gradient(135deg, ${milestoneColor}, #FFB347)`,
-          color: "#1A1200", fontSize: 16, fontWeight: 800,
+          background: `linear-gradient(135deg, ${tier.color}, ${tier.color}CC)`,
+          color: tier.label === "Platinum" ? "#1A1A1A" : "#1A1200", fontSize: 16, fontWeight: 800,
           cursor: "pointer", letterSpacing: 0.3,
-          boxShadow: `0 8px 32px ${milestoneColor}50`,
+          boxShadow: `0 8px 32px ${tier.color}50`,
           opacity: visible ? 1 : 0,
           transform: visible ? "translateY(0)" : "translateY(10px)",
           transition: "all 0.5s ease 0.6s",
@@ -24354,7 +24407,7 @@ const isInitialLoad = React.useRef(true);
     // training does) and reuses newCompleted, the value ALREADY reliably
     // tracked and written server-side for the quote system - no new
     // counter needed, no risk of drift from real history.
-    if (completedGroups.length > 0 && ACTIVITY_MILESTONES.includes(newCompleted)) {
+    if (completedGroups.length > 0 && isActivityMilestone(newCompleted)) {
       setPendingActivityMilestone({ count: newCompleted, activityLabel: "Workouts", nextScreen: realDestination });
       setScreen("activity-milestone");
     } else {
