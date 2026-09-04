@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import html2canvas from "html2canvas";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { getNearestCity } from "offline-geocode-city";
 import iconRunning from "./assets/icons/running.png";
 import iconWalking from "./assets/icons/walking.png";
 import iconRowing from "./assets/icons/rowing.png";
@@ -11525,10 +11526,17 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
   // Same 0.05km floor as the trusted live/save-time guard.
   const cardioHasDistance = (linkedCardioSession?.distanceMeters || 0) >= 50;
   const cardioCourtType = cardioMeta?.courtType;
+  // Real MapLibre+Esri snapshot, replacing the old Mapbox static image -
+  // called unconditionally regardless of whether linkedCardioSession
+  // exists, which the hook already treats as "no route, return null."
+  const cardioRouteSnapshotUrl = useRouteMapSnapshot(
+    (linkedCardioSession && !cardioCourtType) ? linkedCardioSession.route : null,
+    640, 360, COLORS.accent
+  );
   const cardioMapUrl = linkedCardioSession
     ? (cardioCourtType
         ? buildCourtIllustrationUrl(cardioCourtType, COLORS.accent)
-        : (linkedCardioSession.route?.length > 1 ? buildRouteMapUrl(linkedCardioSession.route, 640, 360) : null))
+        : cardioRouteSnapshotUrl)
     : null;
   const cardioPaceLabel = cardioHasDistance && linkedCardioSession?.avgPaceSecondsPerKm
     ? `${Math.floor(linkedCardioSession.avgPaceSecondsPerKm / 60)}:${String(Math.round(linkedCardioSession.avgPaceSecondsPerKm % 60)).padStart(2, "0")}/km`
@@ -14997,9 +15005,14 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
   // meters of pure GPS noise shouldn't display as a real tracked distance.
   const hasDistance = (session.distanceMeters || 0) >= 50;
   const courtType = meta?.courtType;
+  // Real MapLibre+Esri snapshot, replacing the old Mapbox static image -
+  // called unconditionally (hooks must be, regardless of courtType) with
+  // null passed for court sports, which the hook already treats as "no
+  // route, return null" internally.
+  const routeSnapshotUrl = useRouteMapSnapshot(courtType ? null : session.route, 640, 360, COLORS.accent);
   const mapUrl = courtType
     ? buildCourtIllustrationUrl(courtType, COLORS.accent)
-    : (session.route?.length > 1 ? buildRouteMapUrl(session.route, 640, 360) : null);
+    : routeSnapshotUrl;
   const paceLabel = hasDistance && session.avgPaceSecondsPerKm
     ? `${Math.floor(session.avgPaceSecondsPerKm / 60)}:${String(Math.round(session.avgPaceSecondsPerKm % 60)).padStart(2, "0")}/km`
     : null;
@@ -16619,6 +16632,189 @@ const buildRouteMapUrl = (route: { lat: number; lng: number }[], width: number, 
   return `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/${overlays}/auto/${width}x${height}${retina}?padding=40&access_token=${MAPBOX_ACCESS_TOKEN}`;
 };
 
+// Synchronous, guaranteed-to-render fallback for a GPS route image -
+// same technique as buildCourtIllustrationUrl below (a plain SVG data:
+// URL), and following that same function's hard-won lesson: explicit
+// width/height attributes on the <svg> tag itself, not just viewBox, or
+// html2canvas mis-crops the exported sticker image (confirmed by a real
+// side-by-side Instagram-export bug on the court illustrations). Used
+// both as the initial placeholder while the real MapLibre+Esri snapshot
+// is still loading, and as the permanent fallback if that snapshot
+// generation ever fails or times out - so a resident is never shown a
+// blank or broken map image, on a slow connection or otherwise.
+// transparent=true drops the background rect entirely - the mode for a
+// route-outline-only sticker meant to sit over the person's own photo,
+// matching the "Transparent" sticker style real trackers offer.
+const buildRouteFallbackSvgUrl = (
+  route: { lat: number; lng: number }[],
+  width: number,
+  height: number,
+  strokeColor: string,
+  transparent: boolean = false
+): string => {
+  const simplified = simplifyRoute(route, 120);
+  const lats = simplified.map((p) => p.lat);
+  const lngs = simplified.map((p) => p.lng);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+  const latRange = maxLat - minLat || 1;
+  const lngRange = maxLng - minLng || 1;
+  const pad = Math.round(Math.min(width, height) * 0.1);
+  const points = simplified.map((p) => {
+    const x = pad + ((p.lng - minLng) / lngRange) * (width - pad * 2);
+    const y = height - pad - ((p.lat - minLat) / latRange) * (height - pad * 2);
+    return `${x},${y}`;
+  }).join(" ");
+  const bg = transparent ? "" : `<rect x="0" y="0" width="${width}" height="${height}" fill="${COLORS.card}"/>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    ${bg}
+    <polyline points="${points}" fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="${points}" fill="none" stroke="${strokeColor}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+};
+
+// Real replacement for the old synchronous buildRouteMapUrl (Mapbox
+// Static Images API). This has to be async - unlike a plain URL string,
+// generating a MapLibre+Esri snapshot requires actually rendering a real
+// (off-screen) map, waiting for its satellite tiles to load, then
+// capturing the canvas - so this returns the fallback SVG immediately on
+// mount, then swaps in the real satellite snapshot once it's ready.
+// Every existing consumer (ShareableStatCard, StickerShareScreen, plain
+// <img> displays) keeps working completely unchanged, since they only
+// ever receive a plain image URL string either way - none of them need
+// to know a live map was ever involved.
+const useRouteMapSnapshot = (
+  route: { lat: number; lng: number }[] | null | undefined,
+  width: number,
+  height: number,
+  strokeColor?: string,
+  transparent: boolean = false
+): string | null => {
+  const accentColor = strokeColor || COLORS.accent;
+  const [url, setUrl] = useState<string | null>(() =>
+    route && route.length > 1 ? buildRouteFallbackSvgUrl(route, width, height, accentColor, transparent) : null
+  );
+
+  useEffect(() => {
+    if (!route || route.length < 2) { setUrl(null); return; }
+    setUrl(buildRouteFallbackSvgUrl(route, width, height, accentColor, transparent));
+    if (transparent) return; // Transparent mode is always the plain SVG line - never worth a real tile fetch for a route meant to sit invisibly over someone's own photo.
+
+    let cancelled = false;
+    let hasLoaded = false;
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "-9999px";
+    container.style.top = "0";
+    container.style.width = `${width}px`;
+    container.style.height = `${height}px`;
+    document.body.appendChild(container);
+
+    const coordinates = route.map((p) => [p.lng, p.lat] as [number, number]);
+    const lngs = coordinates.map((c) => c[0]);
+    const lats = coordinates.map((c) => c[1]);
+    const bounds: [[number, number], [number, number]] = [
+      [Math.min(...lngs), Math.min(...lats)],
+      [Math.max(...lngs), Math.max(...lats)],
+    ];
+
+    const map = new maplibregl.Map({
+      container,
+      style: {
+        version: 8,
+        sources: {
+          "esri-satellite": {
+            type: "raster",
+            tiles: [ESRI_WORLD_IMAGERY_TILE_URL],
+            tileSize: 256,
+            attribution: "Tiles © Esri",
+          },
+        },
+        layers: [{ id: "esri-satellite", type: "raster", source: "esri-satellite" }],
+      },
+      interactive: false,
+      attributionControl: false,
+      preserveDrawingBuffer: true,
+    });
+
+    const cleanup = () => {
+      map.remove();
+      if (container.parentNode) container.parentNode.removeChild(container);
+    };
+
+    const fallbackTimer = setTimeout(() => {
+      if (!cancelled && !hasLoaded) cleanup();
+    }, 6000);
+
+    map.on("error", () => {
+      if (!cancelled && !hasLoaded) {
+        clearTimeout(fallbackTimer);
+        cleanup();
+      }
+    });
+
+    map.on("load", () => {
+      if (cancelled) return;
+      map.addSource("route-line", {
+        type: "geojson",
+        data: { type: "Feature", geometry: { type: "LineString", coordinates }, properties: {} },
+      });
+      map.addLayer({
+        id: "route-outline", type: "line", source: "route-line",
+        paint: { "line-color": "#000000", "line-width": 7, "line-opacity": 0.55 },
+        layout: { "line-cap": "round", "line-join": "round" },
+      });
+      map.addLayer({
+        id: "route-line-accent", type: "line", source: "route-line",
+        paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.95 },
+        layout: { "line-cap": "round", "line-join": "round" },
+      });
+      map.fitBounds(bounds, { padding: Math.round(Math.min(width, height) * 0.1), animate: false });
+      map.once("idle", () => {
+        if (cancelled) return;
+        hasLoaded = true;
+        clearTimeout(fallbackTimer);
+        try {
+          const dataUrl = map.getCanvas().toDataURL("image/png");
+          if (!cancelled) setUrl(dataUrl);
+        } catch (e) {
+          console.error("Route map snapshot capture failed:", e);
+        }
+        cleanup();
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(fallbackTimer);
+      cleanup();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route, width, height, transparent]);
+
+  return url;
+};
+
+// Opt-in city/country label for a route, using its first (start) point
+// as the representative location - never shown by default, only when
+// explicitly added to a share/sticker card. Fully offline
+// (offline-geocode-city ships its own bundled dataset, no network
+// request of any kind) - works identically on a fast connection or a
+// slow one, and never sends anyone's real coordinates to any
+// third-party service the way a live geocoding API would.
+const getRouteLocationLabel = (route: { lat: number; lng: number }[] | null | undefined): string | null => {
+  if (!route || route.length === 0) return null;
+  try {
+    const start = route[0];
+    const result = getNearestCity(start.lat, start.lng);
+    if (!result?.cityName) return null;
+    return `${result.cityName}, ${result.countryName}`;
+  } catch (e) {
+    return null;
+  }
+};
+
 // Court/field illustrations for basketball, soccer, and padel - used in
 // place of a real GPS route map for these court-confined sports, where a
 // real map has nothing meaningful to show. Proportions are drawn from real
@@ -17136,6 +17332,20 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   const watchIdRef = React.useRef<number | null>(null);
   const timerIntervalRef = React.useRef<any>(null);
   const routeRef = React.useRef<{ lat: number; lng: number; timestamp: number }[]>([]);
+  // courtType hoisted here (not just inside the "finished" block below)
+  // so this hook can be called unconditionally at the top level, as
+  // required - this component has several conditional early returns
+  // (the milestone detours) between here and where the old inline
+  // computation used to live.
+  const courtTypeForFinish = ACTIVITY_TYPES.find((a) => a.key === activityType)?.courtType;
+  // Real MapLibre+Esri snapshot, replacing the old Mapbox static image -
+  // only fed a real route once status is actually "finished" (the route
+  // is still incomplete/changing during live tracking, and this
+  // shouldn't regenerate a snapshot on every GPS point pushed).
+  const finishRouteSnapshotUrl = useRouteMapSnapshot(
+    (status === "finished" && !courtTypeForFinish) ? routeRef.current : null,
+    640, 360, COLORS.accent
+  );
   const lastAcceptedPointRef = React.useRef<{ lat: number; lng: number; timestamp: number } | null>(null);
   const belowThresholdSinceRef = React.useRef<number | null>(null);
   // The position where a potential stop began. Real displacement from this
@@ -17660,8 +17870,8 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // (same underlying state, just frozen at the finish moment), plus the
   // route map when there's a real route to show.
   if (status === "finished") {
-    const courtType = ACTIVITY_TYPES.find((a) => a.key === activityType)?.courtType;
-    const mapUrl = courtType ? buildCourtIllustrationUrl(courtType, COLORS.accent) : buildRouteMapUrl(routeRef.current, 640, 360);
+    const courtType = courtTypeForFinish;
+    const mapUrl = courtType ? buildCourtIllustrationUrl(courtType, COLORS.accent) : finishRouteSnapshotUrl;
     const activityMeta = ACTIVITY_TYPES.find((a) => a.key === activityType);
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
