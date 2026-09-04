@@ -14423,6 +14423,12 @@ const MUSCLE_COLORS = {
 };
 
 const MiniGraph = ({ data, color, unit = "lbs", activeMetric = "weight" }) => {
+  // Real UI upgrade: tap any point for its exact value and date - a
+  // trend line alone only shows the shape of change, not what a
+  // specific past entry actually was, which is exactly what someone
+  // reviewing their own history wants to check.
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
   if (!data || data.length === 0) return (
     <div style={{ height: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0, textAlign: "center" }}>Tap + Log Stats to set your baseline and start tracking</p>
@@ -14454,6 +14460,7 @@ const MiniGraph = ({ data, color, unit = "lbs", activeMetric = "weight" }) => {
   const last = validData[validData.length - 1].value;
   const diff = last - first;
   const sign = diff > 0 ? "+" : "";
+  const selected = selectedIndex !== null ? (data[selectedIndex] as any) : null;
 
   return (
     <div style={{ overflow: "hidden", width: "100%" }}>
@@ -14475,9 +14482,24 @@ const MiniGraph = ({ data, color, unit = "lbs", activeMetric = "weight" }) => {
         {data.map((d, i) => {
           const x = pad + (i / (data.length - 1)) * (w - pad * 2);
           const y = h - pad - ((d.value - min) / range) * (h - pad * 2);
-          return <circle key={i} cx={x} cy={y} r="4" fill={color} />;
+          const isSelected = selectedIndex === i;
+          return (
+            <g key={i} onClick={() => setSelectedIndex(isSelected ? null : i)} style={{ cursor: "pointer" }}>
+              {/* Larger transparent circle purely as a real tap target -
+                  the visible r=4 dot alone is too small to reliably hit
+                  on a real touchscreen. */}
+              <circle cx={x} cy={y} r="14" fill="transparent" />
+              <circle cx={x} cy={y} r={isSelected ? 6 : 4} fill={color} stroke={isSelected ? COLORS.white : "none"} strokeWidth={isSelected ? 2 : 0} />
+            </g>
+          );
         })}
       </svg>
+      {selected && (
+        <p style={{ color: COLORS.white, fontSize: 12, fontWeight: 700, margin: "6px 0 0", textAlign: "center" }}>
+          {selected.value}{unit === "lbs" || unit === "kg" ? ` ${unit}` : unit}
+          {selected.date && <span style={{ color: COLORS.textSecondary, fontWeight: 600 }}> · {new Date(selected.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>}
+        </p>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
         <span style={{ color: COLORS.textSecondary, fontSize: 11 }}>
           {data[0].label}
