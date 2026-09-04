@@ -1266,7 +1266,7 @@ const computeActiveWeeksStreak = (
   sessions: any[],
   accountCreatedAt: Date | null,
   displayWeeks: number = 52
-): { streak: number; thisWeekCount: number; weeklyBlocks: { weekStart: Date; count: number; active: boolean }[] } => {
+): { streak: number; bestStreak: number; thisWeekCount: number; weeklyBlocks: { weekStart: Date; count: number; active: boolean }[] } => {
   const now = new Date();
   const currentWeekStart = getMondayOfWeek(now);
 
@@ -1320,7 +1320,35 @@ const computeActiveWeeksStreak = (
     blockCursor.setDate(blockCursor.getDate() - 7);
   }
 
-  return { streak, thisWeekCount, weeklyBlocks };
+  // All-time longest run of consecutive active weeks, anywhere in real
+  // history - deliberately a separate forward walk from earliestWeekStart
+  // up to (but excluding) the current in-progress week, not just the
+  // trailing run computed above. A person who had a real 12-week run two
+  // years ago, then a gap, then rebuilt to a current streak of 3, should
+  // still see "best: 12" - that historical achievement doesn't disappear
+  // just because the CURRENT streak reset. Recomputed fresh from real
+  // session history every time, same as everything else here - no
+  // separately-persisted counter to drift.
+  let bestStreak = 0;
+  let runLength = 0;
+  let bestCursor = new Date(earliestWeekStart);
+  while (bestCursor.getTime() < currentWeekStart.getTime()) {
+    const count = countsByWeek.get(bestCursor.toISOString()) || 0;
+    if (count >= ACTIVE_WEEK_SESSION_THRESHOLD) {
+      runLength++;
+      if (runLength > bestStreak) bestStreak = runLength;
+    } else {
+      runLength = 0;
+    }
+    bestCursor.setDate(bestCursor.getDate() + 7);
+  }
+  // The current streak is itself always at least as long as any run
+  // found in the completed-weeks walk above by construction, so this
+  // guards against an edge case rather than doing real work in the
+  // common case.
+  if (streak > bestStreak) bestStreak = streak;
+
+  return { streak, bestStreak, thisWeekCount, weeklyBlocks };
 };
 
 const ACTIVE_WEEKS_TIER_RANK: Record<string, number> = { Bronze: 1, Silver: 2, Gold: 3, Platinum: 4 };
@@ -14961,8 +14989,9 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
 // tier you're currently at."
 const ACTIVE_WEEKS_GRID_COLOR = "#E8A87C";
 
-const ActiveWeeksCard = ({ streak, thisWeekCount, weeklyBlocks }: {
+const ActiveWeeksCard = ({ streak, bestStreak, thisWeekCount, weeklyBlocks }: {
   streak: number;
+  bestStreak: number;
   thisWeekCount: number;
   weeklyBlocks: { weekStart: Date; count: number; active: boolean }[];
 }) => {
@@ -14970,6 +14999,15 @@ const ActiveWeeksCard = ({ streak, thisWeekCount, weeklyBlocks }: {
   const nextTierWeeks = streak >= 52 ? null : streak >= 26 ? 52 : streak >= 12 ? 26 : streak >= 4 ? 12 : 4;
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const currentWeekStart = getMondayOfWeek(new Date());
+  // Real bug found via real-device testing: the grid's only way to show
+  // per-week detail was the HTML title attribute, which only reveals on
+  // desktop hover - a real phone has no way to trigger it at all, so the
+  // detail was effectively unreachable on the one platform this app
+  // actually runs on. Tap-driven state instead: tapping a cell shows its
+  // date range and session count in a small line below the grid.
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [showStickerMode, setShowStickerMode] = useState(false);
 
   // Auto-scroll to the most recent (rightmost) week on mount, so the
   // person always lands looking at "now," not the oldest history.
@@ -14985,12 +15023,25 @@ const ActiveWeeksCard = ({ streak, thisWeekCount, weeklyBlocks }: {
   // completed ones. Keeps the grid one coherent timeline (long-term
   // pattern + present state) instead of two disconnected displays.
   const displayBlocks = [...weeklyBlocks, { weekStart: currentWeekStart, count: thisWeekCount, active: false, current: true }];
+  const selectedBlock = selectedIndex !== null ? (displayBlocks[selectedIndex] as any) : null;
+
+  const shareStats = [
+    { label: "Active Weeks", value: String(streak) },
+    { label: "Best Streak", value: String(bestStreak) },
+    { label: "This Week", value: `${Math.min(thisWeekCount, ACTIVE_WEEK_SESSION_THRESHOLD)}/${ACTIVE_WEEK_SESSION_THRESHOLD}` },
+  ];
 
   return (
     <div style={{ background: COLORS.card, borderRadius: 20, padding: "20px", marginBottom: 16, border: `1px solid ${COLORS.border}` }}>
-      <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 16px" }}>Active Weeks</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: 0 }}>Active Weeks</p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setShowShareCard(true)} style={{ background: "transparent", border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: "4px 10px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Share</button>
+          <button onClick={() => setShowStickerMode(true)} style={{ background: "transparent", border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: "4px 10px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Sticker</button>
+        </div>
+      </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 12 }}>
         <div style={{
           width: 64, height: 64, borderRadius: 99, flexShrink: 0,
           background: `${tier?.color || COLORS.textSecondary}18`,
@@ -15012,6 +15063,21 @@ const ActiveWeeksCard = ({ streak, thisWeekCount, weeklyBlocks }: {
           )}
         </div>
       </div>
+
+      {/* Personal-best streak alongside the current one - a real gap
+          rebuild after a break should feel motivating ("on the way back
+          to your best of 12"), not like starting from nothing with no
+          context for what was already achieved. Only shown once there's
+          a real best to show (bestStreak > 0), and only when it differs
+          from the current streak (equal means the current run already IS
+          the best, which the hero number above already conveys on its
+          own without a redundant second line saying the same thing). */}
+      {bestStreak > 0 && bestStreak !== streak && (
+        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 20px" }}>
+          Best: <span style={{ color: COLORS.white, fontWeight: 700 }}>{bestStreak} week{bestStreak === 1 ? "" : "s"}</span>
+        </p>
+      )}
+      {!(bestStreak > 0 && bestStreak !== streak) && <div style={{ marginBottom: 8 }} />}
 
       {/* This week's live progress toward keeping the streak alive - the
           current week is deliberately NOT part of the streak count above
@@ -15036,28 +15102,58 @@ const ActiveWeeksCard = ({ streak, thisWeekCount, weeklyBlocks }: {
           pattern view. Intensity-shaded (not just binary) for real
           visual richness - 0 sessions faintest, 3+ full flame color -
           even though only the 3+ threshold actually counts toward the
-          streak itself. */}
+          streak itself. Tap a cell to see its exact date range and
+          session count below - the only viable detail affordance on a
+          real touch device (see selectedIndex comment above). */}
       <div>
         <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, margin: "0 0 8px" }}>Last {weeklyBlocks.length} weeks</p>
         <style>{`.active-weeks-scroll::-webkit-scrollbar{display:none}`}</style>
         <div ref={scrollRef} className="active-weeks-scroll" style={{ display: "flex", gap: 4, overflowX: "auto", msOverflowStyle: "none", scrollbarWidth: "none", paddingBottom: 4 } as any}>
           {displayBlocks.map((w: any, i) => {
             const bg = w.count === 0 ? COLORS.border : w.count <= 2 ? `${ACTIVE_WEEKS_GRID_COLOR}55` : ACTIVE_WEEKS_GRID_COLOR;
+            const isSelected = selectedIndex === i;
             return (
-              <div
+              <button
                 key={i}
-                title={`${w.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}${w.current ? " (this week)" : ""} — ${w.count} session${w.count === 1 ? "" : "s"}`}
+                onClick={() => setSelectedIndex(isSelected ? null : i)}
                 style={{
-                  width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                  width: 16, height: 16, borderRadius: 4, flexShrink: 0, padding: 0, cursor: "pointer",
                   background: w.current ? "transparent" : bg,
-                  border: w.current ? `2px dashed ${w.count > 0 ? ACTIVE_WEEKS_GRID_COLOR : COLORS.border}` : "none",
+                  border: w.current
+                    ? `2px dashed ${w.count > 0 ? ACTIVE_WEEKS_GRID_COLOR : COLORS.border}`
+                    : isSelected ? `2px solid ${COLORS.white}` : "none",
                   boxSizing: "border-box",
                 }}
               />
             );
           })}
         </div>
+        {selectedBlock && (
+          <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "10px 0 0" }}>
+            Week of {selectedBlock.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            {selectedBlock.current ? " (this week)" : ""} — <span style={{ color: COLORS.white, fontWeight: 700 }}>{selectedBlock.count} session{selectedBlock.count === 1 ? "" : "s"}</span>
+          </p>
+        )}
       </div>
+
+      {showShareCard && (
+        <ShareableStatCard
+          title="Active Weeks"
+          subtitle={tier ? `${tier.label} Tier` : "Building a Streak"}
+          stats={shareStats}
+          icon={Flame}
+          onClose={() => setShowShareCard(false)}
+        />
+      )}
+
+      {showStickerMode && (
+        <StickerShareScreen
+          title="Active Weeks"
+          stats={shareStats}
+          icon={Flame}
+          onClose={() => setShowStickerMode(false)}
+        />
+      )}
     </div>
   );
 };
@@ -15421,6 +15517,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
 
         <ActiveWeeksCard
           streak={activeWeeksData.streak}
+          bestStreak={activeWeeksData.bestStreak}
           thisWeekCount={activeWeeksData.thisWeekCount}
           weeklyBlocks={activeWeeksData.weeklyBlocks}
         />
