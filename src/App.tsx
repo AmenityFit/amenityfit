@@ -1204,6 +1204,95 @@ const computeActivityStats = (sessions: any[], days: number): { activeMinutes: n
   return { activeMinutes, cardioCalories: Math.round(cardioCalories) };
 };
 
+// Real "Active Weeks" streak system - distinct from the volume-based
+// mastery/milestone badges elsewhere in this file: this tracks
+// CONSISTENCY across calendar weeks, not cumulative counts. A week is
+// "active" if it has 3+ sessions of any type (gym, cardio, "Other" all
+// count equally - a real week of activity is a real week of activity
+// regardless of what kind). Uses Flame for every tier (unlike volume
+// milestones' Trophy/Crown/Shield) since Flame is this app's own
+// established streak icon - deliberately not reusing getMilestoneTier's
+// icon-per-tier scheme, so a genuinely different feature is never
+// visually confused with this one.
+const ACTIVE_WEEK_SESSION_THRESHOLD = 3;
+
+// Same Monday-anchored week-start convention already established
+// elsewhere in this file for sessionsThisWeek resets - matched exactly so
+// "this week" always means the same thing everywhere in the app.
+const getMondayOfWeek = (d: Date): Date => {
+  const date = new Date(d);
+  const day = date.getDay();
+  date.setDate(date.getDate() - (day === 0 ? 6 : day - 1));
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const getActiveWeeksTier = (weeks: number) => {
+  if (weeks >= 52) return { label: "Platinum", color: "#FFFFFF" };
+  if (weeks >= 26) return { label: "Gold", color: "#FFD166" };
+  if (weeks >= 12) return { label: "Silver", color: "#A8B8CC" };
+  if (weeks >= 4) return { label: "Bronze", color: "#E8A87C" };
+  return null;
+};
+
+// Computes the current consecutive Active-Weeks streak (completed weeks
+// only - the current in-progress week is deliberately excluded from the
+// count itself, returned separately as thisWeekCount so it can be shown
+// as "2/3 this week - keep going" rather than falsely appearing to break
+// the streak before the week is even over). Walks backward week-by-week,
+// stopping the count the moment an inactive completed week is hit, never
+// before account creation - so a genuinely blank pre-signup period can
+// never look like a broken streak. weeklyBlocks is a separate, capped
+// window (most recent displayWeeks completed weeks) purely for the
+// visualization - independent of how far back the streak math itself
+// needs to check.
+const computeActiveWeeksStreak = (
+  sessions: any[],
+  accountCreatedAt: Date | null,
+  displayWeeks: number = 52
+): { streak: number; thisWeekCount: number; weeklyBlocks: { weekStart: Date; count: number; active: boolean }[] } => {
+  const now = new Date();
+  const currentWeekStart = getMondayOfWeek(now);
+
+  const countsByWeek = new Map<string, number>();
+  for (const s of sessions) {
+    const d = new Date(s.date);
+    if (isNaN(d.getTime())) continue;
+    const key = getMondayOfWeek(d).toISOString();
+    countsByWeek.set(key, (countsByWeek.get(key) || 0) + 1);
+  }
+
+  const thisWeekCount = countsByWeek.get(currentWeekStart.toISOString()) || 0;
+  const earliestWeekStart = accountCreatedAt && !isNaN(accountCreatedAt.getTime())
+    ? getMondayOfWeek(accountCreatedAt)
+    : currentWeekStart;
+
+  let streak = 0;
+  let cursor = new Date(currentWeekStart);
+  cursor.setDate(cursor.getDate() - 7);
+  while (cursor.getTime() >= earliestWeekStart.getTime()) {
+    const count = countsByWeek.get(cursor.toISOString()) || 0;
+    if (count >= ACTIVE_WEEK_SESSION_THRESHOLD) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 7);
+    } else {
+      break;
+    }
+  }
+
+  const weeklyBlocks: { weekStart: Date; count: number; active: boolean }[] = [];
+  let blockCursor = new Date(currentWeekStart);
+  blockCursor.setDate(blockCursor.getDate() - 7);
+  for (let i = 0; i < displayWeeks; i++) {
+    if (blockCursor.getTime() < earliestWeekStart.getTime()) break;
+    const count = countsByWeek.get(blockCursor.toISOString()) || 0;
+    weeklyBlocks.unshift({ weekStart: new Date(blockCursor), count, active: count >= ACTIVE_WEEK_SESSION_THRESHOLD });
+    blockCursor.setDate(blockCursor.getDate() - 7);
+  }
+
+  return { streak, thisWeekCount, weeklyBlocks };
+};
+
 // Builds a short, readable summary of recent cardio activity for the coach
 // chat's system prompt - e.g. "3 cardio activities in the last 2 weeks:
 // most recent a 5.2km run in 32 min on Tue Aug 26; also 1 bike, 1 hike."
@@ -14618,6 +14707,116 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
   );
 };
 
+// Real "Active Weeks" streak visualization - genuinely distinct from
+// Dashboard's "This Week's Activity" snapshot card: that one is a
+// weekly-total snapshot on Home, this is a long-term consistency pattern
+// on Progress. Fixed flame-orange grid scale (independent of overall
+// tier color) - matches the established GitHub-contribution-graph
+// metaphor, where color intensity always means "how active," not "what
+// tier you're currently at."
+const ACTIVE_WEEKS_GRID_COLOR = "#E8A87C";
+
+const ActiveWeeksCard = ({ streak, thisWeekCount, weeklyBlocks }: {
+  streak: number;
+  thisWeekCount: number;
+  weeklyBlocks: { weekStart: Date; count: number; active: boolean }[];
+}) => {
+  const tier = getActiveWeeksTier(streak);
+  const nextTierWeeks = streak >= 52 ? null : streak >= 26 ? 52 : streak >= 12 ? 26 : streak >= 4 ? 12 : 4;
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const currentWeekStart = getMondayOfWeek(new Date());
+
+  // Auto-scroll to the most recent (rightmost) week on mount, so the
+  // person always lands looking at "now," not the oldest history.
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+    }
+  }, [weeklyBlocks.length]);
+
+  // Current in-progress week appended as its own distinct cell - dashed
+  // outline, not a solid fill, so it visually reads as "not yet decided"
+  // rather than looking like a missed week sitting right next to real
+  // completed ones. Keeps the grid one coherent timeline (long-term
+  // pattern + present state) instead of two disconnected displays.
+  const displayBlocks = [...weeklyBlocks, { weekStart: currentWeekStart, count: thisWeekCount, active: false, current: true }];
+
+  return (
+    <div style={{ background: COLORS.card, borderRadius: 20, padding: "20px", marginBottom: 16, border: `1px solid ${COLORS.border}` }}>
+      <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 16px" }}>Active Weeks</p>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: 99, flexShrink: 0,
+          background: `${tier?.color || COLORS.textSecondary}18`,
+          border: `2px solid ${tier?.color || COLORS.border}50`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: tier ? `0 0 24px ${tier.color}30` : "none",
+        }}>
+          <Flame size={30} color={tier?.color || COLORS.textSecondary} strokeWidth={1.75} />
+        </div>
+        <div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{ color: COLORS.white, fontSize: 32, fontWeight: 900, letterSpacing: -1 }}>{streak}</span>
+            <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 700 }}>week{streak === 1 ? "" : "s"}</span>
+          </div>
+          {tier ? (
+            <p style={{ color: tier.color, fontSize: 13, fontWeight: 700, margin: "2px 0 0" }}>{tier.label} tier{nextTierWeeks ? ` · ${nextTierWeeks - streak} to next` : ""}</p>
+          ) : (
+            <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "2px 0 0" }}>{4 - streak} more to Bronze</p>
+          )}
+        </div>
+      </div>
+
+      {/* This week's live progress toward keeping the streak alive - the
+          current week is deliberately NOT part of the streak count above
+          (it isn't over yet), so this gives real visibility into what
+          needs to happen to extend it, without a false "broken" state
+          appearing mid-week. */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, margin: 0 }}>This week</p>
+          <p style={{ color: thisWeekCount >= ACTIVE_WEEK_SESSION_THRESHOLD ? COLORS.success : COLORS.white, fontSize: 12, fontWeight: 700, margin: 0 }}>
+            {Math.min(thisWeekCount, ACTIVE_WEEK_SESSION_THRESHOLD)}/{ACTIVE_WEEK_SESSION_THRESHOLD}
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {Array.from({ length: ACTIVE_WEEK_SESSION_THRESHOLD }, (_, i) => (
+            <div key={i} style={{ flex: 1, height: 6, borderRadius: 4, background: i < thisWeekCount ? ACTIVE_WEEKS_GRID_COLOR : COLORS.border }} />
+          ))}
+        </div>
+      </div>
+
+      {/* GitHub-contribution-style weekly grid - a genuine long-term
+          pattern view. Intensity-shaded (not just binary) for real
+          visual richness - 0 sessions faintest, 3+ full flame color -
+          even though only the 3+ threshold actually counts toward the
+          streak itself. */}
+      <div>
+        <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, margin: "0 0 8px" }}>Last {weeklyBlocks.length} weeks</p>
+        <style>{`.active-weeks-scroll::-webkit-scrollbar{display:none}`}</style>
+        <div ref={scrollRef} className="active-weeks-scroll" style={{ display: "flex", gap: 4, overflowX: "auto", msOverflowStyle: "none", scrollbarWidth: "none", paddingBottom: 4 } as any}>
+          {displayBlocks.map((w: any, i) => {
+            const bg = w.count === 0 ? COLORS.border : w.count <= 2 ? `${ACTIVE_WEEKS_GRID_COLOR}55` : ACTIVE_WEEKS_GRID_COLOR;
+            return (
+              <div
+                key={i}
+                title={`${w.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}${w.current ? " (this week)" : ""} — ${w.count} session${w.count === 1 ? "" : "s"}`}
+                style={{
+                  width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                  background: w.current ? "transparent" : bg,
+                  border: w.current ? `2px dashed ${w.count > 0 ? ACTIVE_WEEKS_GRID_COLOR : COLORS.border}` : "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p) => {} }) => {
   const [activeMetric, setActiveMetric] = useState("weight");
   const [showLogModal, setShowLogModal] = useState(false);
@@ -14654,6 +14853,12 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
       });
     }
   }, [profile?.uid, profile?.sessionsCompleted]);
+  // Real Active Weeks streak data - derived from the same sessionHistory
+  // already loaded above for the workout history list, no separate query.
+  const activeWeeksData = React.useMemo(
+    () => computeActiveWeeksStreak(sessionHistory, profile?.createdAt ? new Date(profile.createdAt) : null, 26),
+    [sessionHistory, profile?.createdAt]
+  );
   const wellnessMode = profile?.wellnessMode || false;
   const unit = (profile?.heightFt && Number(profile.heightFt) > 0) ? "imperial" : (profile?.heightCm ? "metric" : "imperial");
   const startWeight = unit === "imperial"
@@ -14968,6 +15173,12 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
             </p>
           </div>
         )}
+
+        <ActiveWeeksCard
+          streak={activeWeeksData.streak}
+          thisWeekCount={activeWeeksData.thisWeekCount}
+          weeklyBlocks={activeWeeksData.weeklyBlocks}
+        />
 
         {/* ── Results Section ── */}
         <div style={{ background: COLORS.card, borderRadius: 20, padding: "20px", marginBottom: 16, border: `1px solid ${COLORS.border}` }}>
