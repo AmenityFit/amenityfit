@@ -16184,6 +16184,18 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // requesting GPS when this is false means those stats correctly never
   // appear anywhere, with no changes needed to any display code.
   const [otherTracksDistance, setOtherTracksDistance] = useState(false);
+  // Holds a detected activity-count milestone (10/25/50/100/250/500) for
+  // THIS activity type, computed once the session's own save is confirmed
+  // - shown as a real detour after tapping "Done" on the normal
+  // completion screen, not instead of it, so the person still sees/shares
+  // their real per-session stats (distance, pace, etc.) first.
+  const [pendingCardioMilestone, setPendingCardioMilestone] = useState<{ count: number; activityLabel: string } | null>(null);
+  // Decoupled from pendingCardioMilestone itself, which is set the moment
+  // a milestone is detected (during save, before the person has even seen
+  // their real completion stats) - this controls WHEN it actually shows,
+  // only after tapping "Done," so the normal per-session stats/share
+  // always come first.
+  const [showMilestoneScreen, setShowMilestoneScreen] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [sessionNotes, setSessionNotes] = useState("");
@@ -16671,6 +16683,35 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         avgPaceSecondsPerKm: avgPace,
       });
       setSessionPRs(prs);
+
+      // Real activity-count milestone check, deliberately scoped to fixed
+      // activity types only (not "Other" custom names yet - that would
+      // need the same per-person name normalization already built for
+      // the "Other" trending feature, a real separate piece of work).
+      // Counts REAL completed sessions of this exact type via a direct
+      // query, not a separately-maintained counter - avoids any drift
+      // risk and is automatically correct for existing users' real
+      // history, with no backfill needed.
+      if (activityType && activityType !== "other") {
+        try {
+          const countSnap = await getDocs(query(
+            collection(db, "workoutSessions"),
+            where("uid", "==", uid),
+            where("type", "==", activityType)
+          ));
+          const realCount = countSnap.docs.filter((d) => !!d.data().completedAt).length;
+          if (ACTIVITY_MILESTONES.includes(realCount)) {
+            const meta = ACTIVITY_TYPES.find((a) => a.key === activityType);
+            // "Row (machine)" style labels don't pluralize cleanly with a
+            // bare +s - falls back to a safe generic label rather than
+            // producing something like "Row (machine)s".
+            const activityLabel = meta?.label && !meta.label.includes("(") ? `${meta.label}s` : "Sessions";
+            setPendingCardioMilestone({ count: realCount, activityLabel });
+          }
+        } catch (e) {
+          console.error("Failed to check activity milestone:", e);
+        }
+      }
     }
     // Show a real completion summary (stats + route map) instead of
     // immediately returning to whatever screen launched tracking - people
@@ -16715,6 +16756,23 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     const s = Math.round(paceSecondsPerKm % 60);
     return `${m}:${String(s).padStart(2, "0")} /km`;
   })();
+
+  // Real detour, checked BEFORE the normal completion screen below so it
+  // fully takes over once "Done" is tapped - the person always sees their
+  // real per-session stats first (the block below), and only reaches this
+  // after deliberately moving past them.
+  if (showMilestoneScreen && pendingCardioMilestone) {
+    const milestoneMeta = ACTIVITY_TYPES.find((a) => a.key === activityType);
+    return (
+      <MilestoneUnlockedScreen
+        count={pendingCardioMilestone.count}
+        activityLabel={pendingCardioMilestone.activityLabel}
+        icon={milestoneMeta?.icon}
+        iconImage={milestoneMeta?.iconImage}
+        onContinue={onBack}
+      />
+    );
+  }
 
   // Real completion summary - shown once finishActivity has saved the
   // activity, before returning to whatever screen launched tracking.
@@ -16840,7 +16898,10 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
               Sticker
             </button>
           </div>
-          <button onClick={onBack} style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 17, fontWeight: 800, cursor: "pointer", boxShadow: `0 8px 30px ${COLORS.primary}40` }}>
+          <button
+            onClick={() => { if (pendingCardioMilestone) { setShowMilestoneScreen(true); } else { onBack(); } }}
+            style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 17, fontWeight: 800, cursor: "pointer", boxShadow: `0 8px 30px ${COLORS.primary}40` }}
+          >
             Done
           </button>
         </div>
@@ -17930,6 +17991,169 @@ const StickerShareScreen = ({
           {sharing ? "Preparing..." : "Share"}
         </button>
       </div>
+    </div>
+  );
+};
+
+// Real activity-count milestones (10/25/50/100/250/500), scoped
+// deliberately to fixed activity types + lifting sessions for now, not yet
+// "Other" custom names - correctly counting those would need the same
+// per-person name normalization already built for the "Other" trending
+// feature, a real separate piece of work. Not shown for anything more
+// frequent than this ladder - the whole point is staying rare enough to
+// feel earned, not becoming routine.
+const ACTIVITY_MILESTONES = [10, 25, 50, 100, 250, 500];
+
+// Genuinely distinct visual identity from both the regular completion
+// screen and the regular sticker, per real product direction - reuses
+// LevelUpScreen's proven celebratory language (staggered fade/slide-in,
+// icon ring, badge pill) but adds real Share/Sticker buttons, which
+// LevelUpScreen never had. Deliberately routes through the SAME
+// ShareableStatCard/StickerShareScreen already used everywhere else,
+// rather than a separate export path - guarantees this benefits from the
+// same real Instagram-export fixes already made tonight (explicit SVG
+// width/height, etc.), not a second, untested code path.
+const MilestoneUnlockedScreen = ({
+  count,
+  activityLabel,
+  icon: Icon,
+  iconImage,
+  onContinue,
+}: {
+  count: number;
+  activityLabel: string;
+  icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  iconImage?: string;
+  onContinue: () => void;
+}) => {
+  const [visible, setVisible] = useState(false);
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [showStickerMode, setShowStickerMode] = useState(false);
+  // Gold, not the app's usual blue accent - deliberately distinct so this
+  // reads as its own real occasion, not just another activity completion
+  // screen in a different color.
+  const milestoneColor = "#FFD166";
+
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 100);
+    return () => clearTimeout(t);
+  }, []);
+
+  const milestoneStats = [{ label: activityLabel, value: String(count) }];
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 900, background: COLORS.background,
+      fontFamily: "'Inter', sans-serif", display: "flex",
+      flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
+      padding: "48px 28px 40px", textAlign: "center", overflowY: "auto",
+    }}>
+      <div style={{
+        width: 90, height: 90, borderRadius: 99, marginBottom: 20,
+        background: `${milestoneColor}18`,
+        border: `2px solid ${milestoneColor}50`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: `0 0 48px ${milestoneColor}25`,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "scale(1)" : "scale(0.85)",
+        transition: "all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)",
+      }}>
+        {iconImage
+          ? <img src={iconImage} alt="" style={{ width: 44, height: 44, objectFit: "contain" }} />
+          : Icon && <Icon size={40} color={milestoneColor} strokeWidth={1.5} />}
+      </div>
+
+      <div style={{
+        display: "inline-flex", alignItems: "center",
+        background: `${milestoneColor}18`, borderRadius: 99,
+        padding: "4px 14px", marginBottom: 14,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(10px)",
+        transition: "all 0.5s ease 0.2s",
+      }}>
+        <span style={{ color: milestoneColor, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
+          Milestone Unlocked
+        </span>
+      </div>
+
+      <h1 style={{
+        color: COLORS.white, fontSize: 56, fontWeight: 900,
+        margin: "0 0 4px", letterSpacing: -1.5, lineHeight: 1,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(10px)",
+        transition: "all 0.5s ease 0.3s",
+      }}>
+        {count}
+      </h1>
+      <p style={{
+        color: COLORS.white, fontSize: 20, fontWeight: 800,
+        margin: "0 0 10px", textTransform: "capitalize",
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(10px)",
+        transition: "all 0.5s ease 0.35s",
+      }}>
+        {activityLabel}
+      </p>
+
+      <p style={{
+        color: COLORS.textSecondary, fontSize: 15, lineHeight: 1.65,
+        margin: "0 0 36px", maxWidth: 280,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(10px)",
+        transition: "all 0.5s ease 0.4s",
+      }}>
+        {count} {activityLabel.toLowerCase()}, completed. That's real, earned consistency.
+      </p>
+
+      <div style={{
+        display: "flex", gap: 12, width: "100%", marginBottom: 12,
+        opacity: visible ? 1 : 0,
+        transition: "all 0.5s ease 0.5s",
+      }}>
+        <button onClick={() => setShowShareCard(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+          Share
+        </button>
+        <button onClick={() => setShowStickerMode(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+          Sticker
+        </button>
+      </div>
+
+      <button
+        onClick={onContinue}
+        style={{
+          width: "100%", padding: "18px", borderRadius: 16, border: "none",
+          background: `linear-gradient(135deg, ${milestoneColor}, #FFB347)`,
+          color: "#1A1200", fontSize: 16, fontWeight: 800,
+          cursor: "pointer", letterSpacing: 0.3,
+          boxShadow: `0 8px 32px ${milestoneColor}50`,
+          opacity: visible ? 1 : 0,
+          transform: visible ? "translateY(0)" : "translateY(10px)",
+          transition: "all 0.5s ease 0.6s",
+        }}
+      >
+        Continue
+      </button>
+
+      {showShareCard && (
+        <ShareableStatCard
+          title={`${count} ${activityLabel}`}
+          subtitle="Milestone Unlocked"
+          stats={milestoneStats}
+          icon={Icon}
+          iconImage={iconImage}
+          onClose={() => setShowShareCard(false)}
+        />
+      )}
+
+      {showStickerMode && (
+        <StickerShareScreen
+          title={`${count} ${activityLabel}`}
+          stats={milestoneStats}
+          icon={Icon}
+          iconImage={iconImage}
+          onClose={() => setShowStickerMode(false)}
+        />
+      )}
     </div>
   );
 };
@@ -23728,6 +23952,14 @@ export default function App() {
   const [superAdminLoggedIn, setSuperAdminLoggedIn] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  // Holds the milestone being celebrated plus where to actually go once
+  // "Continue" is tapped - real product direction, not something to
+  // interrupt every completion for: only ever set when a genuine
+  // milestone (10/25/50/100/250/500 sessions) was just crossed, and
+  // deliberately preserves the ORIGINAL destination (dashboard or
+  // cycle-complete) rather than hardcoding one, so the milestone screen
+  // is a real detour, not a replacement for the normal flow.
+  const [pendingActivityMilestone, setPendingActivityMilestone] = useState<{ count: number; activityLabel: string; nextScreen: string } | null>(null);
   // Carries context into the cardioTracking screen when it's launched from
   // a specific place - a programmed workout day's cardio segment (goal
   // duration + link back to that workout) versus the standalone "Track an
@@ -24115,10 +24347,18 @@ const isInitialLoad = React.useRef(true);
       }
     }
 
-    if (cycleFinished) {
-      setScreen("cycle-complete");
+    const realDestination = cycleFinished ? "cycle-complete" : "dashboard";
+    // Real feedback: milestones should feel rare and earned, not routine -
+    // only fires for a genuine lifting-workout completion (never a rest
+    // day, which never increments sessionsCompleted the same way real
+    // training does) and reuses newCompleted, the value ALREADY reliably
+    // tracked and written server-side for the quote system - no new
+    // counter needed, no risk of drift from real history.
+    if (completedGroups.length > 0 && ACTIVITY_MILESTONES.includes(newCompleted)) {
+      setPendingActivityMilestone({ count: newCompleted, activityLabel: "Workouts", nextScreen: realDestination });
+      setScreen("activity-milestone");
     } else {
-      setScreen("dashboard");
+      setScreen(realDestination);
     }
 
     if (uid) {
@@ -24576,6 +24816,18 @@ const isInitialLoad = React.useRef(true);
     return <WorkoutListScreen day={previewDay} filteredGroups={previewFiltered} onStart={null} onBack={() => { setPreviewDay(null); setScreen("weekly"); }} programDay={previewDay.programDay} programWeek={Math.ceil((previewDay.programDay || 1) / 7)} isReview={false} workoutImage={previewImage} bgPosition={previewBgPos} equipmentPreference={userProfile?.equipmentPreference || "gym-and-bands"} buildingEquipment={userProfile?.buildingEquipment || []} />;
   }
   if (screen === "level-up") return <LevelUpScreen profile={liveProfile} onContinue={() => setScreen("dashboard")} />;
+  if (screen === "activity-milestone" && pendingActivityMilestone) return (
+    <MilestoneUnlockedScreen
+      count={pendingActivityMilestone.count}
+      activityLabel={pendingActivityMilestone.activityLabel}
+      icon={Dumbbell}
+      onContinue={() => {
+        const dest = pendingActivityMilestone.nextScreen;
+        setPendingActivityMilestone(null);
+        setScreen(dest);
+      }}
+    />
+  );
   if (screen === "badge-unlocked") return <BadgeUnlockedScreen profile={liveProfile} onContinue={() => setScreen("dashboard")} />;
   if (screen === "welcome-back") return <WelcomeBackScreen profile={liveProfile} onContinue={() => setScreen("dashboard")} />;
   if (screen === "re-entry-complete") return (
