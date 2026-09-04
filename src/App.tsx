@@ -11080,6 +11080,10 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
   const message = getMotivationalMessage(sessionCount, uid);
   const [showShareCard, setShowShareCard] = useState(false);
   const [showStickerMode, setShowStickerMode] = useState(false);
+  // Weightlifting RPE - identical concept to cardio's, self-reported
+  // effort 1-10, saved directly onto this lifting session's own doc.
+  const [sessionRpe, setSessionRpe] = useState<number | null>(null);
+  const [rpeSaveStatus, setRpeSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   // Real gap this closes: a lift+cardio combined day (e.g. legs+cardio)
   // saves as two separate workoutSessions documents, and the cardio one
   // is tagged with linkedWorkoutId pointing back to this lifting
@@ -11109,6 +11113,28 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
     })();
     return () => { cancelled = true; };
   }, [sessionId]);
+
+  // Same retry pattern as cardio's saveSessionNotes: a couple of
+  // automatic retries so a transient blip resolves invisibly, and a
+  // genuine "error" state, distinct from "idle", if every retry fails.
+  const saveRpe = async (value: number) => {
+    if (!sessionId) return;
+    setRpeSaveStatus("saving");
+    const maxAttempts = 2;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        await setDoc(doc(db, "workoutSessions", sessionId), { rpe: value }, { merge: true });
+        setRpeSaveStatus("saved");
+        return;
+      } catch (e) {
+        console.error("saveRpe error:", e);
+        if (attempt < maxAttempts - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+    }
+    setRpeSaveStatus("error");
+  };
 
   // Weight-only PRs (see checkAndUpdateLiftPRs) - real exercise names via
   // EXERCISES_DATA, not raw ids, and only ever the weight actually logged -
@@ -11140,6 +11166,7 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
     { label: "Sets Done", value: String(totalSets) },
     { label: "Time", value: `${mins}m ${secs}s` },
     ...prExercises.map((p) => ({ label: p.name, value: `${p.weight} lbs`, isPR: true })),
+    ...(sessionRpe !== null ? [{ label: "RPE", value: `${sessionRpe}/10` }] : []),
     // Appended only when a real linked cardio session exists, so the
     // exported sticker/share card tells the whole day's story in one
     // image rather than only the lifting half.
@@ -11188,6 +11215,40 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
           <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, margin: "0 0 6px" }}>Time</p>
           <p style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0 }}>{mins}<span style={{ fontSize: 14, color: COLORS.textSecondary }}>m </span>{secs}<span style={{ fontSize: 14, color: COLORS.textSecondary }}>s</span></p>
         </div>
+      </div>
+
+      {/* Real self-reported RPE for weightlifting - same concept and
+          scale as cardio's, saved straight onto this session's doc. */}
+      <div style={{ width: "100%", marginBottom: 20 }}>
+        <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 10px" }}>Effort (RPE)</p>
+        <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+          {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+            <button
+              key={n}
+              onClick={() => {
+                const newVal = sessionRpe === n ? null : n;
+                setSessionRpe(newVal);
+                setRpeSaveStatus("idle");
+                if (newVal !== null) saveRpe(newVal);
+              }}
+              style={{
+                flex: 1, aspectRatio: "1", borderRadius: 10, border: `1px solid ${sessionRpe === n ? COLORS.accent : COLORS.border}`,
+                background: sessionRpe === n ? `${COLORS.accent}25` : COLORS.card,
+                color: sessionRpe === n ? COLORS.accent : COLORS.textSecondary,
+                fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0,
+              }}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0 }}>Easy</p>
+          <p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0 }}>Max Effort</p>
+        </div>
+        {rpeSaveStatus === "error" && (
+          <p style={{ color: COLORS.danger || "#ff4444", fontSize: 11, margin: "8px 0 0" }}>Couldn't save - tap a number again to retry</p>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 12, width: "100%", marginBottom: 12 }}>
