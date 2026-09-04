@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import html2canvas from "html2canvas";
-import * as maplibregl from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
+// maplibregl is deliberately NOT statically imported here - it's a large
+// WebGL library that was bloating the initial bundle for every single
+// person who opens the app, even if they never view a single route map
+// that session. Loaded on-demand instead, inside each effect that
+// actually needs it (InteractiveRouteMap, useRouteMapSnapshot) via a
+// dynamic import() - so its real cost is only ever paid by someone who
+// actually triggers a map render.
 import { getNearestCity } from "offline-geocode-city";
 import iconRunning from "./assets/icons/running.png";
 import iconWalking from "./assets/icons/walking.png";
@@ -14903,6 +14908,11 @@ const InteractiveRouteMap = ({
     // of the old value, which would make this timer fire unconditionally
     // regardless of whether the map genuinely finished loading.
     let hasLoaded = false;
+    // Set once the dynamically-imported map instance actually exists -
+    // the cleanup function below needs a way to reach it even though
+    // it's created inside an async inner function, not this effect's
+    // own top-level scope.
+    let mapInstance: any = null;
 
     const fallbackTimer = setTimeout(() => {
       if (!cancelled && !hasLoaded) setFallback(true);
@@ -14916,66 +14926,80 @@ const InteractiveRouteMap = ({
       [Math.max(...lngs), Math.max(...lats)],
     ];
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          "esri-satellite": {
-            type: "raster",
-            tiles: [ESRI_WORLD_IMAGERY_TILE_URL],
-            tileSize: 256,
-            attribution: "Tiles © Esri",
+    (async () => {
+      // Dynamic import, deferred until this component actually mounts
+      // with a real route - see the top-of-file note on why maplibregl
+      // is never statically imported. The CSS import works the same way
+      // Vite handles a static CSS import, just deferred until this code
+      // path genuinely runs, not bundled for every single visitor.
+      const [maplibregl] = await Promise.all([
+        import("maplibre-gl"),
+        import("maplibre-gl/dist/maplibre-gl.css"),
+      ]);
+      if (cancelled || !containerRef.current) return;
+
+      const map = new maplibregl.Map({
+        container: containerRef.current,
+        style: {
+          version: 8,
+          sources: {
+            "esri-satellite": {
+              type: "raster",
+              tiles: [ESRI_WORLD_IMAGERY_TILE_URL],
+              tileSize: 256,
+              attribution: "Tiles © Esri",
+            },
           },
+          layers: [{ id: "esri-satellite", type: "raster", source: "esri-satellite" }],
         },
-        layers: [{ id: "esri-satellite", type: "raster", source: "esri-satellite" }],
-      },
-      interactive,
-      attributionControl: false,
-      preserveDrawingBuffer: true,
-    });
-
-    map.on("error", () => {
-      if (!cancelled && !hasLoaded) setFallback(true);
-    });
-
-    map.on("load", () => {
-      if (cancelled) return;
-      map.addSource("route-line", {
-        type: "geojson",
-        data: { type: "Feature", geometry: { type: "LineString", coordinates }, properties: {} },
+        interactive,
+        attributionControl: false,
+        preserveDrawingBuffer: true,
       });
-      // Same double-stroke technique as the old static image - a wider
-      // dark outline first, then the accent-colored line on top, so the
-      // route stays readable regardless of what's underneath it.
-      map.addLayer({
-        id: "route-outline", type: "line", source: "route-line",
-        paint: { "line-color": "#000000", "line-width": 7, "line-opacity": 0.55 },
-        layout: { "line-cap": "round", "line-join": "round" },
-      });
-      map.addLayer({
-        id: "route-line-accent", type: "line", source: "route-line",
-        paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.95 },
-        layout: { "line-cap": "round", "line-join": "round" },
-      });
-      map.fitBounds(bounds, { padding: 40, animate: false });
-      hasLoaded = true;
-    });
+      mapInstance = map;
 
-    if (!interactive) {
-      map.dragPan.disable();
-      map.scrollZoom.disable();
-      map.boxZoom.disable();
-      map.dragRotate.disable();
-      map.keyboard.disable();
-      map.doubleClickZoom.disable();
-      map.touchZoomRotate.disable();
-    }
+      map.on("error", () => {
+        if (!cancelled && !hasLoaded) setFallback(true);
+      });
+
+      map.on("load", () => {
+        if (cancelled) return;
+        map.addSource("route-line", {
+          type: "geojson",
+          data: { type: "Feature", geometry: { type: "LineString", coordinates }, properties: {} },
+        });
+        // Same double-stroke technique as the old static image - a wider
+        // dark outline first, then the accent-colored line on top, so the
+        // route stays readable regardless of what's underneath it.
+        map.addLayer({
+          id: "route-outline", type: "line", source: "route-line",
+          paint: { "line-color": "#000000", "line-width": 7, "line-opacity": 0.55 },
+          layout: { "line-cap": "round", "line-join": "round" },
+        });
+        map.addLayer({
+          id: "route-line-accent", type: "line", source: "route-line",
+          paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.95 },
+          layout: { "line-cap": "round", "line-join": "round" },
+        });
+        map.fitBounds(bounds, { padding: 40, animate: false });
+        hasLoaded = true;
+      });
+
+      if (!interactive) {
+        map.dragPan.disable();
+        map.scrollZoom.disable();
+        map.boxZoom.disable();
+        map.dragRotate.disable();
+        map.keyboard.disable();
+        map.doubleClickZoom.disable();
+        map.touchZoomRotate.disable();
+      }
+    })();
 
     return () => {
       cancelled = true;
       clearTimeout(fallbackTimer);
-      map.remove();
+      if (mapInstance) mapInstance.remove();
     };
   }, [route]);
 
@@ -16730,6 +16754,7 @@ const useRouteMapSnapshot = (
 
     let cancelled = false;
     let hasLoaded = false;
+    let mapInstance: any = null;
     const container = document.createElement("div");
     container.style.position = "fixed";
     container.style.left = "-9999px";
@@ -16746,27 +16771,8 @@ const useRouteMapSnapshot = (
       [Math.max(...lngs), Math.max(...lats)],
     ];
 
-    const map = new maplibregl.Map({
-      container,
-      style: {
-        version: 8,
-        sources: {
-          "esri-satellite": {
-            type: "raster",
-            tiles: [ESRI_WORLD_IMAGERY_TILE_URL],
-            tileSize: 256,
-            attribution: "Tiles © Esri",
-          },
-        },
-        layers: [{ id: "esri-satellite", type: "raster", source: "esri-satellite" }],
-      },
-      interactive: false,
-      attributionControl: false,
-      preserveDrawingBuffer: true,
-    });
-
     const cleanup = () => {
-      map.remove();
+      if (mapInstance) mapInstance.remove();
       if (container.parentNode) container.parentNode.removeChild(container);
     };
 
@@ -16774,43 +16780,74 @@ const useRouteMapSnapshot = (
       if (!cancelled && !hasLoaded) cleanup();
     }, 6000);
 
-    map.on("error", () => {
-      if (!cancelled && !hasLoaded) {
-        clearTimeout(fallbackTimer);
-        cleanup();
-      }
-    });
-
-    map.on("load", () => {
+    (async () => {
+      // Dynamic import, deferred until a real snapshot is actually
+      // needed - see the top-of-file note on why maplibregl is never
+      // statically imported.
+      const [maplibregl] = await Promise.all([
+        import("maplibre-gl"),
+        import("maplibre-gl/dist/maplibre-gl.css"),
+      ]);
       if (cancelled) return;
-      map.addSource("route-line", {
-        type: "geojson",
-        data: { type: "Feature", geometry: { type: "LineString", coordinates }, properties: {} },
+
+      const map = new maplibregl.Map({
+        container,
+        style: {
+          version: 8,
+          sources: {
+            "esri-satellite": {
+              type: "raster",
+              tiles: [ESRI_WORLD_IMAGERY_TILE_URL],
+              tileSize: 256,
+              attribution: "Tiles © Esri",
+            },
+          },
+          layers: [{ id: "esri-satellite", type: "raster", source: "esri-satellite" }],
+        },
+        interactive: false,
+        attributionControl: false,
+        preserveDrawingBuffer: true,
       });
-      map.addLayer({
-        id: "route-outline", type: "line", source: "route-line",
-        paint: { "line-color": "#000000", "line-width": 7, "line-opacity": 0.55 },
-        layout: { "line-cap": "round", "line-join": "round" },
-      });
-      map.addLayer({
-        id: "route-line-accent", type: "line", source: "route-line",
-        paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.95 },
-        layout: { "line-cap": "round", "line-join": "round" },
-      });
-      map.fitBounds(bounds, { padding: Math.round(Math.min(width, height) * 0.1), animate: false });
-      map.once("idle", () => {
-        if (cancelled) return;
-        hasLoaded = true;
-        clearTimeout(fallbackTimer);
-        try {
-          const dataUrl = map.getCanvas().toDataURL("image/png");
-          if (!cancelled) setUrl(dataUrl);
-        } catch (e) {
-          console.error("Route map snapshot capture failed:", e);
+      mapInstance = map;
+
+      map.on("error", () => {
+        if (!cancelled && !hasLoaded) {
+          clearTimeout(fallbackTimer);
+          cleanup();
         }
-        cleanup();
       });
-    });
+
+      map.on("load", () => {
+        if (cancelled) return;
+        map.addSource("route-line", {
+          type: "geojson",
+          data: { type: "Feature", geometry: { type: "LineString", coordinates }, properties: {} },
+        });
+        map.addLayer({
+          id: "route-outline", type: "line", source: "route-line",
+          paint: { "line-color": "#000000", "line-width": 7, "line-opacity": 0.55 },
+          layout: { "line-cap": "round", "line-join": "round" },
+        });
+        map.addLayer({
+          id: "route-line-accent", type: "line", source: "route-line",
+          paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.95 },
+          layout: { "line-cap": "round", "line-join": "round" },
+        });
+        map.fitBounds(bounds, { padding: Math.round(Math.min(width, height) * 0.1), animate: false });
+        map.once("idle", () => {
+          if (cancelled) return;
+          hasLoaded = true;
+          clearTimeout(fallbackTimer);
+          try {
+            const dataUrl = map.getCanvas().toDataURL("image/png");
+            if (!cancelled) setUrl(dataUrl);
+          } catch (e) {
+            console.error("Route map snapshot capture failed:", e);
+          }
+          cleanup();
+        });
+      });
+    })();
 
     return () => {
       cancelled = true;
