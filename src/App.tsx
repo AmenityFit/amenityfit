@@ -16199,6 +16199,14 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [sessionNotes, setSessionNotes] = useState("");
+  // Real self-reported effort scale (1-10, RPE) - honest by design, no
+  // sensor/wearable needed, unlike heart rate which would need a real
+  // connection this app doesn't have yet. Shown for anything that isn't
+  // mind-body (regular cardio AND "Other" both get it - RPE is a real,
+  // legitimate metric for a genuine run just as much as for something
+  // like boxing or fishing), matching real feedback that Distance/Pace
+  // alone don't make sense for every "Other" entry.
+  const [sessionRpe, setSessionRpe] = useState<number | null>(null);
   const [notesSaveStatus, setNotesSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [showNotesToast, setShowNotesToast] = useState(false);
   // Every exit-to-picker point (the "How long?" back button, the "Other"
@@ -16230,6 +16238,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     setShowDiscardConfirm(false);
     setSavedSessionId(null);
     setSessionNotes("");
+    setSessionRpe(null);
     setNotesSaveStatus("idle");
     setShowNotesToast(false);
     setShowShareCard(false);
@@ -16255,7 +16264,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     const maxAttempts = 2;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        await setDoc(doc(db, "workoutSessions", savedSessionId), { notes: sessionNotes }, { merge: true });
+        await setDoc(doc(db, "workoutSessions", savedSessionId), { notes: sessionNotes, rpe: sessionRpe ?? null }, { merge: true });
         setNotesSaveStatus("saved");
         setShowNotesToast(true);
         setTimeout(() => setShowNotesToast(false), 2000);
@@ -16869,22 +16878,72 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
 
         </div>
 
-        {activityMeta?.isMindBody && (
+        {/* Real self-reported RPE (Rate of Perceived Exertion), 1-10 -
+            shown for anything that isn't mind-body. Honest by design: no
+            heart-rate sensor needed, this is the person's own read on
+            their effort, exactly the kind of real signal that fits
+            Distance/Pace-less activities like "Other" just as well as a
+            genuine tracked run. */}
+        {!activityMeta?.isMindBody && (
           <div style={{ padding: "0 24px 20px" }}>
-            <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 8px" }}>How did it feel?</p>
+            <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 10px" }}>Effort (RPE)</p>
+            <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                <button
+                  key={n}
+                  onClick={() => { setSessionRpe(sessionRpe === n ? null : n); setNotesSaveStatus("idle"); }}
+                  style={{
+                    flex: 1, aspectRatio: "1", borderRadius: 10, border: `1px solid ${sessionRpe === n ? COLORS.accent : COLORS.border}`,
+                    background: sessionRpe === n ? `${COLORS.accent}25` : COLORS.card,
+                    color: sessionRpe === n ? COLORS.accent : COLORS.textSecondary,
+                    fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0,
+                  }}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0 }}>Easy</p>
+              <p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0 }}>Max Effort</p>
+            </div>
+          </div>
+        )}
+
+        {(activityMeta?.isMindBody || activityType === "other") && (
+          <div style={{ padding: "0 24px 20px" }}>
+            <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 8px" }}>
+              {activityMeta?.isMindBody ? "How did it feel?" : "Notes"}
+            </p>
             <textarea
               value={sessionNotes}
               onChange={(e) => { setSessionNotes(e.target.value); setNotesSaveStatus("idle"); }}
-              placeholder="Frustrated, couldn't focus... or felt clear and present. Whatever comes to mind."
+              placeholder={activityMeta?.isMindBody
+                ? "Frustrated, couldn't focus... or felt clear and present. Whatever comes to mind."
+                : "Any details worth remembering - what you caught, how it went, whatever comes to mind."}
               rows={3}
               style={{ width: "100%", padding: 14, borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", resize: "none" }}
             />
             <button
               onClick={saveSessionNotes}
-              disabled={notesSaveStatus === "saving" || !sessionNotes.trim()}
-              style={{ marginTop: 8, padding: "10px 16px", borderRadius: 12, border: `1px solid ${notesSaveStatus === "error" ? (COLORS.danger || "#ff4444") : COLORS.border}`, background: COLORS.card, color: notesSaveStatus === "error" ? (COLORS.danger || "#ff4444") : COLORS.white, fontSize: 13, fontWeight: 700, cursor: notesSaveStatus === "saving" ? "default" : "pointer", opacity: !sessionNotes.trim() ? 0.5 : 1 }}
+              disabled={notesSaveStatus === "saving" || (!sessionNotes.trim() && sessionRpe === null)}
+              style={{ marginTop: 8, padding: "10px 16px", borderRadius: 12, border: `1px solid ${notesSaveStatus === "error" ? (COLORS.danger || "#ff4444") : COLORS.border}`, background: COLORS.card, color: notesSaveStatus === "error" ? (COLORS.danger || "#ff4444") : COLORS.white, fontSize: 13, fontWeight: 700, cursor: notesSaveStatus === "saving" ? "default" : "pointer", opacity: (!sessionNotes.trim() && sessionRpe === null) ? 0.5 : 1 }}
             >
-              {notesSaveStatus === "saved" ? "Saved" : notesSaveStatus === "saving" ? "Saving..." : notesSaveStatus === "error" ? "Couldn't save - tap to retry" : "Save Note"}
+              {notesSaveStatus === "saved" ? "Saved" : notesSaveStatus === "saving" ? "Saving..." : notesSaveStatus === "error" ? "Couldn't save - tap to retry" : "Save"}
+            </button>
+          </div>
+        )}
+        {/* RPE-only save path for regular cardio (not mind-body, not
+            "Other") - those activities don't get the notes textarea
+            above, but RPE alone should still be saveable on its own. */}
+        {!activityMeta?.isMindBody && activityType !== "other" && sessionRpe !== null && (
+          <div style={{ padding: "0 24px 20px" }}>
+            <button
+              onClick={saveSessionNotes}
+              disabled={notesSaveStatus === "saving"}
+              style={{ width: "100%", padding: "12px 16px", borderRadius: 12, border: `1px solid ${notesSaveStatus === "error" ? (COLORS.danger || "#ff4444") : COLORS.border}`, background: COLORS.card, color: notesSaveStatus === "error" ? (COLORS.danger || "#ff4444") : COLORS.white, fontSize: 13, fontWeight: 700, cursor: notesSaveStatus === "saving" ? "default" : "pointer" }}
+            >
+              {notesSaveStatus === "saved" ? "Saved" : notesSaveStatus === "saving" ? "Saving..." : notesSaveStatus === "error" ? "Couldn't save - tap to retry" : "Save Effort"}
             </button>
           </div>
         )}
@@ -16920,6 +16979,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
               ...(distanceMeters > 0 ? [{ label: "Time", value: formatTime(elapsedSeconds), isPR: sessionPRs.duration }] : []),
               ...(distanceMeters > 0 ? [{ label: "Pace", value: paceLabel, isPR: sessionPRs.pace }] : []),
               ...(finalCalories ? [{ label: "Calories", value: `~${finalCalories}` }] : []),
+              ...(sessionRpe !== null ? [{ label: "RPE", value: `${sessionRpe}/10` }] : []),
             ]}
             onClose={() => setShowShareCard(false)}
           />
@@ -16937,6 +16997,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
                 : { label: "Time", value: formatTime(elapsedSeconds), isPR: sessionPRs.duration },
               ...(distanceMeters > 0 ? [{ label: "Time", value: formatTime(elapsedSeconds), isPR: sessionPRs.duration }] : []),
               ...(finalCalories ? [{ label: "Calories", value: `~${finalCalories}` }] : []),
+              ...(sessionRpe !== null ? [{ label: "RPE", value: `${sessionRpe}/10` }] : []),
             ]}
             onClose={() => setShowStickerMode(false)}
           />
