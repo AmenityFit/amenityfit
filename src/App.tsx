@@ -1232,11 +1232,20 @@ const getMondayOfWeek = (d: Date): Date => {
   return date;
 };
 
+// Real fire-intensity progression - Spark/Ember/Blaze/Inferno -
+// deliberately its own naming scheme, distinct from the lifting-cycle
+// mastery badges (Bronze/Silver/Gold/Platinum) elsewhere in this app.
+// Both systems used identical tier names before this, which could
+// genuinely confuse a person seeing "Gold" in two completely different
+// places meaning two completely different things. New colors too, not
+// just new names - distinct from both the mastery badge palette and the
+// Dashboard's own separate daily-streak stat color (#FF6B35) - so no two
+// systems in the app share a name OR a color for their tiers.
 const getActiveWeeksTier = (weeks: number) => {
-  if (weeks >= 52) return { label: "Platinum", color: "#FFFFFF" };
-  if (weeks >= 26) return { label: "Gold", color: "#FFD166" };
-  if (weeks >= 12) return { label: "Silver", color: "#A8B8CC" };
-  if (weeks >= 4) return { label: "Bronze", color: "#E8A87C" };
+  if (weeks >= 52) return { label: "Inferno", color: "#E63946" };
+  if (weeks >= 26) return { label: "Blaze", color: "#F3722C" };
+  if (weeks >= 12) return { label: "Ember", color: "#FF9F1C" };
+  if (weeks >= 4) return { label: "Spark", color: "#FFE066" };
   return null;
 };
 
@@ -1353,7 +1362,7 @@ const computeActiveWeeksStreak = (
   return { streak, bestStreak, thisWeekCount, weeklyBlocks };
 };
 
-const ACTIVE_WEEKS_TIER_RANK: Record<string, number> = { Bronze: 1, Silver: 2, Gold: 3, Platinum: 4 };
+const ACTIVE_WEEKS_TIER_RANK: Record<string, number> = { Spark: 1, Ember: 2, Blaze: 3, Inferno: 4 };
 
 // Real celebration trigger for crossing into a new Active-Weeks tier.
 // Deliberately NOT "celebrate whenever streak > last stored number" -
@@ -1512,7 +1521,7 @@ const seedActivityVolumeMilestoneTestData = async (uid: string, activityType: st
 // to the tier just below the target, so the real transaction in
 // checkAndUpdateActiveWeeksTier correctly detects a genuine crossing (not
 // a no-op) the moment that one real session is completed.
-const ACTIVE_WEEKS_TIER_BY_WEEKS: Record<number, string | null> = { 4: null, 12: "Bronze", 26: "Silver", 52: "Gold" };
+const ACTIVE_WEEKS_TIER_BY_WEEKS: Record<number, string | null> = { 4: null, 12: "Spark", 26: "Ember", 52: "Blaze" };
 
 const seedActiveWeeksTestData = async (uid: string, targetTierWeeks: number): Promise<void> => {
   await clearSeededTestData(uid);
@@ -15237,7 +15246,7 @@ const ActiveWeeksCard = ({ streak, bestStreak, thisWeekCount, weeklyBlocks }: {
           {tier ? (
             <p style={{ color: tier.color, fontSize: 13, fontWeight: 700, margin: "2px 0 0" }}>{tier.label} tier{nextTierWeeks ? ` · ${nextTierWeeks - streak} to next` : ""}</p>
           ) : (
-            <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "2px 0 0" }}>{4 - streak} more to Bronze</p>
+            <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "2px 0 0" }}>{4 - streak} more to Spark</p>
           )}
         </div>
       </div>
@@ -19184,10 +19193,10 @@ const ActiveWeeksMilestoneScreen = ({
   const [visible, setVisible] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
   const [showStickerMode, setShowStickerMode] = useState(false);
-  const tier = getActiveWeeksTier(streak) || { label: "Bronze", color: "#E8A87C" };
-  const isPlatinum = tier.label === "Platinum";
-  const ringSize = isPlatinum ? 104 : tier.label === "Gold" ? 98 : tier.label === "Silver" ? 94 : 90;
-  const glow = isPlatinum ? 64 : tier.label === "Gold" ? 56 : tier.label === "Silver" ? 48 : 40;
+  const tier = getActiveWeeksTier(streak) || { label: "Spark", color: "#FFE066" };
+  const isTopTier = tier.label === "Inferno";
+  const ringSize = isTopTier ? 104 : tier.label === "Blaze" ? 98 : tier.label === "Ember" ? 94 : 90;
+  const glow = isTopTier ? 64 : tier.label === "Blaze" ? 56 : tier.label === "Ember" ? 48 : 40;
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 100);
@@ -19210,7 +19219,7 @@ const ActiveWeeksMilestoneScreen = ({
       flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
       padding: "48px 28px 40px", textAlign: "center", overflowY: "auto",
     }}>
-      {isPlatinum && (
+      {isTopTier && (
         <style>{`
           @keyframes activeWeeksPlatinumShimmer {
             0% { background-position: -200% 0; }
@@ -19230,7 +19239,7 @@ const ActiveWeeksMilestoneScreen = ({
         transition: "all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)",
         overflow: "hidden",
       }}>
-        {isPlatinum && (
+        {isTopTier && (
           <div style={{
             position: "absolute", inset: 0,
             background: `linear-gradient(100deg, transparent 30%, ${tier.color}40 50%, transparent 70%)`,
