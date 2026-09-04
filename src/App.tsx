@@ -11149,7 +11149,8 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
   // (not undefined - the "still checking" state), so this never flashes a
   // half-built cardio section before the query returns.
   const cardioMeta = linkedCardioSession ? ACTIVITY_TYPES.find((a) => a.key === linkedCardioSession.type) : null;
-  const cardioHasDistance = (linkedCardioSession?.distanceMeters || 0) > 0;
+  // Same 0.05km floor as the trusted live/save-time guard.
+  const cardioHasDistance = (linkedCardioSession?.distanceMeters || 0) >= 50;
   const cardioCourtType = cardioMeta?.courtType;
   const cardioMapUrl = linkedCardioSession
     ? (cardioCourtType
@@ -14452,7 +14453,9 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
   const [showStickerMode, setShowStickerMode] = useState(false);
   const meta = ACTIVITY_TYPES.find((a) => a.key === session.type);
   const isMindBody = !!meta?.isMindBody;
-  const hasDistance = (session.distanceMeters || 0) > 0;
+  // Same 0.05km floor as the trusted live/save-time guard - a few
+  // meters of pure GPS noise shouldn't display as a real tracked distance.
+  const hasDistance = (session.distanceMeters || 0) >= 50;
   const courtType = meta?.courtType;
   const mapUrl = courtType
     ? buildCourtIllustrationUrl(courtType, COLORS.accent)
@@ -16188,6 +16191,15 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   const [distanceMeters, setDistanceMeters] = useState(0);
   const [isAutoPaused, setIsAutoPaused] = useState(false);
   const [goalHitPromptShown, setGoalHitPromptShown] = useState(false);
+  // Real bug found via real-device testing: tapping "Keep Going" set
+  // goalHitPromptShown back to false, but elapsedSeconds was still >=
+  // effectiveGoalDuration, so the effect below immediately re-fired and
+  // re-showed the exact same prompt on the very next render - looked
+  // completely frozen/stuck from the outside, but was actually
+  // re-triggering instantly. This flag tracks "already handled this
+  // goal-hit," stays true once acknowledged, and is reset only by
+  // resetForNewPick for a genuinely new activity.
+  const [goalHitAcknowledged, setGoalHitAcknowledged] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   // Set once, right before showing the completion summary - the estimate
   // is computed inside finishActivity using elapsedSeconds/activityType at
@@ -16297,6 +16309,8 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     setOtherNameChecking(false);
     setOtherTracksDistance(false);
     setShowDiscardConfirm(false);
+    setGoalHitPromptShown(false);
+    setGoalHitAcknowledged(false);
     setSavedSessionId(null);
     setSessionNotes("");
     setSessionRpe(null);
@@ -16716,7 +16730,13 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     let estimatedCalories: number | undefined;
     if (uid && activityType) {
       const distanceKm = distanceMeters / 1000;
-      const avgPace = distanceKm > 0 ? elapsedSeconds / distanceKm : undefined;
+      // Same floor already trusted on the live in-session pace display
+      // (distanceKm < 0.05 || elapsedSeconds < 10 => invalid) - without
+      // it, a near-zero GPS-noise distance combined with any real elapsed
+      // time produces a nonsense pace (e.g. dividing 10s by 0.0003km),
+      // which then gets saved permanently onto the session doc and shown
+      // on Share/Sticker exports and the Progress pace trend chart.
+      const avgPace = (distanceKm >= 0.05 && elapsedSeconds >= 10) ? elapsedSeconds / distanceKm : undefined;
       // Estimated (MET-based), not from a real device - clearly distinct
       // from any future real wearable-sourced calorie value. Only computed
       // when a weight is on file; left undefined otherwise rather than
@@ -16796,14 +16816,14 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // never a hard cutoff, since the person may want to push past what the
   // program suggested.
   useEffect(() => {
-    if (effectiveGoalDuration && !goalHitPromptShown && elapsedSeconds >= effectiveGoalDuration && status === "tracking") {
+    if (effectiveGoalDuration && !goalHitPromptShown && !goalHitAcknowledged && elapsedSeconds >= effectiveGoalDuration && status === "tracking") {
       setGoalHitPromptShown(true);
       if (currentActivityIsMindBody) {
         playEndChime();
         triggerEndVibration();
       }
     }
-  }, [elapsedSeconds, effectiveGoalDuration, goalHitPromptShown, status]);
+  }, [elapsedSeconds, effectiveGoalDuration, goalHitPromptShown, goalHitAcknowledged, status]);
 
   useEffect(() => {
     return () => stopTrackingInternals();
@@ -17499,7 +17519,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>{currentActivityIsMindBody ? "Time's up. Ready to close out, or stay a little longer?" : "Cardio goal hit — stop here, or keep going?"}</p>
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={finishActivity} style={{ flex: 1, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "12px", color: COLORS.white, fontWeight: 700, cursor: "pointer" }}>Stop Here</button>
-            <button onClick={() => setGoalHitPromptShown(false)} style={{ flex: 1, background: COLORS.primary, border: "none", borderRadius: 12, padding: "12px", color: COLORS.white, fontWeight: 700, cursor: "pointer" }}>Keep Going</button>
+            <button onClick={() => { setGoalHitPromptShown(false); setGoalHitAcknowledged(true); }} style={{ flex: 1, background: COLORS.primary, border: "none", borderRadius: 12, padding: "12px", color: COLORS.white, fontWeight: 700, cursor: "pointer" }}>Keep Going</button>
           </div>
         </div>
       )}
