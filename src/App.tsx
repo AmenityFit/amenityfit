@@ -69,6 +69,8 @@ import {
   increment,
   deleteDoc,
   runTransaction,
+  writeBatch,
+  Timestamp,
 } from "firebase/firestore";
 import {
   getStorage,
@@ -86,6 +88,7 @@ import {
   ArrowLeft,
   Check,
   Flame,
+  Star,
   Dumbbell,
   Zap,
   Sprout,
@@ -1246,6 +1249,19 @@ const getActiveWeeksTier = (weeks: number) => {
 // window (most recent displayWeeks completed weeks) purely for the
 // visualization - independent of how far back the streak math itself
 // needs to check.
+// A session's real duration in minutes, regardless of which of the two
+// different fields this session type stores it in - lifting sessions
+// record sessionLength directly in minutes, cardio sessions record
+// durationSeconds. Used only for the 5-minute qualifying floor below;
+// never surfaced as a displayed number anywhere, so a session that
+// clears the floor still counts identically toward the day regardless of
+// whether it ran 6 minutes or 90 - Active Weeks measures real attendance
+// (did you show up), not volume.
+const getSessionMinutes = (s: any): number =>
+  (!!s.type && s.type !== "gym") ? (s.durationSeconds || 0) / 60 : (s.sessionLength || 0);
+
+const ACTIVE_WEEK_MIN_SESSION_MINUTES = 5;
+
 const computeActiveWeeksStreak = (
   sessions: any[],
   accountCreatedAt: Date | null,
@@ -1254,9 +1270,23 @@ const computeActiveWeeksStreak = (
   const now = new Date();
   const currentWeekStart = getMondayOfWeek(now);
 
-  const countsByWeek = new Map<string, number>();
+  // Distinct qualifying CALENDAR DAYS, not raw session documents - a
+  // combined lift+cardio day (linkedWorkoutId) saves as two separate
+  // documents, and counting both would silently double-count what's
+  // really one day of real effort. A day qualifies if it has at least
+  // one session clearing the 5-minute floor (filters out an accidental
+  // near-zero-duration tap without penalizing a real day that also
+  // happens to include one short entry alongside a real workout).
+  const qualifyingDaysSet = new Set<string>();
   for (const s of sessions) {
-    const d = new Date(s.date);
+    if (getSessionMinutes(s) < ACTIVE_WEEK_MIN_SESSION_MINUTES) continue;
+    if (!s.date) continue;
+    qualifyingDaysSet.add(s.date);
+  }
+
+  const countsByWeek = new Map<string, number>();
+  for (const dateStr of qualifyingDaysSet) {
+    const d = new Date(dateStr);
     if (isNaN(d.getTime())) continue;
     const key = getMondayOfWeek(d).toISOString();
     countsByWeek.set(key, (countsByWeek.get(key) || 0) + 1);
@@ -1372,6 +1402,140 @@ const checkAndUpdateActiveWeeksTier = async (
     console.error("checkAndUpdateActiveWeeksTier error:", e);
     return { shouldCelebrate: false };
   }
+};
+
+// ── Super Admin test-data tools (dev/QA only, never exposed to real users) ──
+// Real reason these exist: previewing every milestone/celebration tier
+// (volume: 10/25/50/100/250/500/1000/1500..., Active Weeks: Bronze/Silver/
+// Gold/Platinum at 4/12/26/52 weeks) by actually completing that many real
+// sessions is impractical, and a pure UI mockup with hardcoded numbers
+// would only prove the screens render nicely - not that the real
+// isActivityMilestone/checkAndUpdateActiveWeeksTier logic and real
+// Firestore queries actually fire correctly against real data. These
+// functions instead seed real workoutSessions documents that leave a real
+// account exactly ONE session short of a real threshold, so the actual
+// admin can then complete one genuine session through the real app UI and
+// see the real trigger logic fire exactly as a resident would experience
+// it - true end-to-end verification, not a mockup.
+//
+// Every seeded doc is tagged seedTestData: true (and seedKind, to
+// distinguish which tool wrote it) so it can always be found and removed
+// again, and can never be mistaken for real activity. clearSeededTestData
+// always runs first inside each seed function - re-running any seed
+// action is always predictable and never double-counts on top of a
+// previous run.
+const clearSeededTestData = async (uid: string): Promise<void> => {
+  const snap = await getDocs(query(collection(db, "workoutSessions"), where("uid", "==", uid), where("seedTestData", "==", true)));
+  const docsToDelete = snap.docs;
+  // Firestore caps a single batch at 500 writes (deletes count as writes),
+  // so a large seeded set (e.g. 1500 volume-milestone docs) needs to be
+  // chunked across multiple batches, not one.
+  for (let i = 0; i < docsToDelete.length; i += 450) {
+    const batch = writeBatch(db);
+    docsToDelete.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+};
+
+// Seeds exactly (targetMilestone - 1) completed sessions of a single
+// activity type, all dated on one fixed, far-in-the-past day (2 years
+// ago) - deliberately clustered onto ONE day rather than spread out, so
+// this volume-milestone test data can never accidentally inflate a
+// RECENT week's count and interfere with an Active Weeks preview running
+// on the same test account. One more real session completed through the
+// actual app naturally reaches targetMilestone and fires the real
+// isActivityMilestone check.
+const seedActivityVolumeMilestoneTestData = async (uid: string, activityType: string, targetMilestone: number): Promise<void> => {
+  await clearSeededTestData(uid);
+  const seedDate = new Date();
+  seedDate.setFullYear(seedDate.getFullYear() - 2);
+  const seedDateString = getLocalDateString(seedDate);
+  const seedTimestamp = Timestamp.fromDate(seedDate);
+  const count = Math.max(0, targetMilestone - 1);
+
+  for (let i = 0; i < count; i += 450) {
+    const batch = writeBatch(db);
+    const chunkSize = Math.min(450, count - i);
+    for (let j = 0; j < chunkSize; j++) {
+      const id = `seedtest_${uid}_${activityType}_${i + j}`;
+      const ref = doc(db, "workoutSessions", id);
+      batch.set(ref, {
+        uid,
+        sessionId: id,
+        date: seedDateString,
+        type: activityType,
+        durationSeconds: 600,
+        completedAt: seedTimestamp,
+        seedTestData: true,
+        seedKind: "volume",
+      });
+    }
+    await batch.commit();
+  }
+};
+
+// Seeds (targetTierWeeks - 1) consecutive, fully-active past weeks (3
+// sessions each, Mon/Wed/Fri) ending at the week just before the current
+// one, PLUS 2 sessions in the current week - so the streak sits exactly
+// at (targetTierWeeks - 1) and the current week needs exactly one more
+// real session to complete it. Also resets lastAcknowledgedActiveWeeksTier
+// to the tier just below the target, so the real transaction in
+// checkAndUpdateActiveWeeksTier correctly detects a genuine crossing (not
+// a no-op) the moment that one real session is completed.
+const ACTIVE_WEEKS_TIER_BY_WEEKS: Record<number, string | null> = { 4: null, 12: "Bronze", 26: "Silver", 52: "Gold" };
+
+const seedActiveWeeksTestData = async (uid: string, targetTierWeeks: number): Promise<void> => {
+  await clearSeededTestData(uid);
+  const activityType = "run";
+  const currentWeekStart = getMondayOfWeek(new Date());
+  const weeksToSeed = Math.max(0, targetTierWeeks - 1);
+
+  const allDocs: { id: string; date: string; timestamp: any }[] = [];
+  for (let w = 1; w <= weeksToSeed; w++) {
+    const weekStart = new Date(currentWeekStart);
+    weekStart.setDate(weekStart.getDate() - 7 * w);
+    // Mon/Wed/Fri of that week - comfortably 3 real sessions, well clear
+    // of the 3-session threshold with no ambiguity.
+    for (const offset of [0, 2, 4]) {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + offset);
+      d.setHours(9, 0, 0, 0);
+      allDocs.push({ id: `seedtest_${uid}_aw_w${w}_${offset}`, date: getLocalDateString(d), timestamp: Timestamp.fromDate(d) });
+    }
+  }
+  // Current (in-progress) week: exactly 2 sessions, so completing ONE
+  // real session this week is what naturally reaches 3 and fires the
+  // real check - never seeded to 3 directly, since that would trigger
+  // nothing (the real trigger only fires on an actual completion event).
+  for (const offset of [0, 2]) {
+    const d = new Date(currentWeekStart);
+    d.setDate(d.getDate() + offset);
+    d.setHours(9, 0, 0, 0);
+    if (d.getTime() <= Date.now()) {
+      allDocs.push({ id: `seedtest_${uid}_aw_current_${offset}`, date: getLocalDateString(d), timestamp: Timestamp.fromDate(d) });
+    }
+  }
+
+  for (let i = 0; i < allDocs.length; i += 450) {
+    const batch = writeBatch(db);
+    allDocs.slice(i, i + 450).forEach((item) => {
+      const ref = doc(db, "workoutSessions", item.id);
+      batch.set(ref, {
+        uid,
+        sessionId: item.id,
+        date: item.date,
+        type: activityType,
+        durationSeconds: 600,
+        completedAt: item.timestamp,
+        seedTestData: true,
+        seedKind: "activeWeeks",
+      });
+    });
+    await batch.commit();
+  }
+
+  const belowTier = ACTIVE_WEEKS_TIER_BY_WEEKS[targetTierWeeks] ?? null;
+  await setDoc(doc(db, "users", uid), { lastAcknowledgedActiveWeeksTier: belowTier }, { merge: true });
 };
 
 // Builds a short, readable summary of recent cardio activity for the coach
@@ -15346,14 +15510,17 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
 
         {/* ── Consistency Section ── */}
         <div style={{ background: COLORS.card, borderRadius: 20, padding: "20px", marginBottom: 16, border: `1px solid ${COLORS.border}` }}>
-          <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 16px" }}>Consistency</p>
+          <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 16px" }}>This Cycle</p>
 
           <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
             {/* Streak */}
             <div style={{ flex: 1, background: COLORS.background, borderRadius: 14, padding: "16px 12px", textAlign: "center", border: `1px solid ${COLORS.border}` }}>
-              <p style={{ fontSize: 28, fontWeight: 900, color: streak > 0 ? "#FF6B35" : COLORS.textSecondary, margin: "0 0 2px" }}>
-                {streak}{streak > 0 ? " 🔥" : ""}
-              </p>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                <p style={{ fontSize: 28, fontWeight: 900, color: streak > 0 ? COLORS.accent : COLORS.textSecondary, margin: "0 0 2px" }}>
+                  {streak}
+                </p>
+                {streak > 0 && <Star size={16} color={COLORS.accent} fill={COLORS.accent} strokeWidth={0} style={{ marginTop: -2 }} />}
+              </div>
               <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>Streak</p>
             </div>
             {/* Completed */}
