@@ -17351,7 +17351,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
                 pointerEvents: "none",
               }} />
               <p style={{ position: "relative", color: COLORS.textSecondary, fontSize: 13, margin: "0 0 18px", fontWeight: 700, letterSpacing: 2 }}>{displayLabel}</p>
-              <h1 style={{ position: "relative", color: COLORS.white, fontSize: 76, fontWeight: 900, margin: 0, lineHeight: 1, letterSpacing: -2, fontVariantNumeric: "tabular-nums", textShadow: `0 0 50px ${COLORS.primary}50` }}>{displayPrefix}{formatTime(displaySeconds)}</h1>
+              <h1 style={{ position: "relative", color: COLORS.white, fontSize: 104, fontWeight: 900, margin: 0, lineHeight: 1, letterSpacing: -3, fontVariantNumeric: "tabular-nums", textShadow: `0 0 60px ${COLORS.primary}55` }}>{displayPrefix}{formatTime(displaySeconds)}</h1>
             </div>
           );
         })()}
@@ -17359,11 +17359,11 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           <div style={{ display: "flex", gap: 48 }}>
             <div style={{ textAlign: "center" }}>
               <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 6px", fontWeight: 700, letterSpacing: 1 }}>DISTANCE</p>
-              <h2 style={{ color: COLORS.white, fontSize: 36, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{(distanceMeters / 1000).toFixed(2)}<span style={{ fontSize: 18, fontWeight: 700, color: COLORS.textSecondary, marginLeft: 4 }}>km</span></h2>
+              <h2 style={{ color: COLORS.white, fontSize: 46, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{(distanceMeters / 1000).toFixed(2)}<span style={{ fontSize: 20, fontWeight: 700, color: COLORS.textSecondary, marginLeft: 4 }}>km</span></h2>
             </div>
             <div style={{ textAlign: "center" }}>
               <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 6px", fontWeight: 700, letterSpacing: 1 }}>PACE</p>
-              <h2 style={{ color: COLORS.white, fontSize: 36, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{paceLabel}</h2>
+              <h2 style={{ color: COLORS.white, fontSize: 46, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{paceLabel}</h2>
             </div>
           </div>
         )}
@@ -17619,7 +17619,7 @@ const StickerShareScreen = ({
         </div>
         {visibleStats.map((s, i) => (
           <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: i === 0 ? 48 : 24, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1 : -0.3 }}>{s.value}</span>
+            <span style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: i === 0 ? 58 : 28, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1.5 : -0.3 }}>{s.value}</span>
             <span style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.85 }}>{s.isPR ? "PR" : s.label}</span>
           </div>
         ))}
