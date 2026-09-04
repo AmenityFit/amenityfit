@@ -14437,7 +14437,12 @@ const MiniGraph = ({ data, color, unit = "lbs", activeMetric = "weight" }) => {
         })}
       </svg>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-        <span style={{ color: COLORS.textSecondary, fontSize: 11 }}>{data[0].label}</span>
+        <span style={{ color: COLORS.textSecondary, fontSize: 11 }}>
+          {data[0].label}
+          {data[0].label === "Baseline" && data[0].date && (
+            <> · {new Date(data[0].date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</>
+          )}
+        </span>
         <span style={{ color: (unit === "in" || unit === "cm") && activeMetric === "arms" ? (diff >= 0 ? COLORS.success : "#FF6B35") : diff <= 0 ? COLORS.success : "#FF6B35", fontSize: 13, fontWeight: 700 }}>
           {sign}{diff.toFixed(1)} {unit} since start
         </span>
@@ -15290,13 +15295,13 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
   const completionPct = Math.round((totalSessions / 30) * 100);
   const streak = profile?.streak || 0;
 
-  const weightData = logs.filter(l => l.weight != null).map(l => ({ value: l.weight, label: l.label }));
-  const waistData = logs.filter(l => l.waist).map(l => ({ value: l.waist, label: l.label }));
-  const hipsData = logs.filter(l => l.hips).map(l => ({ value: l.hips, label: l.label }));
-  const armsData = logs.filter(l => l.arms).map(l => ({ value: l.arms, label: l.label }));
-  const chestData = logs.filter(l => l.chest).map(l => ({ value: l.chest, label: l.label }));
-  const neckData = logs.filter(l => l.neck).map(l => ({ value: l.neck, label: l.label }));
-  const thighsData = logs.filter(l => l.thighs).map(l => ({ value: l.thighs, label: l.label }));
+  const weightData = logs.filter(l => l.weight != null).map(l => ({ value: l.weight, label: l.label, date: l.date }));
+  const waistData = logs.filter(l => l.waist).map(l => ({ value: l.waist, label: l.label, date: l.date }));
+  const hipsData = logs.filter(l => l.hips).map(l => ({ value: l.hips, label: l.label, date: l.date }));
+  const armsData = logs.filter(l => l.arms).map(l => ({ value: l.arms, label: l.label, date: l.date }));
+  const chestData = logs.filter(l => l.chest).map(l => ({ value: l.chest, label: l.label, date: l.date }));
+  const neckData = logs.filter(l => l.neck).map(l => ({ value: l.neck, label: l.label, date: l.date }));
+  const thighsData = logs.filter(l => l.thighs).map(l => ({ value: l.thighs, label: l.label, date: l.date }));
 
   const getActiveData = () => {
     if (activeMetric === "weight") return weightData;
