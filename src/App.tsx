@@ -1293,6 +1293,87 @@ const computeActiveWeeksStreak = (
   return { streak, thisWeekCount, weeklyBlocks };
 };
 
+const ACTIVE_WEEKS_TIER_RANK: Record<string, number> = { Bronze: 1, Silver: 2, Gold: 3, Platinum: 4 };
+
+// Real celebration trigger for crossing into a new Active-Weeks tier.
+// Deliberately NOT "celebrate whenever streak > last stored number" -
+// since the current week never counts until it's over, the streak is
+// recomputed fresh from real history every time (same as everything else
+// in this app, no separately-maintained counter to drift), which means it
+// can legitimately go DOWN too (a genuine gap correctly lowers a past
+// reading). Tracking TIER RANK instead of the raw number means: climbing
+// within a tier never re-fires, a real gap silently lowers the stored
+// tier with no celebration, and a genuine climb back into a tier after a
+// real reset correctly re-triggers.
+//
+// Wrapped in a transaction specifically because this app already supports
+// combined lift+cardio days (linkedWorkoutId) - both completion flows can
+// finish within seconds of each other and both independently detect
+// "just crossed into Bronze." Without a transaction, both reads would see
+// the same stale stored tier and both would try to celebrate. The
+// transaction serializes them: whichever commits first updates the stored
+// tier, and the second one's read-after-that-write correctly sees the
+// already-updated tier and stays silent - exactly one celebration, never
+// zero, never two, regardless of the two sessions' actual timing.
+const checkAndUpdateActiveWeeksTier = async (
+  uid: string
+): Promise<{ shouldCelebrate: boolean; tierLabel?: string; streak?: number; totalSessions?: number; rangeStart?: Date; rangeEnd?: Date }> => {
+  try {
+    const sessions = await fetchWorkoutHistory(uid);
+    const userRef = doc(db, "users", uid);
+    const userSnapForCreatedAt = await getDoc(userRef);
+    const createdAtRaw = userSnapForCreatedAt.exists() ? userSnapForCreatedAt.data()?.createdAt : null;
+    const accountCreatedAt = createdAtRaw ? new Date(createdAtRaw) : null;
+    const { streak } = computeActiveWeeksStreak(sessions, accountCreatedAt, 0);
+    const newTier = getActiveWeeksTier(streak);
+    const newRank = newTier ? ACTIVE_WEEKS_TIER_RANK[newTier.label] : 0;
+
+    let shouldCelebrate = false;
+    let celebrateTierLabel: string | undefined;
+
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(userRef);
+      const storedLabel: string | undefined = snap.exists() ? snap.data()?.lastAcknowledgedActiveWeeksTier : undefined;
+      const storedRank = storedLabel ? (ACTIVE_WEEKS_TIER_RANK[storedLabel] || 0) : 0;
+
+      if (newRank > storedRank) {
+        shouldCelebrate = true;
+        celebrateTierLabel = newTier!.label;
+        transaction.set(userRef, { lastAcknowledgedActiveWeeksTier: newTier!.label }, { merge: true });
+      } else if (newRank < storedRank) {
+        // Real gap happened - silently sync the stored tier down (or
+        // clear it entirely below Bronze) so a future genuine climb back
+        // up correctly re-triggers, with no celebration for the drop.
+        transaction.set(userRef, { lastAcknowledgedActiveWeeksTier: newTier ? newTier.label : null }, { merge: true });
+      }
+      // newRank === storedRank: no write needed, nothing changed.
+    });
+
+    let totalSessions: number | undefined;
+    let rangeStart: Date | undefined;
+    let rangeEnd: Date | undefined;
+    if (shouldCelebrate && streak > 0) {
+      // Re-running with displayWeeks = streak is self-consistent: by
+      // construction, the streak counts only trailing CONSECUTIVE active
+      // weeks, so every block this returns is guaranteed active (no
+      // separate "was this week really part of the streak" check needed).
+      const { weeklyBlocks: streakWeeks } = computeActiveWeeksStreak(sessions, accountCreatedAt, streak);
+      totalSessions = streakWeeks.reduce((sum, w) => sum + w.count, 0);
+      rangeStart = streakWeeks[0]?.weekStart;
+      if (streakWeeks.length > 0) {
+        const lastWeekStart = streakWeeks[streakWeeks.length - 1].weekStart;
+        rangeEnd = new Date(lastWeekStart);
+        rangeEnd.setDate(rangeEnd.getDate() + 6);
+      }
+    }
+
+    return { shouldCelebrate, tierLabel: celebrateTierLabel, streak, totalSessions, rangeStart, rangeEnd };
+  } catch (e) {
+    console.error("checkAndUpdateActiveWeeksTier error:", e);
+    return { shouldCelebrate: false };
+  }
+};
+
 // Builds a short, readable summary of recent cardio activity for the coach
 // chat's system prompt - e.g. "3 cardio activities in the last 2 weeks:
 // most recent a 5.2km run in 32 min on Tue Aug 26; also 1 bike, 1 hike."
@@ -16480,6 +16561,13 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // only after tapping "Done," so the normal per-session stats/share
   // always come first.
   const [showMilestoneScreen, setShowMilestoneScreen] = useState(false);
+  // Same decoupled "detected vs shown" split as pendingCardioMilestone -
+  // detected during save (via checkAndUpdateActiveWeeksTier), shown only
+  // after "Done" and only after the activity-count milestone (if any) has
+  // already been continued past, so the two celebrations never stack or
+  // silently drop one for the other.
+  const [pendingActiveWeeksMilestone, setPendingActiveWeeksMilestone] = useState<{ streak: number; totalSessions?: number; rangeStart?: Date; rangeEnd?: Date } | null>(null);
+  const [showActiveWeeksMilestoneScreen, setShowActiveWeeksMilestoneScreen] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [sessionNotes, setSessionNotes] = useState("");
@@ -17013,6 +17101,27 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
           console.error("Failed to check activity milestone:", e);
         }
       }
+
+      // Real Active Weeks tier check - unlike the activity-count milestone
+      // above, this deliberately runs for EVERY activity type including
+      // "Other," since a real week of activity is a real week of activity
+      // regardless of what kind. checkAndUpdateActiveWeeksTier's own
+      // transaction handles the combined lift+cardio day race (both
+      // completion flows can call this within seconds of each other) -
+      // nothing extra needed here beyond just calling it.
+      try {
+        const tierCheck = await checkAndUpdateActiveWeeksTier(uid);
+        if (tierCheck.shouldCelebrate && tierCheck.tierLabel) {
+          setPendingActiveWeeksMilestone({
+            streak: tierCheck.streak || 0,
+            totalSessions: tierCheck.totalSessions,
+            rangeStart: tierCheck.rangeStart,
+            rangeEnd: tierCheck.rangeEnd,
+          });
+        }
+      } catch (e) {
+        console.error("Failed to check Active Weeks milestone:", e);
+      }
     }
     // Show a real completion summary (stats + route map) instead of
     // immediately returning to whatever screen launched tracking - people
@@ -17070,6 +17179,25 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         activityLabel={pendingCardioMilestone.activityLabel}
         icon={milestoneMeta?.icon}
         iconImage={milestoneMeta?.iconImage}
+        onContinue={() => {
+          if (pendingActiveWeeksMilestone) { setShowActiveWeeksMilestoneScreen(true); }
+          else { onBack(); }
+        }}
+      />
+    );
+  }
+
+  // Same detour pattern as the activity-count milestone above, checked
+  // right after it so the two never render simultaneously - whichever was
+  // detected, the person sees per-session stats first, then (if
+  // applicable) the activity-count milestone, then (if applicable) this.
+  if (showActiveWeeksMilestoneScreen && pendingActiveWeeksMilestone) {
+    return (
+      <ActiveWeeksMilestoneScreen
+        streak={pendingActiveWeeksMilestone.streak}
+        totalSessions={pendingActiveWeeksMilestone.totalSessions}
+        rangeStart={pendingActiveWeeksMilestone.rangeStart}
+        rangeEnd={pendingActiveWeeksMilestone.rangeEnd}
         onContinue={onBack}
       />
     );
@@ -17260,7 +17388,11 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             </button>
           </div>
           <button
-            onClick={() => { if (pendingCardioMilestone) { setShowMilestoneScreen(true); } else { onBack(); } }}
+            onClick={() => {
+              if (pendingCardioMilestone) { setShowMilestoneScreen(true); }
+              else if (pendingActiveWeeksMilestone) { setShowActiveWeeksMilestoneScreen(true); }
+              else { onBack(); }
+            }}
             style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 17, fontWeight: 800, cursor: "pointer", boxShadow: `0 8px 30px ${COLORS.primary}40` }}
           >
             Done
@@ -18578,6 +18710,192 @@ const MilestoneUnlockedScreen = ({
           stats={milestoneStats}
           icon={Icon}
           iconImage={iconImage}
+          onClose={() => setShowStickerMode(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+// Real celebration for crossing into a new Active-Weeks tier - deliberately
+// its own standalone component rather than reusing MilestoneUnlockedScreen
+// directly: that screen's copy/props are built around a single running
+// COUNT (e.g. "247 Runs"), while this is a WEEK-STREAK with genuinely
+// different supporting facts (total sessions across the stretch, a real
+// date range) - reusing MilestoneUnlockedScreen's visual PATTERN (staggered
+// fade/slide-in, tier ring, badge pill, Share/Sticker via the same
+// ShareableStatCard/StickerShareScreen already used everywhere) without
+// forcing its copy to awkwardly fit a shape it wasn't built for.
+const ActiveWeeksMilestoneScreen = ({
+  streak,
+  totalSessions,
+  rangeStart,
+  rangeEnd,
+  onContinue,
+}: {
+  streak: number;
+  totalSessions?: number;
+  rangeStart?: Date;
+  rangeEnd?: Date;
+  onContinue: () => void;
+}) => {
+  const [visible, setVisible] = useState(false);
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [showStickerMode, setShowStickerMode] = useState(false);
+  const tier = getActiveWeeksTier(streak) || { label: "Bronze", color: "#E8A87C" };
+  const isPlatinum = tier.label === "Platinum";
+  const ringSize = isPlatinum ? 104 : tier.label === "Gold" ? 98 : tier.label === "Silver" ? 94 : 90;
+  const glow = isPlatinum ? 64 : tier.label === "Gold" ? 56 : tier.label === "Silver" ? 48 : 40;
+
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 100);
+    return () => clearTimeout(t);
+  }, []);
+
+  const dateRangeLabel = rangeStart && rangeEnd
+    ? `${rangeStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${rangeEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+    : "";
+
+  const milestoneStats = [
+    { label: "Weeks", value: String(streak) },
+    ...(totalSessions !== undefined ? [{ label: "Sessions", value: String(totalSessions) }] : []),
+  ];
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 900, background: COLORS.background,
+      fontFamily: "'Inter', sans-serif", display: "flex",
+      flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
+      padding: "48px 28px 40px", textAlign: "center", overflowY: "auto",
+    }}>
+      {isPlatinum && (
+        <style>{`
+          @keyframes activeWeeksPlatinumShimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+        `}</style>
+      )}
+      <div style={{
+        position: "relative",
+        width: ringSize, height: ringSize, borderRadius: 99, marginBottom: 20,
+        background: `${tier.color}18`,
+        border: `2px solid ${tier.color}50`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: `0 0 ${glow}px ${tier.color}30`,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "scale(1)" : "scale(0.85)",
+        transition: "all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)",
+        overflow: "hidden",
+      }}>
+        {isPlatinum && (
+          <div style={{
+            position: "absolute", inset: 0,
+            background: `linear-gradient(100deg, transparent 30%, ${tier.color}40 50%, transparent 70%)`,
+            backgroundSize: "300% 100%",
+            animation: "activeWeeksPlatinumShimmer 2.5s ease-in-out infinite",
+          }} />
+        )}
+        <Flame size={40} color={tier.color} strokeWidth={1.5} style={{ position: "relative" }} />
+      </div>
+
+      <div style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        background: `${tier.color}18`, borderRadius: 99,
+        padding: "4px 14px", marginBottom: 14,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(10px)",
+        transition: "all 0.5s ease 0.2s",
+      }}>
+        <Flame size={12} color={tier.color} strokeWidth={2} />
+        <span style={{ color: tier.color, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
+          {tier.label} Active Streak
+        </span>
+      </div>
+
+      <h1 style={{
+        color: COLORS.white, fontSize: 56, fontWeight: 900,
+        margin: "0 0 4px", letterSpacing: -1.5, lineHeight: 1,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(10px)",
+        transition: "all 0.5s ease 0.3s",
+      }}>
+        {streak}
+      </h1>
+      <p style={{
+        color: COLORS.white, fontSize: 20, fontWeight: 800,
+        margin: "0 0 6px",
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(10px)",
+        transition: "all 0.5s ease 0.35s",
+      }}>
+        {streak}-Week Active Streak
+      </p>
+      {dateRangeLabel && (
+        <p style={{
+          color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, margin: "0 0 10px",
+          opacity: visible ? 1 : 0,
+          transform: visible ? "translateY(0)" : "translateY(10px)",
+          transition: "all 0.5s ease 0.37s",
+        }}>
+          {dateRangeLabel}
+        </p>
+      )}
+
+      <p style={{
+        color: COLORS.textSecondary, fontSize: 15, lineHeight: 1.65,
+        margin: "0 0 36px", maxWidth: 280,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(10px)",
+        transition: "all 0.5s ease 0.4s",
+      }}>
+        {streak} straight weeks with 3+ real sessions{totalSessions !== undefined ? ` — ${totalSessions} sessions total` : ""}. That's real, earned consistency.
+      </p>
+
+      <div style={{
+        display: "flex", gap: 12, width: "100%", marginBottom: 12,
+        opacity: visible ? 1 : 0,
+        transition: "all 0.5s ease 0.5s",
+      }}>
+        <button onClick={() => setShowShareCard(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+          Share
+        </button>
+        <button onClick={() => setShowStickerMode(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+          Sticker
+        </button>
+      </div>
+
+      <button
+        onClick={onContinue}
+        style={{
+          width: "100%", padding: "18px", borderRadius: 16, border: "none",
+          background: `linear-gradient(135deg, ${tier.color}, ${tier.color}CC)`,
+          color: tier.label === "Platinum" ? "#1A1A1A" : "#1A1200", fontSize: 16, fontWeight: 800,
+          cursor: "pointer", letterSpacing: 0.3,
+          boxShadow: `0 8px 32px ${tier.color}50`,
+          opacity: visible ? 1 : 0,
+          transform: visible ? "translateY(0)" : "translateY(10px)",
+          transition: "all 0.5s ease 0.6s",
+        }}
+      >
+        Continue
+      </button>
+
+      {showShareCard && (
+        <ShareableStatCard
+          title={`${streak}-Week Streak`}
+          subtitle={`${tier.label} Active Streak`}
+          stats={milestoneStats}
+          icon={Flame}
+          onClose={() => setShowShareCard(false)}
+        />
+      )}
+
+      {showStickerMode && (
+        <StickerShareScreen
+          title={`${streak}-Week Streak`}
+          stats={milestoneStats}
+          icon={Flame}
           onClose={() => setShowStickerMode(false)}
         />
       )}
@@ -24387,6 +24705,11 @@ export default function App() {
   // cycle-complete) rather than hardcoding one, so the milestone screen
   // is a real detour, not a replacement for the normal flow.
   const [pendingActivityMilestone, setPendingActivityMilestone] = useState<{ count: number; activityLabel: string; nextScreen: string } | null>(null);
+  // Same pattern as pendingActivityMilestone, for the lifting side of the
+  // Active Weeks celebration (the cardio side has its own separate local
+  // state inside CardioTrackingScreen - these are two different React
+  // component scopes, not a shared/duplicated variable).
+  const [pendingActiveWeeksMilestone, setPendingActiveWeeksMilestone] = useState<{ streak: number; totalSessions?: number; rangeStart?: Date; rangeEnd?: Date; nextScreen: string } | null>(null);
   // Carries context into the cardioTracking screen when it's launched from
   // a specific place - a programmed workout day's cardio segment (goal
   // duration + link back to that workout) versus the standalone "Track an
@@ -24775,17 +25098,46 @@ const isInitialLoad = React.useRef(true);
     }
 
     const realDestination = cycleFinished ? "cycle-complete" : "dashboard";
+
+    // Real Active Weeks tier check - runs for every genuine lifting
+    // completion (completedGroups.length > 0, matching the same "never a
+    // bare rest day" guard as the activity-count milestone below), not
+    // gated behind that milestone firing. checkAndUpdateActiveWeeksTier's
+    // own transaction handles the combined lift+cardio day race - both
+    // completion flows can call this within seconds of each other.
+    let activeWeeksNextScreen = realDestination;
+    if (completedGroups.length > 0 && uid) {
+      try {
+        const tierCheck = await checkAndUpdateActiveWeeksTier(uid);
+        if (tierCheck.shouldCelebrate && tierCheck.tierLabel) {
+          setPendingActiveWeeksMilestone({
+            streak: tierCheck.streak || 0,
+            totalSessions: tierCheck.totalSessions,
+            rangeStart: tierCheck.rangeStart,
+            rangeEnd: tierCheck.rangeEnd,
+            nextScreen: realDestination,
+          });
+          activeWeeksNextScreen = "active-weeks-milestone";
+        }
+      } catch (e) {
+        console.error("Failed to check Active Weeks milestone:", e);
+      }
+    }
+
     // Real feedback: milestones should feel rare and earned, not routine -
     // only fires for a genuine lifting-workout completion (never a rest
     // day, which never increments sessionsCompleted the same way real
     // training does) and reuses newCompleted, the value ALREADY reliably
     // tracked and written server-side for the quote system - no new
-    // counter needed, no risk of drift from real history.
+    // counter needed, no risk of drift from real history. Chains into the
+    // Active Weeks milestone (if one was detected above) rather than
+    // straight to realDestination, so the two celebrations never stack or
+    // silently drop one for the other.
     if (completedGroups.length > 0 && isActivityMilestone(newCompleted)) {
-      setPendingActivityMilestone({ count: newCompleted, activityLabel: "Workouts", nextScreen: realDestination });
+      setPendingActivityMilestone({ count: newCompleted, activityLabel: "Workouts", nextScreen: activeWeeksNextScreen });
       setScreen("activity-milestone");
     } else {
-      setScreen(realDestination);
+      setScreen(activeWeeksNextScreen);
     }
 
     if (uid) {
@@ -25251,6 +25603,19 @@ const isInitialLoad = React.useRef(true);
       onContinue={() => {
         const dest = pendingActivityMilestone.nextScreen;
         setPendingActivityMilestone(null);
+        setScreen(dest);
+      }}
+    />
+  );
+  if (screen === "active-weeks-milestone" && pendingActiveWeeksMilestone) return (
+    <ActiveWeeksMilestoneScreen
+      streak={pendingActiveWeeksMilestone.streak}
+      totalSessions={pendingActiveWeeksMilestone.totalSessions}
+      rangeStart={pendingActiveWeeksMilestone.rangeStart}
+      rangeEnd={pendingActiveWeeksMilestone.rangeEnd}
+      onContinue={() => {
+        const dest = pendingActiveWeeksMilestone.nextScreen;
+        setPendingActiveWeeksMilestone(null);
         setScreen(dest);
       }}
     />
