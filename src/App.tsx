@@ -25489,6 +25489,12 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
                 { label: "Total Workouts Completed", value: String(b.totalWorkoutsThisMonth) },
                 { label: "Avg Sessions Per Resident/Week", value: String(b.avgSessionsPerUserPerWeek) },
                 { label: "Fitness Assistant Sessions", value: String(b.fitnessAssistantQuestionsThisMonth) },
+                // New fields, only populated once "Recalculate" has been
+                // run at least once since they were added - a graceful
+                // "—" fallback rather than a literal "undefined" for any
+                // report snapshot taken before that.
+                { label: "Residents on Active Streak (4+ wks)", value: b.activeWeeksResidentsCount != null ? String(b.activeWeeksResidentsCount) : "—" },
+                { label: "Avg Active Weeks Streak", value: b.avgActiveWeeksStreak != null ? String(b.avgActiveWeeksStreak) : "—" },
               ].map((row, i, arr) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, marginBottom: 12, borderBottom: i < arr.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
                   <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>{row.label}</span>
