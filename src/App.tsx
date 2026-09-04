@@ -15090,6 +15090,12 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
   stats.push({ label: "Time", value: formatTime(session.durationSeconds || 0) });
   if (paceLabel) stats.push({ label: "Pace", value: paceLabel });
   if (session.calories) stats.push({ label: "Calories", value: `~${session.calories}` });
+  // Only shown when there's real, trusted altitude data to compute from -
+  // null (insufficient data) is deliberately different from a genuine 0m
+  // flat route, so this stat simply doesn't appear rather than showing a
+  // misleading "0 m" for older sessions with no altitude captured at all.
+  const elevationGain = computeElevationGainMeters(session.route);
+  if (elevationGain !== null) stats.push({ label: "Elevation Gain", value: `${elevationGain} m` });
 
   // Multi-session trend - last 10 sessions of the same type, oldest-to-newest
   // (natural left-to-right reading of "progress over time"), including this
@@ -16879,6 +16885,33 @@ const getRouteLocationLabel = (route: { lat: number; lng: number }[] | null | un
   }
 };
 
+// Honest, v1 elevation gain - GPS-derived altitude, not barometric (see
+// the top-of-file note near GPS_ALTITUDE_ACCURACY_REJECT_METERS: real
+// barometric altitude requires native sensor access this web app
+// doesn't have yet, a concrete planned upgrade for the native app
+// phase). Only counts deltas between consecutive points that BOTH have
+// a trusted altitude reading - a gap where altitude was rejected for
+// one point doesn't propagate a bad delta on either side of it. A
+// minimum per-step threshold filters raw GPS altitude jitter (which
+// fluctuates meaningfully even standing still) from being counted as
+// real elevation change. Returns null (not 0) when there's insufficient
+// altitude data to compute anything meaningful - "no data" and "flat
+// route" are genuinely different and shouldn't look the same.
+const MIN_ELEVATION_DELTA_METERS = 1;
+
+const computeElevationGainMeters = (route: { lat: number; lng: number; altitude?: number }[] | null | undefined): number | null => {
+  if (!route || route.length < 2) return null;
+  const withAltitude = route.filter((p) => typeof p.altitude === "number");
+  if (withAltitude.length < 2) return null;
+
+  let gain = 0;
+  for (let i = 1; i < withAltitude.length; i++) {
+    const delta = withAltitude[i].altitude! - withAltitude[i - 1].altitude!;
+    if (delta > MIN_ELEVATION_DELTA_METERS) gain += delta;
+  }
+  return Math.round(gain);
+};
+
 // Court/field illustrations for basketball, soccer, and padel - used in
 // place of a real GPS route map for these court-confined sports, where a
 // real map has nothing meaningful to show. Proportions are drawn from real
@@ -17005,6 +17038,12 @@ const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel" 
 // sky is typically 5-15m - so this only discards fixes that are genuinely
 // unreliable, not merely imperfect.
 const GPS_ACCURACY_REJECT_METERS = 50;
+// Browsers commonly report altitude with much worse confidence than
+// horizontal position - phone GPS chips are inherently weaker at
+// vertical accuracy than horizontal. A fix whose altitudeAccuracy
+// exceeds this is treated as having NO altitude for that point (lat/lng
+// still captured normally) rather than trusting a likely-garbage value.
+const GPS_ALTITUDE_ACCURACY_REJECT_METERS = 25;
 
 // A GPS fix implying faster than this is almost certainly a bad reading
 // (satellite jump, urban canyon reflection) rather than real movement -
@@ -17395,7 +17434,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
 
   const watchIdRef = React.useRef<number | null>(null);
   const timerIntervalRef = React.useRef<any>(null);
-  const routeRef = React.useRef<{ lat: number; lng: number; timestamp: number }[]>([]);
+  const routeRef = React.useRef<{ lat: number; lng: number; timestamp: number; altitude?: number }[]>([]);
   // courtType hoisted here (not just inside the "finished" block below)
   // so this hook can be called unconditionally at the top level, as
   // required - this component has several conditional early returns
@@ -17438,7 +17477,15 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   const pauseStartedAtRef = React.useRef<number | null>(null);
 
   const handlePosition = (pos: GeolocationPosition) => {
-    const { latitude, longitude, accuracy } = pos.coords;
+    const { latitude, longitude, accuracy, altitude, altitudeAccuracy } = pos.coords;
+    // Real, honest elevation feature: phone GPS altitude is inherently
+    // less reliable than horizontal position, so a fix is only trusted
+    // for altitude when the device itself reports reasonable confidence
+    // in it - many fixes will simply have no usable altitude, and that's
+    // treated as "no data for this point," not zero.
+    const validAltitude = (typeof altitude === "number" && typeof altitudeAccuracy === "number" && altitudeAccuracy <= GPS_ALTITUDE_ACCURACY_REJECT_METERS)
+      ? altitude
+      : undefined;
     const now = pos.timestamp;
 
     // Reject a low-confidence fix outright, before it ever reaches the
@@ -17525,7 +17572,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     }
 
     if (pointIsPlausible) {
-      routeRef.current.push({ lat: latitude, lng: longitude, timestamp: now });
+      routeRef.current.push({ lat: latitude, lng: longitude, timestamp: now, altitude: validAltitude });
       lastAcceptedPointRef.current = { lat: latitude, lng: longitude, timestamp: now };
     }
   };
