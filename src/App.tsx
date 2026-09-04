@@ -11533,6 +11533,13 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
     (linkedCardioSession && !cardioCourtType) ? linkedCardioSession.route : null,
     640, 360, COLORS.accent
   );
+  const cardioOutlineSnapshotUrl = useRouteMapSnapshot(
+    (linkedCardioSession && !cardioCourtType) ? linkedCardioSession.route : null,
+    640, 360, COLORS.accent, true
+  );
+  const cardioLocationLabel = (linkedCardioSession && !cardioCourtType)
+    ? getRouteLocationLabel(linkedCardioSession.route)
+    : null;
   const cardioMapUrl = linkedCardioSession
     ? (cardioCourtType
         ? buildCourtIllustrationUrl(cardioCourtType, COLORS.accent)
@@ -11651,6 +11658,14 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
           title={dayTitle || "Workout"}
           subtitle={new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
           stats={shareStats}
+          // Real gap found tonight: the linked-cardio map was computed
+          // (cardioMapUrl) but never actually passed anywhere - a
+          // combined lift+cardio day's exported card told the whole
+          // day's story in its STATS (already handled above) but never
+          // showed the actual route, even though it existed.
+          mapUrl={cardioMapUrl}
+          outlineMapUrl={cardioOutlineSnapshotUrl}
+          locationLabel={cardioLocationLabel}
           onClose={() => setShowShareCard(false)}
         />
       )}
@@ -11659,6 +11674,9 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
         <StickerShareScreen
           title={dayTitle || "Workout"}
           stats={shareStats}
+          mapUrl={cardioMapUrl}
+          outlineMapUrl={cardioOutlineSnapshotUrl}
+          locationLabel={cardioLocationLabel}
           onClose={() => setShowStickerMode(false)}
         />
       )}
@@ -15010,6 +15028,11 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
   // null passed for court sports, which the hook already treats as "no
   // route, return null" internally.
   const routeSnapshotUrl = useRouteMapSnapshot(courtType ? null : session.route, 640, 360, COLORS.accent);
+  // Transparent route-outline variant for the Satellite/Outline toggle -
+  // only meaningful for a real GPS route, not court sports (which have
+  // no route data at all, so this hook receives null and returns null).
+  const outlineSnapshotUrl = useRouteMapSnapshot(courtType ? null : session.route, 640, 360, COLORS.accent, true);
+  const locationLabel = courtType ? null : getRouteLocationLabel(session.route);
   const mapUrl = courtType
     ? buildCourtIllustrationUrl(courtType, COLORS.accent)
     : routeSnapshotUrl;
@@ -15162,6 +15185,8 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
           icon={meta?.icon}
           iconImage={meta?.iconImage}
           mapUrl={mapUrl}
+          outlineMapUrl={outlineSnapshotUrl}
+          locationLabel={locationLabel}
           stats={stats}
           onClose={() => setShowShareCard(false)}
         />
@@ -15172,6 +15197,8 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
           icon={meta?.icon}
           iconImage={meta?.iconImage}
           mapUrl={mapUrl}
+          outlineMapUrl={outlineSnapshotUrl}
+          locationLabel={locationLabel}
           stats={stats}
           onClose={() => setShowStickerMode(false)}
         />
@@ -17346,6 +17373,13 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     (status === "finished" && !courtTypeForFinish) ? routeRef.current : null,
     640, 360, COLORS.accent
   );
+  const finishOutlineSnapshotUrl = useRouteMapSnapshot(
+    (status === "finished" && !courtTypeForFinish) ? routeRef.current : null,
+    640, 360, COLORS.accent, true
+  );
+  const finishLocationLabel = (status === "finished" && !courtTypeForFinish)
+    ? getRouteLocationLabel(routeRef.current)
+    : null;
   const lastAcceptedPointRef = React.useRef<{ lat: number; lng: number; timestamp: number } | null>(null);
   const belowThresholdSinceRef = React.useRef<number | null>(null);
   // The position where a potential stop began. Real displacement from this
@@ -18067,6 +18101,8 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             icon={activityMeta?.icon}
             iconImage={activityMeta?.iconImage}
             mapUrl={mapUrl}
+            outlineMapUrl={finishOutlineSnapshotUrl}
+            locationLabel={finishLocationLabel}
             stats={[
               distanceMeters > 0
                 ? { label: "Distance", value: `${(distanceMeters / 1000).toFixed(2)} km`, isPR: sessionPRs.distance }
@@ -18086,6 +18122,8 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             icon={activityMeta?.icon}
             iconImage={activityMeta?.iconImage}
             mapUrl={mapUrl}
+            outlineMapUrl={finishOutlineSnapshotUrl}
+            locationLabel={finishLocationLabel}
             stats={[
               distanceMeters > 0
                 ? { label: "Distance", value: `${(distanceMeters / 1000).toFixed(2)} km`, isPR: sessionPRs.distance }
