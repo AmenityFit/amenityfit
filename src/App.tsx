@@ -15085,10 +15085,15 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
     }
   }
 
-  const stats: { label: string; value: string }[] = [];
-  if (hasDistance) stats.push({ label: "Distance", value: `${(session.distanceMeters / 1000).toFixed(2)} km` });
-  stats.push({ label: "Time", value: formatTime(session.durationSeconds || 0) });
-  if (paceLabel) stats.push({ label: "Pace", value: paceLabel });
+  // Real gap found tonight: PR status computed at completion time was
+  // never persisted onto the saved session, so revisiting it later from
+  // History showed no PR badge at all even when it genuinely was one.
+  // session.isPR is written once, at save time (see finishActivity) -
+  // reading it back here is what makes the badge persist correctly.
+  const stats: { label: string; value: string; isPR?: boolean }[] = [];
+  if (hasDistance) stats.push({ label: "Distance", value: `${(session.distanceMeters / 1000).toFixed(2)} km`, isPR: !!session.isPR?.distance });
+  stats.push({ label: "Time", value: formatTime(session.durationSeconds || 0), isPR: !!session.isPR?.duration });
+  if (paceLabel) stats.push({ label: "Pace", value: paceLabel, isPR: !!session.isPR?.pace });
   if (session.calories) stats.push({ label: "Calories", value: `~${session.calories}` });
   // Only shown when there's real, trusted altitude data to compute from -
   // null (insufficient data) is deliberately different from a genuine 0m
@@ -15161,8 +15166,8 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
 
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${stats.length}, 1fr)`, gap: 10, margin: "20px 24px 0" }}>
         {stats.map((s) => (
-          <div key={s.label} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 8px", textAlign: "center" }}>
-            <p style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>{s.label}</p>
+          <div key={s.label} style={{ background: s.isPR ? `${COLORS.accent}18` : COLORS.card, border: s.isPR ? `1px solid ${COLORS.accent}60` : `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 8px", textAlign: "center" }}>
+            <p style={{ color: s.isPR ? COLORS.accent : COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>{s.isPR ? "PR" : s.label}</p>
             <p style={{ color: COLORS.white, fontSize: 18, fontWeight: 900, margin: 0 }}>{s.value}</p>
           </div>
         ))}
@@ -17851,6 +17856,20 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         avgPaceSecondsPerKm: avgPace,
       });
       setSessionPRs(prs);
+      // Real gap found tonight: PR status was computed but only ever
+      // held in React state (sessionPRs) for the completion screen's
+      // one-time celebration - nothing persisted it onto the saved
+      // document, so reopening this exact session later from History
+      // showed no PR badge at all, even though it genuinely was one.
+      // Only written when at least one PR was actually hit, to avoid a
+      // no-op write on every ordinary session.
+      if ((prs.distance || prs.pace || prs.duration) && savedId) {
+        try {
+          await setDoc(doc(db, "workoutSessions", savedId), { isPR: prs }, { merge: true });
+        } catch (e) {
+          console.error("Failed to persist PR status onto session:", e);
+        }
+      }
 
       // Real activity-count milestone check, deliberately scoped to fixed
       // activity types only (not "Other" custom names yet - that would
