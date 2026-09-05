@@ -15214,7 +15214,12 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${stats.length}, 1fr)`, gap: 10, margin: "20px 24px 0" }}>
+      {/* Real UI bug found via real-device testing: a fixed column-per-stat
+          grid worked fine at 4 stats, but a 5th (Elevation Gain) simply
+          overflowed off the right edge of the screen with no way to see
+          it - there was no wrapping at all. A fixed 3-column grid lets
+          any additional stats wrap naturally to a new row instead. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, margin: "20px 24px 0" }}>
         {stats.map((s) => (
           <div key={s.label} style={{ background: s.isPR ? `${COLORS.accent}18` : COLORS.card, border: s.isPR ? `1px solid ${COLORS.accent}60` : `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 8px", textAlign: "center" }}>
             <p style={{ color: s.isPR ? COLORS.accent : COLORS.textSecondary, fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 6px" }}>{s.isPR ? "PR" : s.label}</p>
