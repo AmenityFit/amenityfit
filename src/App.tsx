@@ -11592,20 +11592,24 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
   const cardioDisplayName = linkedCardioSession?.customActivityName || cardioMeta?.label || linkedCardioSession?.type;
   const cardioMinutes = linkedCardioSession ? Math.round((linkedCardioSession.durationSeconds || 0) / 60) : 0;
 
-  const shareStats = [
+  // Split by half specifically for the "Full Combined" sticker/share
+  // layout, which shows strength and cardio clearly side by side rather
+  // than as one undifferentiated list - AmenityFit's own real
+  // differentiator on a combined day. shareStats below stays the same
+  // flat, combined array the other layouts (Classic/Minimal/Route
+  // Focus) already expect, unchanged.
+  const liftingStats = [
     { label: "Sets Done", value: String(totalSets) },
     { label: "Time", value: `${mins}m ${secs}s` },
     ...prExercises.map((p) => ({ label: p.name, value: `${p.weight} lbs`, isPR: true })),
     ...(sessionRpe !== null ? [{ label: "RPE", value: `${sessionRpe}/10` }] : []),
-    // Appended only when a real linked cardio session exists, so the
-    // exported sticker/share card tells the whole day's story in one
-    // image rather than only the lifting half.
-    ...(linkedCardioSession ? [
-      ...(cardioHasDistance ? [{ label: `${cardioDisplayName} Distance`, value: `${(linkedCardioSession.distanceMeters / 1000).toFixed(2)} km` }] : []),
-      { label: `${cardioDisplayName} Time`, value: `${cardioMinutes} min` },
-      ...(cardioPaceLabel ? [{ label: `${cardioDisplayName} Pace`, value: cardioPaceLabel }] : []),
-    ] : []),
   ];
+  const cardioStatsForShare = linkedCardioSession ? [
+    ...(cardioHasDistance ? [{ label: `${cardioDisplayName} Distance`, value: `${(linkedCardioSession.distanceMeters / 1000).toFixed(2)} km` }] : []),
+    { label: `${cardioDisplayName} Time`, value: `${cardioMinutes} min` },
+    ...(cardioPaceLabel ? [{ label: `${cardioDisplayName} Pace`, value: cardioPaceLabel }] : []),
+  ] : [];
+  const shareStats = [...liftingStats, ...cardioStatsForShare];
 
   return (
     <div style={{ minHeight: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 32px", textAlign: "center" }}>
@@ -11707,6 +11711,8 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
           mapUrl={cardioMapUrl}
           outlineMapUrl={cardioOutlineSnapshotUrl}
           locationLabel={cardioLocationLabel}
+          liftingStats={liftingStats}
+          cardioStats={cardioStatsForShare}
           onClose={() => setShowShareCard(false)}
         />
       )}
@@ -11718,6 +11724,8 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
           mapUrl={cardioMapUrl}
           outlineMapUrl={cardioOutlineSnapshotUrl}
           locationLabel={cardioLocationLabel}
+          liftingStats={liftingStats}
+          cardioStats={cardioStatsForShare}
           onClose={() => setShowStickerMode(false)}
         />
       )}
