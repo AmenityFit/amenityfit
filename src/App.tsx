@@ -16067,9 +16067,19 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
 
         {/* ── Workout History Section ── */}
         {(() => {
-          const sessionsCompleted = profile?.sessionsCompleted || 0;
-
-          if (sessionsCompleted === 0) return null;
+          // Real bug found via real-device testing: this was gated on
+          // profile.sessionsCompleted, which only counts LIFTING sessions
+          // (incremented by the lifting completion flow specifically) -
+          // a cardio-only session (a walk, a run) never touches that
+          // field. Active Weeks sits right above this and correctly
+          // counts lifting AND cardio together, which meant someone
+          // could see a real cardio session reflected there while this
+          // entire section stayed permanently blank underneath it - not
+          // a glitch, the gate itself was simply checking the wrong
+          // count. sessionHistory.length is the real fetched list,
+          // which already includes every session type.
+          if (sessionHistory.length === 0) return null;
+          const sessionsCompleted = sessionHistory.length;
 
          // ── History List View ──
           const PREVIEW_COUNT = 3;
