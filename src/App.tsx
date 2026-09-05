@@ -11583,7 +11583,7 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
     : null;
   const cardioMapUrl = linkedCardioSession
     ? (cardioCourtType
-        ? buildCourtIllustrationUrl(cardioCourtType, COLORS.accent)
+        ? buildCourtIllustrationUrl(cardioCourtType, ROUTE_LINE_COLOR)
         : cardioRouteSnapshotUrl)
     : null;
   const cardioPaceLabel = cardioHasDistance && linkedCardioSession?.avgPaceSecondsPerKm
@@ -15069,7 +15069,7 @@ const InteractiveRouteMap = ({
           // applied to real tracked segments.
           map.addLayer({
             id: "route-outline", type: "line", source: "route-line",
-            paint: { "line-color": "#000000", "line-width": 11, "line-opacity": 0.8 },
+            paint: { "line-color": "#000000", "line-width": 9, "line-opacity": 0.8 },
             layout: { "line-cap": "round", "line-join": "round" },
           });
           map.addLayer({
@@ -15195,7 +15195,7 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
   const outlineSnapshotUrl = useRouteMapSnapshot(courtType ? null : session.route, 640, 360, undefined, true);
   const locationLabel = courtType ? null : getRouteLocationLabel(session.route);
   const mapUrl = courtType
-    ? buildCourtIllustrationUrl(courtType, COLORS.accent)
+    ? buildCourtIllustrationUrl(courtType, ROUTE_LINE_COLOR)
     : routeSnapshotUrl;
   const paceLabel = hasDistance && session.avgPaceSecondsPerKm
     ? `${Math.floor(session.avgPaceSecondsPerKm / 60)}:${String(Math.round(session.avgPaceSecondsPerKm % 60)).padStart(2, "0")}/km`
@@ -16982,7 +16982,7 @@ const buildRouteFallbackSvgUrl = (
   const bg = transparent ? "" : `<rect x="0" y="0" width="${width}" height="${height}" fill="${COLORS.card}"/>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
     ${bg}
-    <polyline points="${points}" fill="none" stroke="#000000" stroke-opacity="0.8" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="${points}" fill="none" stroke="#000000" stroke-opacity="0.8" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
     <polyline points="${points}" fill="none" stroke="${strokeColor}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
@@ -17103,7 +17103,7 @@ const useRouteMapSnapshot = (
           });
           map.addLayer({
             id: "route-outline", type: "line", source: "route-line",
-            paint: { "line-color": "#000000", "line-width": 11, "line-opacity": 0.8 },
+            paint: { "line-color": "#000000", "line-width": 9, "line-opacity": 0.8 },
             layout: { "line-cap": "round", "line-join": "round" },
           });
           map.addLayer({
@@ -18363,7 +18363,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // route map when there's a real route to show.
   if (status === "finished") {
     const courtType = courtTypeForFinish;
-    const mapUrl = courtType ? buildCourtIllustrationUrl(courtType, COLORS.accent) : finishRouteSnapshotUrl;
+    const mapUrl = courtType ? buildCourtIllustrationUrl(courtType, ROUTE_LINE_COLOR) : finishRouteSnapshotUrl;
     const activityMeta = ACTIVITY_TYPES.find((a) => a.key === activityType);
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
