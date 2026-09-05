@@ -2090,12 +2090,7 @@ const FeatureCard = ({ icon: Icon, title, desc }) => (
 );
 
 const WelcomeScreen = ({ onGetStarted, onLogin, onManagerLogin }) => (
-  // Temporary: overflow changed from "hidden" to "auto" so this is
-  // reachable/scrollable on a desktop browser viewport (short and wide),
-  // where fixed-height content designed for a phone screen can clip
-  // below the fold with no way to reach it. Real phones are unaffected -
-  // this only engages when content genuinely doesn't fit the viewport.
-  <div style={{ minHeight: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+  <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "hidden" }}>
     <div style={{ background: `linear-gradient(180deg, ${COLORS.primary}25 0%, ${COLORS.background} 65%)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "calc(72px + env(safe-area-inset-top, 0px)) 0 24px" }}>
       <div style={{ marginBottom: 18, boxShadow: `0 12px 40px ${COLORS.primary}50`, width: 82, height: 82, borderRadius: 18, overflow: "hidden" }}>
         <img src="https://res.cloudinary.com/dk5g9itw8/image/upload/Logo_rkq0cv" alt="AmenityFit" style={{ width: "120%", height: "120%", display: "block", objectFit: "cover", marginLeft: "-10%", marginTop: "-10%" }} />
@@ -19054,7 +19049,21 @@ const ShareableStatCard = ({
     setSharing(false);
   };
 
-  return (
+  // Real fix for a genuine bug found via real-device testing: this is
+  // the only sticker/share entry point that gets triggered from INSIDE
+  // an actively scrolling container (ProgressScreen's own scrollable
+  // content area, via ActiveWeeksCard) rather than from within another
+  // already-fixed-position screen. Real WebKit (Safari, and this app's
+  // WKWebView-based wrapper) has a well-documented quirk where a
+  // position:fixed element can get trapped inside its nearest scrolling
+  // ancestor instead of truly covering the full viewport - Chrome/Blink
+  // (including its desktop device-emulation mode) doesn't share this
+  // quirk, which is exactly why this only ever showed up on real
+  // mobile/wrapped-app testing, never on desktop. A React Portal renders
+  // this component's DOM directly under <body>, completely outside
+  // wherever it was logically triggered from, sidestepping the issue
+  // entirely regardless of which scrolling container called it.
+  return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", padding: "72px 24px 24px", overflowY: "auto" }}>
       <button onClick={onClose} style={{ position: "absolute", top: "calc(56px + env(safe-area-inset-top, 0px))", right: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer", zIndex: 10 }}>×</button>
 
@@ -19153,7 +19162,8 @@ const ShareableStatCard = ({
           {sharing ? "Preparing..." : "Share"}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -19167,7 +19177,26 @@ const ShareableStatCard = ({
 // pixels behind the sticker's current position and switches the panel's
 // light/dark treatment automatically. A single tap still overrides it for
 // the rare case the auto-read guesses wrong, without a full color picker.
-const StickerShareScreen = ({
+// Real fix for a genuine bug found via real-device testing: the Active
+// Weeks card's Sticker button is the only sticker/share entry point
+// triggered from INSIDE an actively scrolling container (ProgressScreen's
+// own scrollable content area) rather than from within another already-
+// fixed-position screen. Real WebKit (Safari, and this app's WKWebView-
+// based wrapper) has a well-documented quirk where a position:fixed
+// element can get trapped inside its nearest scrolling ancestor instead
+// of truly covering the full viewport - Chrome/Blink (including its
+// desktop device-emulation mode) doesn't share this quirk, which is
+// exactly why this only ever showed up on real mobile/wrapped-app
+// testing, never on desktop. Rather than editing each of this
+// component's several internal return statements individually (choose/
+// sticker-only/overlay modes, each a real risk of a mismatched edit),
+// the whole component is renamed to an inner implementation and wrapped
+// once here in a thin outer component that portals it to <body> -
+// zero changes needed to any of the complex internal JSX.
+const StickerShareScreen = (props: React.ComponentProps<typeof StickerShareScreenInner>) =>
+  createPortal(<StickerShareScreenInner {...props} />, document.body);
+
+const StickerShareScreenInner = ({
   title,
   stats,
   icon: Icon,
