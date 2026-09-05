@@ -19071,6 +19071,8 @@ const ShareableStatCard = ({
   icon: Icon,
   iconImage,
   onClose,
+  liftingStats,
+  cardioStats,
 }: {
   title: string;
   subtitle: string;
@@ -19090,12 +19092,27 @@ const ShareableStatCard = ({
   icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   iconImage?: string;
   onClose: () => void;
+  // Only ever passed by a combined lift+cardio day (SessionCompleteScreen
+  // specifically) - the same underlying data as `stats`, but split by
+  // half, so the "Full Combined" layout can show each side clearly
+  // labeled rather than as one undifferentiated list. undefined for
+  // every solo-cardio or solo-lifting share, which correctly hides the
+  // "Full Combined" option entirely - there's nothing combined to show.
+  liftingStats?: { label: string; value: string; isPR?: boolean }[];
+  cardioStats?: { label: string; value: string; isPR?: boolean }[];
 }) => {
   const cardRef = React.useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const [useOutlineMap, setUseOutlineMap] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
+  // Real, selectable layout options (matching Strava's own model of
+  // offering several distinct sticker designs, not one fixed template).
+  // "Full Combined" only ever appears as a choice when real lift+cardio
+  // data both exist - never shown, and never the default, for a normal
+  // solo-cardio or solo-lifting share.
+  const [layoutStyle, setLayoutStyle] = useState<"classic" | "minimal" | "route-focus" | "full-combined">("classic");
+  const hasCombinedData = !!(liftingStats?.length && cardioStats?.length);
   const displayMapUrl = (useOutlineMap && outlineMapUrl) ? outlineMapUrl : mapUrl;
   // Location is appended as a real extra stat, not a separate UI
   // element - so it participates in the exact same grid layout, sizing,
@@ -19162,6 +19179,25 @@ const ShareableStatCard = ({
     <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", padding: "72px 24px 24px", overflowY: "auto" }}>
       <button onClick={onClose} style={{ position: "absolute", top: "calc(56px + env(safe-area-inset-top, 0px))", right: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer", zIndex: 10 }}>×</button>
 
+      {/* Real, selectable sticker layouts - matching Strava's own model
+          of offering several distinct designs rather than one fixed
+          template. "Full Combined" only appears when there's genuine
+          lift+cardio data to show together - AmenityFit's own real
+          differentiator, not something Strava can offer at all. */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", justifyContent: "center", maxWidth: 340 }}>
+        {(["classic", "minimal", "route-focus"] as const).map((l) => (
+          <button key={l} onClick={() => setLayoutStyle(l)} style={{ padding: "7px 14px", borderRadius: 20, border: "none", background: layoutStyle === l ? COLORS.white : COLORS.card, color: layoutStyle === l ? "#0A0A0A" : COLORS.textSecondary, fontSize: 12, fontWeight: 700, cursor: "pointer", textTransform: "capitalize" }}>
+            {l === "route-focus" ? "Route Focus" : l}
+          </button>
+        ))}
+        {hasCombinedData && (
+          <button onClick={() => setLayoutStyle("full-combined")} style={{ padding: "7px 14px", borderRadius: 20, border: "none", background: layoutStyle === "full-combined" ? COLORS.white : COLORS.card, color: layoutStyle === "full-combined" ? "#0A0A0A" : COLORS.textSecondary, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            Full Combined
+          </button>
+        )}
+      </div>
+
+      {layoutStyle === "classic" && (
       <div
         ref={cardRef}
         style={{
@@ -19250,6 +19286,98 @@ const ShareableStatCard = ({
           <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 900, letterSpacing: 0.8 }}>AMENITYFIT</span>
         </div>
       </div>
+      )}
+
+      {layoutStyle === "minimal" && (
+        <div ref={cardRef} style={{ width: 340, borderRadius: 28, overflow: "hidden", position: "relative", background: `linear-gradient(160deg, ${COLORS.background} 0%, ${COLORS.card} 100%)`, border: `1px solid ${COLORS.border}`, boxShadow: `0 20px 60px rgba(0,0,0,0.5)`, fontFamily: "'Inter', sans-serif", padding: "48px 24px 28px", textAlign: "center" }}>
+          {(Icon || iconImage) && (
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: `${COLORS.white}10`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              {iconImage ? <img src={iconImage} alt="" style={{ width: 26, height: 26, objectFit: "contain" }} /> : Icon && <Icon size={26} color={COLORS.white} strokeWidth={2} />}
+            </div>
+          )}
+          {effectiveStats.length > 0 && (
+            <>
+              {effectiveStats[0].isPR && (
+                <span style={{ display: "inline-block", background: COLORS.accent, color: "#0A0A0A", fontSize: 10, fontWeight: 900, letterSpacing: 0.8, padding: "3px 8px", borderRadius: 20, marginBottom: 10 }}>NEW PR</span>
+              )}
+              <h1 style={{ color: COLORS.white, fontSize: 72, fontWeight: 900, margin: 0, lineHeight: 1, letterSpacing: -2, textShadow: effectiveStats[0].isPR ? `0 0 60px ${COLORS.accent}90` : `0 0 50px ${COLORS.primary}60` }}>{effectiveStats[0].value}</h1>
+              <p style={{ color: COLORS.accent, fontSize: 14, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", margin: "12px 0 0" }}>{effectiveStats[0].label}</p>
+            </>
+          )}
+          <p style={{ color: COLORS.textSecondary, fontSize: 13, fontWeight: 700, margin: "20px 0 0", textTransform: "capitalize" }}>{title}</p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 24, paddingTop: 20, borderTop: `1px solid ${COLORS.border}` }}>
+            <img src={amenityfitLogo} alt="" style={{ width: 16, height: 16, borderRadius: 5, objectFit: "contain" }} />
+            <span style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 800, letterSpacing: 0.8 }}>AMENITYFIT</span>
+          </div>
+        </div>
+      )}
+
+      {layoutStyle === "route-focus" && (
+        <div ref={cardRef} style={{ width: 340, borderRadius: 28, overflow: "hidden", position: "relative", background: `linear-gradient(160deg, ${COLORS.background} 0%, ${COLORS.card} 100%)`, border: `1px solid ${COLORS.border}`, boxShadow: `0 20px 60px rgba(0,0,0,0.5)`, fontFamily: "'Inter', sans-serif" }}>
+          {displayMapUrl ? (
+            <div style={{ position: "relative" }}>
+              <img src={displayMapUrl} alt="" style={{ width: "100%", height: 300, objectFit: "cover", display: "block" }} crossOrigin="anonymous" />
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.75) 100%)" }} />
+              <div style={{ position: "absolute", bottom: 16, left: 20, right: 20 }}>
+                <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 800, margin: "0 0 2px", textTransform: "capitalize", textShadow: "0 2px 8px rgba(0,0,0,0.6)" }}>{title}</p>
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: "32px 24px 8px", textAlign: "center" }}>
+              <p style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: 0, textTransform: "capitalize" }}>{title}</p>
+            </div>
+          )}
+          <div style={{ display: "flex", padding: "18px 20px" }}>
+            {effectiveStats.slice(0, 3).map((s, i) => (
+              <div key={i} style={{ flex: 1, textAlign: "center", borderLeft: i > 0 ? `1px solid ${COLORS.border}` : "none" }}>
+                <p style={{ color: s.isPR ? COLORS.accent : COLORS.white, fontSize: 20, fontWeight: 900, margin: 0 }}>{s.value}</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", margin: "2px 0 0" }}>{s.isPR ? "PR" : s.label}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 24px 20px" }}>
+            <img src={amenityfitLogo} alt="" style={{ width: 16, height: 16, borderRadius: 5, objectFit: "contain" }} />
+            <span style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 800, letterSpacing: 0.8 }}>AMENITYFIT</span>
+          </div>
+        </div>
+      )}
+
+      {layoutStyle === "full-combined" && hasCombinedData && (
+        <div ref={cardRef} style={{ width: 340, borderRadius: 28, overflow: "hidden", position: "relative", background: `linear-gradient(160deg, ${COLORS.background} 0%, ${COLORS.card} 100%)`, border: `1px solid ${COLORS.border}`, boxShadow: `0 20px 60px rgba(0,0,0,0.5)`, fontFamily: "'Inter', sans-serif", padding: "28px 22px 20px" }}>
+          <p style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: "0 0 20px", textAlign: "center", textTransform: "capitalize" }}>{title}</p>
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ color: COLORS.accent, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 10px" }}>Strength</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+              {(liftingStats || []).map((s, i) => (
+                <div key={i} style={{ background: s.isPR ? `${COLORS.accent}18` : `${COLORS.white}08`, border: s.isPR ? `1px solid ${COLORS.accent}60` : "none", borderRadius: 12, padding: "10px 6px", textAlign: "center" }}>
+                  <p style={{ color: s.isPR ? COLORS.accent : COLORS.textSecondary, fontSize: 8, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", margin: "0 0 3px" }}>{s.isPR ? "PR" : s.label}</p>
+                  <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 800, margin: 0 }}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p style={{ color: ROUTE_LINE_COLOR, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 10px" }}>Cardio</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+              {(cardioStats || []).map((s, i) => (
+                <div key={i} style={{ background: s.isPR ? `${COLORS.accent}18` : `${COLORS.white}08`, border: s.isPR ? `1px solid ${COLORS.accent}60` : "none", borderRadius: 12, padding: "10px 6px", textAlign: "center" }}>
+                  <p style={{ color: s.isPR ? COLORS.accent : COLORS.textSecondary, fontSize: 8, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", margin: "0 0 3px" }}>{s.isPR ? "PR" : s.label}</p>
+                  <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 800, margin: 0 }}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          {displayMapUrl && (
+            <div style={{ margin: "16px 0 0", borderRadius: 14, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
+              <img src={displayMapUrl} alt="" style={{ width: "100%", display: "block" }} crossOrigin="anonymous" />
+            </div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 18, paddingTop: 16, borderTop: `1px solid ${COLORS.border}` }}>
+            <img src={amenityfitLogo} alt="" style={{ width: 16, height: 16, borderRadius: 5, objectFit: "contain" }} />
+            <span style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 800, letterSpacing: 0.8 }}>AMENITYFIT</span>
+          </div>
+        </div>
+      )}
 
       <div style={{ width: 340, marginTop: 20 }}>
         {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: "0 0 12px" }}>{shareError}</p>}
