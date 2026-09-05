@@ -16969,11 +16969,35 @@ const useRouteMapSnapshot = (
 // request of any kind) - works identically on a fast connection or a
 // slow one, and never sends anyone's real coordinates to any
 // third-party service the way a live geocoding API would.
-const getRouteLocationLabel = (route: { lat: number; lng: number }[] | null | undefined): string | null => {
-  if (!route || route.length === 0) return null;
+// Real bug found via real-device testing: a session reported a city
+// roughly 25 miles from where the person actually was. Root cause - the
+// very FIRST GPS fix in a tracking session often comes from fast WiFi/
+// cell-tower triangulation, before real satellite GPS lock kicks in, and
+// can report a falsely confident (small) accuracy value while still
+// being geographically wrong by miles. The original version always used
+// route[0] - literally the first point - which is exactly the point
+// most likely to have this problem.
+//
+// Real fix: require genuine multi-point movement (route.length >= 2,
+// not just one isolated fix - real movement across consistent points is
+// a much stronger correctness signal than any single fix's self-reported
+// number) AND pick whichever point has the BEST reported accuracy across
+// the whole route, gated by a threshold far stricter than the general
+// route-acceptance filter (20m here vs. 50m for GPS_ACCURACY_REJECT_METERS
+// generally - location naming needs real confidence, not just "good
+// enough to draw a line on a map"). If no point clears both bars, this
+// returns null and the Location stat simply doesn't appear - the same
+// "never show a confident-looking but possibly wrong number" principle
+// already used for pace/distance on very short sessions.
+const LOCATION_ACCURACY_REQUIRED_METERS = 20;
+
+const getRouteLocationLabel = (route: { lat: number; lng: number; accuracy?: number }[] | null | undefined): string | null => {
+  if (!route || route.length < 2) return null;
   try {
-    const start = route[0];
-    const result = getNearestCity(start.lat, start.lng);
+    const withAccuracy = route.filter((p) => typeof p.accuracy === "number" && p.accuracy! <= LOCATION_ACCURACY_REQUIRED_METERS);
+    if (withAccuracy.length === 0) return null;
+    const best = withAccuracy.reduce((a, b) => (a.accuracy! <= b.accuracy! ? a : b));
+    const result = getNearestCity(best.lat, best.lng);
     if (!result?.cityName) return null;
     return `${result.cityName}, ${result.countryName}`;
   } catch (e) {
@@ -17568,7 +17592,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
 
   const watchIdRef = React.useRef<number | null>(null);
   const timerIntervalRef = React.useRef<any>(null);
-  const routeRef = React.useRef<{ lat: number; lng: number; timestamp: number; altitude?: number }[]>([]);
+  const routeRef = React.useRef<{ lat: number; lng: number; timestamp: number; altitude?: number; accuracy?: number }[]>([]);
   // courtType hoisted here (not just inside the "finished" block below)
   // so this hook can be called unconditionally at the top level, as
   // required - this component has several conditional early returns
@@ -17706,7 +17730,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     }
 
     if (pointIsPlausible) {
-      routeRef.current.push({ lat: latitude, lng: longitude, timestamp: now, altitude: validAltitude });
+      routeRef.current.push({ lat: latitude, lng: longitude, timestamp: now, altitude: validAltitude, accuracy: typeof accuracy === "number" ? accuracy : undefined });
       lastAcceptedPointRef.current = { lat: latitude, lng: longitude, timestamp: now };
     }
   };
