@@ -19428,6 +19428,8 @@ const StickerShareScreenInner = ({
   mapUrl,
   outlineMapUrl,
   locationLabel,
+  liftingStats,
+  cardioStats,
 }: {
   title: string;
   stats: { label: string; value: string; isPR?: boolean }[];
@@ -19441,6 +19443,10 @@ const StickerShareScreenInner = ({
   outlineMapUrl?: string | null;
   // Opt-in city/country label - never shown by default.
   locationLabel?: string | null;
+  // Same combined-day data ShareableStatCard accepts - see its own
+  // comment for the full explanation.
+  liftingStats?: { label: string; value: string; isPR?: boolean }[];
+  cardioStats?: { label: string; value: string; isPR?: boolean }[];
 }) => {
   // Density tier for the stat stack - 0 shows just the hero stat, 1 shows
   // everything. Shared across both sticker-only and photo-overlay modes so
@@ -19448,6 +19454,10 @@ const StickerShareScreenInner = ({
   const [overlayTier, setOverlayTier] = useState<0 | 1>(0);
   const [useOutlineMap, setUseOutlineMap] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
+  // Same selectable layouts as ShareableStatCard - see its own comment
+  // for the full explanation of why each option exists.
+  const [layoutStyle, setLayoutStyle] = useState<"classic" | "minimal" | "route-focus" | "full-combined">("classic");
+  const hasCombinedData = !!(liftingStats?.length && cardioStats?.length);
   const displayMapUrl = (useOutlineMap && outlineMapUrl) ? outlineMapUrl : mapUrl;
   const effectiveStats = (showLocation && locationLabel)
     ? [...stats, { label: "Location", value: locationLabel }]
@@ -19464,6 +19474,111 @@ const StickerShareScreenInner = ({
     const textShadowStyle = fontColor === "white"
       ? "0 2px 10px rgba(0,0,0,0.65), 0 1px 3px rgba(0,0,0,0.9)"
       : "0 2px 10px rgba(255,255,255,0.55), 0 1px 3px rgba(255,255,255,0.85)";
+    const logoRow = (
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+        <img src={amenityfitLogo} alt="" style={{ width: 12, height: 12, objectFit: "contain", filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />
+        <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 9, fontWeight: 900, letterSpacing: 0.6, opacity: 0.85 }}>AMENITYFIT</span>
+      </div>
+    );
+    const titleRow = (
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {iconImage
+          ? <img src={iconImage} alt="" style={{ width: 26, height: 26, objectFit: "contain", filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />
+          : Icon && <Icon size={26} color={textColor} strokeWidth={2.5} style={{ filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />}
+        <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 15, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>{title}</span>
+      </div>
+    );
+
+    // "Minimal" - just the one headline number, nothing else. Deliberately
+    // never shows the map even if one exists - the whole point is the
+    // single fastest, cleanest read.
+    if (layoutStyle === "minimal") {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
+          {titleRow}
+          {effectiveStats.length > 0 && (
+            <span style={{ color: effectiveStats[0].isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: 72, fontWeight: 900, lineHeight: 1, letterSpacing: -2 }}>{effectiveStats[0].value}</span>
+          )}
+          {logoRow}
+        </div>
+      );
+    }
+
+    // "Route Focus" - the map gets real visual dominance, stats shrink to
+    // a single compact supporting line underneath rather than competing
+    // with it for attention.
+    if (layoutStyle === "route-focus") {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
+          {routeMapUrl && (
+            <img
+              src={routeMapUrl}
+              alt=""
+              decoding="sync"
+              loading="eager"
+              crossOrigin="anonymous"
+              style={{ maxWidth: 300, maxHeight: 220, width: "auto", height: "auto", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
+            />
+          )}
+          {titleRow}
+          {effectiveStats.length > 0 && (
+            <div style={{ display: "flex", gap: 16 }}>
+              {effectiveStats.slice(0, 3).map((s, i) => (
+                <span key={i} style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: 20, fontWeight: 900, whiteSpace: "nowrap" }}>
+                  {s.value}<span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85, textTransform: "uppercase", marginLeft: 4 }}>{s.isPR ? "PR" : s.label}</span>
+                </span>
+              ))}
+            </div>
+          )}
+          {logoRow}
+        </div>
+      );
+    }
+
+    // "Full Combined" - AmenityFit's own real differentiator, not
+    // something Strava can offer at all: strength and cardio shown
+    // clearly side by side rather than as one undifferentiated list.
+    if (layoutStyle === "full-combined" && hasCombinedData) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
+          {titleRow}
+          <div>
+            <span style={{ color: COLORS.accent, textShadow: textShadowStyle, fontSize: 10, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase" }}>Strength</span>
+            <div style={{ display: "flex", gap: 14, marginTop: 4 }}>
+              {(liftingStats || []).map((s, i) => (
+                <span key={i} style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: 17, fontWeight: 900, whiteSpace: "nowrap" }}>
+                  {s.value}<span style={{ fontSize: 9, fontWeight: 700, opacity: 0.85, textTransform: "uppercase", marginLeft: 3 }}>{s.isPR ? "PR" : s.label}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+          <div>
+            <span style={{ color: ROUTE_LINE_COLOR, textShadow: textShadowStyle, fontSize: 10, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase" }}>Cardio</span>
+            <div style={{ display: "flex", gap: 14, marginTop: 4 }}>
+              {(cardioStats || []).map((s, i) => (
+                <span key={i} style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: 17, fontWeight: 900, whiteSpace: "nowrap" }}>
+                  {s.value}<span style={{ fontSize: 9, fontWeight: 700, opacity: 0.85, textTransform: "uppercase", marginLeft: 3 }}>{s.isPR ? "PR" : s.label}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+          {routeMapUrl && (
+            <img
+              src={routeMapUrl}
+              alt=""
+              decoding="sync"
+              loading="eager"
+              crossOrigin="anonymous"
+              style={{ maxWidth: 200, maxHeight: 130, width: "auto", height: "auto", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
+            />
+          )}
+          {logoRow}
+        </div>
+      );
+    }
+
+    // "Classic" - the original, unchanged design. Also the fallback if
+    // "Full Combined" was somehow selected without real combined data.
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
         {routeMapUrl && (
@@ -19476,22 +19591,14 @@ const StickerShareScreenInner = ({
             style={{ maxWidth: 240, maxHeight: 160, width: "auto", height: "auto", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
           />
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {iconImage
-            ? <img src={iconImage} alt="" style={{ width: 26, height: 26, objectFit: "contain", filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />
-            : Icon && <Icon size={26} color={textColor} strokeWidth={2.5} style={{ filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />}
-          <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 15, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>{title}</span>
-        </div>
+        {titleRow}
         {visibleStats.map((s, i) => (
           <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8, whiteSpace: "nowrap" }}>
             <span style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: i === 0 ? 58 : 28, fontWeight: 900, lineHeight: 1, letterSpacing: i === 0 ? -1.5 : -0.3, whiteSpace: "nowrap" }}>{s.value}</span>
             <span style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", opacity: 0.85, whiteSpace: "nowrap" }}>{s.isPR ? "PR" : s.label}</span>
           </div>
         ))}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-          <img src={amenityfitLogo} alt="" style={{ width: 12, height: 12, objectFit: "contain", filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />
-          <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 9, fontWeight: 900, letterSpacing: 0.6, opacity: 0.85 }}>AMENITYFIT</span>
-        </div>
+        {logoRow}
       </div>
     );
   };
@@ -19785,6 +19892,18 @@ const StickerShareScreenInner = ({
               }}>{m} text</button>
             ))}
           </div>
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
+            {(["classic", "minimal", "route-focus"] as const).map((l) => (
+              <button key={l} onClick={() => setLayoutStyle(l)} style={{ padding: "6px 12px", borderRadius: 20, border: "none", background: layoutStyle === l ? COLORS.white : "transparent", color: layoutStyle === l ? "#0A0A0A" : COLORS.textSecondary, fontSize: 11, fontWeight: 700, cursor: "pointer", textTransform: "capitalize", boxShadow: layoutStyle === l ? "none" : `inset 0 0 0 1px ${COLORS.border}` }}>
+                {l === "route-focus" ? "Route Focus" : l}
+              </button>
+            ))}
+            {hasCombinedData && (
+              <button onClick={() => setLayoutStyle("full-combined")} style={{ padding: "6px 12px", borderRadius: 20, border: "none", background: layoutStyle === "full-combined" ? COLORS.white : "transparent", color: layoutStyle === "full-combined" ? "#0A0A0A" : COLORS.textSecondary, fontSize: 11, fontWeight: 700, cursor: "pointer", boxShadow: layoutStyle === "full-combined" ? "none" : `inset 0 0 0 1px ${COLORS.border}` }}>
+                Full Combined
+              </button>
+            )}
+          </div>
           {(outlineMapUrl || (locationLabel && !showLocation)) && (
             <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
               {outlineMapUrl && (
@@ -19876,6 +19995,18 @@ const StickerShareScreenInner = ({
             ))}
           </div>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+        </div>
+        <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
+          {(["classic", "minimal", "route-focus"] as const).map((l) => (
+            <button key={l} onClick={() => setLayoutStyle(l)} style={{ padding: "6px 12px", borderRadius: 20, border: "none", background: layoutStyle === l ? COLORS.white : "transparent", color: layoutStyle === l ? "#0A0A0A" : COLORS.textSecondary, fontSize: 11, fontWeight: 700, cursor: "pointer", textTransform: "capitalize", boxShadow: layoutStyle === l ? "none" : `inset 0 0 0 1px ${COLORS.border}` }}>
+              {l === "route-focus" ? "Route Focus" : l}
+            </button>
+          ))}
+          {hasCombinedData && (
+            <button onClick={() => setLayoutStyle("full-combined")} style={{ padding: "6px 12px", borderRadius: 20, border: "none", background: layoutStyle === "full-combined" ? COLORS.white : "transparent", color: layoutStyle === "full-combined" ? "#0A0A0A" : COLORS.textSecondary, fontSize: 11, fontWeight: 700, cursor: "pointer", boxShadow: layoutStyle === "full-combined" ? "none" : `inset 0 0 0 1px ${COLORS.border}` }}>
+              Full Combined
+            </button>
+          )}
         </div>
         {(outlineMapUrl || (locationLabel && !showLocation)) && (
           <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
