@@ -11536,11 +11536,11 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
   // exists, which the hook already treats as "no route, return null."
   const cardioRouteSnapshotUrl = useRouteMapSnapshot(
     (linkedCardioSession && !cardioCourtType) ? linkedCardioSession.route : null,
-    640, 360, COLORS.accent
+    640, 360
   );
   const cardioOutlineSnapshotUrl = useRouteMapSnapshot(
     (linkedCardioSession && !cardioCourtType) ? linkedCardioSession.route : null,
-    640, 360, COLORS.accent, true
+    640, 360, undefined, true
   );
   const cardioLocationLabel = (linkedCardioSession && !cardioCourtType)
     ? getRouteLocationLabel(linkedCardioSession.route)
@@ -14903,6 +14903,20 @@ const TrendChart = ({ points, unit, showBest, higherIsBetter }: { points: { labe
 // recorded, simplified, or how distance/pace are calculated; it only
 // changes how the already-recorded route array gets drawn on screen.
 const ESRI_WORLD_IMAGERY_TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+// Real research finding: Strava's route lines are orange, not their own
+// UI brand color by coincidence - orange sits roughly opposite sky-blue
+// and green foliage on the color wheel, the two most common outdoor
+// photo backdrops, which is WHY it reads clearly without any clever
+// contrast trickery. AmenityFit's own blue accent is nearly the worst
+// possible choice for this specific job, since it directly blends with
+// sky - confirmed by a real device test where the route was barely
+// visible against a blue-sky photo. This is a dedicated color for map/
+// route rendering only - distinct from Strava's specific red-orange
+// (#FC4C02), and not identical to AmenityFit's own UI blue either. It
+// sits roughly opposite that blue on the color wheel, so the pairing
+// reads as a deliberate, coordinated two-color system unique to this
+// app, not a copy of anyone else's brand color.
+const ROUTE_LINE_COLOR = "#F5A623";
 
 const InteractiveRouteMap = ({
   route,
@@ -14917,7 +14931,7 @@ const InteractiveRouteMap = ({
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [fallback, setFallback] = useState(false);
-  const accentColor = strokeColor || COLORS.accent;
+  const accentColor = strokeColor || ROUTE_LINE_COLOR;
 
   useEffect(() => {
     if (!containerRef.current || !route || route.length < 2) return;
@@ -14995,12 +15009,12 @@ const InteractiveRouteMap = ({
         // route stays readable regardless of what's underneath it.
         map.addLayer({
           id: "route-outline", type: "line", source: "route-line",
-          paint: { "line-color": "#000000", "line-width": 7, "line-opacity": 0.55 },
+          paint: { "line-color": "#000000", "line-width": 11, "line-opacity": 0.8 },
           layout: { "line-cap": "round", "line-join": "round" },
         });
         map.addLayer({
           id: "route-line-accent", type: "line", source: "route-line",
-          paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.95 },
+          paint: { "line-color": accentColor, "line-width": 7, "line-opacity": 1 },
           layout: { "line-cap": "round", "line-join": "round" },
         });
         map.fitBounds(bounds, { padding: 40, animate: false });
@@ -15073,11 +15087,11 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
   // called unconditionally (hooks must be, regardless of courtType) with
   // null passed for court sports, which the hook already treats as "no
   // route, return null" internally.
-  const routeSnapshotUrl = useRouteMapSnapshot(courtType ? null : session.route, 640, 360, COLORS.accent);
+  const routeSnapshotUrl = useRouteMapSnapshot(courtType ? null : session.route, 640, 360);
   // Transparent route-outline variant for the Satellite/Outline toggle -
   // only meaningful for a real GPS route, not court sports (which have
   // no route data at all, so this hook receives null and returns null).
-  const outlineSnapshotUrl = useRouteMapSnapshot(courtType ? null : session.route, 640, 360, COLORS.accent, true);
+  const outlineSnapshotUrl = useRouteMapSnapshot(courtType ? null : session.route, 640, 360, undefined, true);
   const locationLabel = courtType ? null : getRouteLocationLabel(session.route);
   const mapUrl = courtType
     ? buildCourtIllustrationUrl(courtType, COLORS.accent)
@@ -16821,8 +16835,8 @@ const buildRouteFallbackSvgUrl = (
   const bg = transparent ? "" : `<rect x="0" y="0" width="${width}" height="${height}" fill="${COLORS.card}"/>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
     ${bg}
-    <polyline points="${points}" fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-    <polyline points="${points}" fill="none" stroke="${strokeColor}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="${points}" fill="none" stroke="#000000" stroke-opacity="0.8" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="${points}" fill="none" stroke="${strokeColor}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 };
@@ -16844,7 +16858,7 @@ const useRouteMapSnapshot = (
   strokeColor?: string,
   transparent: boolean = false
 ): string | null => {
-  const accentColor = strokeColor || COLORS.accent;
+  const accentColor = strokeColor || ROUTE_LINE_COLOR;
   const [url, setUrl] = useState<string | null>(() =>
     route && route.length > 1 ? buildRouteFallbackSvgUrl(route, width, height, accentColor, transparent) : null
   );
@@ -16927,12 +16941,12 @@ const useRouteMapSnapshot = (
         });
         map.addLayer({
           id: "route-outline", type: "line", source: "route-line",
-          paint: { "line-color": "#000000", "line-width": 7, "line-opacity": 0.55 },
+          paint: { "line-color": "#000000", "line-width": 11, "line-opacity": 0.8 },
           layout: { "line-cap": "round", "line-join": "round" },
         });
         map.addLayer({
           id: "route-line-accent", type: "line", source: "route-line",
-          paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.95 },
+          paint: { "line-color": accentColor, "line-width": 7, "line-opacity": 1 },
           layout: { "line-cap": "round", "line-join": "round" },
         });
         map.fitBounds(bounds, { padding: Math.round(Math.min(width, height) * 0.1), animate: false });
@@ -17605,11 +17619,11 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   // shouldn't regenerate a snapshot on every GPS point pushed).
   const finishRouteSnapshotUrl = useRouteMapSnapshot(
     (status === "finished" && !courtTypeForFinish) ? routeRef.current : null,
-    640, 360, COLORS.accent
+    640, 360
   );
   const finishOutlineSnapshotUrl = useRouteMapSnapshot(
     (status === "finished" && !courtTypeForFinish) ? routeRef.current : null,
-    640, 360, COLORS.accent, true
+    640, 360, undefined, true
   );
   const finishLocationLabel = (status === "finished" && !courtTypeForFinish)
     ? getRouteLocationLabel(routeRef.current)
@@ -19112,11 +19126,11 @@ const StickerShareScreen = ({
             style={{ maxWidth: 240, maxHeight: 160, width: "auto", height: "auto", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
           />
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {iconImage
-            ? <img src={iconImage} alt="" style={{ width: 16, height: 16, objectFit: "contain", filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />
-            : Icon && <Icon size={16} color={textColor} strokeWidth={2.5} style={{ filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />}
-          <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 13, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>{title}</span>
+            ? <img src={iconImage} alt="" style={{ width: 26, height: 26, objectFit: "contain", filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />
+            : Icon && <Icon size={26} color={textColor} strokeWidth={2.5} style={{ filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />}
+          <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 15, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>{title}</span>
         </div>
         {visibleStats.map((s, i) => (
           <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8, whiteSpace: "nowrap" }}>
