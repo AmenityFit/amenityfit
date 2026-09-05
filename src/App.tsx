@@ -19083,7 +19083,7 @@ const ShareableStatCard = ({
   // wherever it was logically triggered from, sidestepping the issue
   // entirely regardless of which scrolling container called it.
   return createPortal(
-    <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", padding: "72px 24px 24px", overflowY: "auto" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", padding: "72px 24px 24px", overflowY: "auto" }}>
       <button onClick={onClose} style={{ position: "absolute", top: "calc(56px + env(safe-area-inset-top, 0px))", right: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer", zIndex: 10 }}>×</button>
 
       <div
@@ -19520,7 +19520,7 @@ const StickerShareScreenInner = ({
 
   if (mode === "choose") {
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 500, background: COLORS.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: COLORS.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', sans-serif" }}>
         <button onClick={onClose} style={{ position: "absolute", top: "calc(56px + env(safe-area-inset-top, 0px))", right: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer", zIndex: 10 }}>×</button>
         <div style={{ width: 72, height: 72, borderRadius: 20, background: `${COLORS.white}10`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
           <Camera size={30} color={COLORS.white} strokeWidth={1.75} />
@@ -19545,7 +19545,7 @@ const StickerShareScreenInner = ({
     // the photo with a drop-shadow for legibility, matching Strava's own
     // minimal sticker convention rather than always wrapping stats in a box.
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 500, background: COLORS.background, display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: COLORS.background, display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
         <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <button onClick={() => setMode("choose")} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <ArrowLeft size={16} color={COLORS.white} />
@@ -19605,7 +19605,7 @@ const StickerShareScreenInner = ({
 
   if (!photoUrl) {
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 500, background: COLORS.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: COLORS.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', sans-serif" }}>
         <button onClick={() => setMode("choose")} style={{ position: "absolute", top: 24, left: 24, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <ArrowLeft size={18} color={COLORS.white} />
         </button>
@@ -19624,7 +19624,7 @@ const StickerShareScreenInner = ({
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "#000", display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: "#000", display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
       <div ref={containerRef} style={{ position: "relative", flex: 1, overflow: "hidden", touchAction: "none" }}>
         <img ref={photoImgRef} src={photoUrl} alt="" crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
 
