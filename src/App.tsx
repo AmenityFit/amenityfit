@@ -15010,37 +15010,49 @@ const InteractiveRouteMap = ({
 
       map.on("load", () => {
         if (cancelled) return;
-        map.addSource("route-line", {
-          type: "geojson",
-          data: { type: "Feature", geometry: { type: "MultiLineString", coordinates: normalCoords }, properties: {} },
-        });
-        map.addSource("route-gap", {
-          type: "geojson",
-          data: { type: "Feature", geometry: { type: "MultiLineString", coordinates: gapCoords }, properties: {} },
-        });
-        // Same double-stroke technique as the old static image - a wider
-        // dark outline first, then the accent-colored line on top, so the
-        // route stays readable regardless of what's underneath it. Only
-        // applied to real tracked segments.
-        map.addLayer({
-          id: "route-outline", type: "line", source: "route-line",
-          paint: { "line-color": "#000000", "line-width": 11, "line-opacity": 0.8 },
-          layout: { "line-cap": "round", "line-join": "round" },
-        });
-        map.addLayer({
-          id: "route-line-accent", type: "line", source: "route-line",
-          paint: { "line-color": accentColor, "line-width": 7, "line-opacity": 1 },
-          layout: { "line-cap": "round", "line-join": "round" },
-        });
-        // Suspected background-gap segment - thinner, lighter, dashed,
-        // no heavy outline - reads as "estimated," not a confidently
-        // tracked real path.
-        map.addLayer({
-          id: "route-gap-line", type: "line", source: "route-gap",
-          paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.6, "line-dasharray": [2, 2] },
-          layout: { "line-cap": "round", "line-join": "round" },
-        });
-        map.fitBounds(bounds, { padding: 40, animate: false });
+        // Real fix for a genuine bug found via real-device testing: an
+        // uncaught error here (e.g. from malformed/legacy route data
+        // predating some of tonight's fields) was silently leaving this
+        // screen in a broken state - no visible route line AND,
+        // separately, the Share/Sticker buttons elsewhere on the same
+        // screen stopped responding entirely. Wrapping this in a real
+        // try/catch means any unexpected data shape degrades to "no
+        // route drawn" instead of destabilizing the rest of the screen.
+        try {
+          map.addSource("route-line", {
+            type: "geojson",
+            data: { type: "Feature", geometry: { type: "MultiLineString", coordinates: normalCoords }, properties: {} },
+          });
+          map.addSource("route-gap", {
+            type: "geojson",
+            data: { type: "Feature", geometry: { type: "MultiLineString", coordinates: gapCoords }, properties: {} },
+          });
+          // Same double-stroke technique as the old static image - a wider
+          // dark outline first, then the accent-colored line on top, so the
+          // route stays readable regardless of what's underneath it. Only
+          // applied to real tracked segments.
+          map.addLayer({
+            id: "route-outline", type: "line", source: "route-line",
+            paint: { "line-color": "#000000", "line-width": 11, "line-opacity": 0.8 },
+            layout: { "line-cap": "round", "line-join": "round" },
+          });
+          map.addLayer({
+            id: "route-line-accent", type: "line", source: "route-line",
+            paint: { "line-color": accentColor, "line-width": 7, "line-opacity": 1 },
+            layout: { "line-cap": "round", "line-join": "round" },
+          });
+          // Suspected background-gap segment - thinner, lighter, dashed,
+          // no heavy outline - reads as "estimated," not a confidently
+          // tracked real path.
+          map.addLayer({
+            id: "route-gap-line", type: "line", source: "route-gap",
+            paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.6, "line-dasharray": [2, 2] },
+            layout: { "line-cap": "round", "line-join": "round" },
+          });
+          map.fitBounds(bounds, { padding: 40, animate: false });
+        } catch (e) {
+          console.error("Failed to draw route line on map:", e);
+        }
         hasLoaded = true;
       });
 
@@ -17001,30 +17013,37 @@ const useRouteMapSnapshot = (
 
       map.on("load", () => {
         if (cancelled) return;
-        map.addSource("route-line", {
-          type: "geojson",
-          data: { type: "Feature", geometry: { type: "MultiLineString", coordinates: normalCoords }, properties: {} },
-        });
-        map.addSource("route-gap", {
-          type: "geojson",
-          data: { type: "Feature", geometry: { type: "MultiLineString", coordinates: gapCoords }, properties: {} },
-        });
-        map.addLayer({
-          id: "route-outline", type: "line", source: "route-line",
-          paint: { "line-color": "#000000", "line-width": 11, "line-opacity": 0.8 },
-          layout: { "line-cap": "round", "line-join": "round" },
-        });
-        map.addLayer({
-          id: "route-line-accent", type: "line", source: "route-line",
-          paint: { "line-color": accentColor, "line-width": 7, "line-opacity": 1 },
-          layout: { "line-cap": "round", "line-join": "round" },
-        });
-        map.addLayer({
-          id: "route-gap-line", type: "line", source: "route-gap",
-          paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.6, "line-dasharray": [2, 2] },
-          layout: { "line-cap": "round", "line-join": "round" },
-        });
-        map.fitBounds(bounds, { padding: Math.round(Math.min(width, height) * 0.1), animate: false });
+        // Same defensive wrapping as InteractiveRouteMap - an uncaught
+        // error here from unexpected/legacy route data shouldn't stop
+        // the snapshot capture below from still happening.
+        try {
+          map.addSource("route-line", {
+            type: "geojson",
+            data: { type: "Feature", geometry: { type: "MultiLineString", coordinates: normalCoords }, properties: {} },
+          });
+          map.addSource("route-gap", {
+            type: "geojson",
+            data: { type: "Feature", geometry: { type: "MultiLineString", coordinates: gapCoords }, properties: {} },
+          });
+          map.addLayer({
+            id: "route-outline", type: "line", source: "route-line",
+            paint: { "line-color": "#000000", "line-width": 11, "line-opacity": 0.8 },
+            layout: { "line-cap": "round", "line-join": "round" },
+          });
+          map.addLayer({
+            id: "route-line-accent", type: "line", source: "route-line",
+            paint: { "line-color": accentColor, "line-width": 7, "line-opacity": 1 },
+            layout: { "line-cap": "round", "line-join": "round" },
+          });
+          map.addLayer({
+            id: "route-gap-line", type: "line", source: "route-gap",
+            paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.6, "line-dasharray": [2, 2] },
+            layout: { "line-cap": "round", "line-join": "round" },
+          });
+          map.fitBounds(bounds, { padding: Math.round(Math.min(width, height) * 0.1), animate: false });
+        } catch (e) {
+          console.error("Failed to draw route line on map snapshot:", e);
+        }
         map.once("idle", () => {
           if (cancelled) return;
           hasLoaded = true;
