@@ -14966,6 +14966,16 @@ const InteractiveRouteMap = ({
       [Math.min(...lngs), Math.min(...lats)],
       [Math.max(...lngs), Math.max(...lats)],
     ];
+    // Real fix for a genuine bug found via real-device testing: switching
+    // apps mid-session suspends GPS tracking entirely for that stretch,
+    // leaving only two real points connected by a fabricated straight
+    // line - drawn identically to real tracked road/trail before this,
+    // which was misleading. Gap segments (see ROUTE_GAP_THRESHOLD_SECONDS)
+    // get their own separate source/layer, styled thinner, lighter, and
+    // dashed - visually honest about "this is an estimate," not real data.
+    const { normalSegments, gapSegments } = splitRouteIntoSegments(route);
+    const normalCoords = normalSegments.map((seg) => seg.map((p) => [p.lng, p.lat]));
+    const gapCoords = gapSegments.map((seg) => seg.map((p) => [p.lng, p.lat]));
 
     (async () => {
       // Dynamic import, deferred until this component actually mounts
@@ -15007,11 +15017,16 @@ const InteractiveRouteMap = ({
         if (cancelled) return;
         map.addSource("route-line", {
           type: "geojson",
-          data: { type: "Feature", geometry: { type: "LineString", coordinates }, properties: {} },
+          data: { type: "Feature", geometry: { type: "MultiLineString", coordinates: normalCoords }, properties: {} },
+        });
+        map.addSource("route-gap", {
+          type: "geojson",
+          data: { type: "Feature", geometry: { type: "MultiLineString", coordinates: gapCoords }, properties: {} },
         });
         // Same double-stroke technique as the old static image - a wider
         // dark outline first, then the accent-colored line on top, so the
-        // route stays readable regardless of what's underneath it.
+        // route stays readable regardless of what's underneath it. Only
+        // applied to real tracked segments.
         map.addLayer({
           id: "route-outline", type: "line", source: "route-line",
           paint: { "line-color": "#000000", "line-width": 11, "line-opacity": 0.8 },
@@ -15020,6 +15035,14 @@ const InteractiveRouteMap = ({
         map.addLayer({
           id: "route-line-accent", type: "line", source: "route-line",
           paint: { "line-color": accentColor, "line-width": 7, "line-opacity": 1 },
+          layout: { "line-cap": "round", "line-join": "round" },
+        });
+        // Suspected background-gap segment - thinner, lighter, dashed,
+        // no heavy outline - reads as "estimated," not a confidently
+        // tracked real path.
+        map.addLayer({
+          id: "route-gap-line", type: "line", source: "route-gap",
+          paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.6, "line-dasharray": [2, 2] },
           layout: { "line-cap": "round", "line-join": "round" },
         });
         map.fitBounds(bounds, { padding: 40, animate: false });
@@ -16770,6 +16793,37 @@ const simplifyRoute = (route: { lat: number; lng: number }[], maxPoints: number)
   return result;
 };
 
+// Splits a route into real, continuously-tracked segments and suspected
+// background-gap segments (see ROUTE_GAP_THRESHOLD_SECONDS), so each can
+// be rendered distinctly - solid for real tracking, dashed for a
+// fabricated straight-line gap where GPS tracking was actually suspended.
+// A gap segment is always exactly the 2 points bordering the gap; every
+// other stretch of continuous tracking becomes its own normal segment.
+const splitRouteIntoSegments = (
+  route: { lat: number; lng: number; isGapStart?: boolean }[]
+): { normalSegments: { lat: number; lng: number }[][]; gapSegments: { lat: number; lng: number }[][] } => {
+  const normalSegments: { lat: number; lng: number }[][] = [];
+  const gapSegments: { lat: number; lng: number }[][] = [];
+  let currentSegment: { lat: number; lng: number }[] = [];
+
+  for (let i = 0; i < route.length; i++) {
+    const point = route[i];
+    if (point.isGapStart && i > 0 && currentSegment.length > 0) {
+      // currentSegment already ends at route[i-1] (the point right
+      // before this gap) from the previous iteration - close it out,
+      // record the 2-point gap segment, then start a fresh segment here.
+      if (currentSegment.length >= 2) normalSegments.push(currentSegment);
+      gapSegments.push([route[i - 1], point]);
+      currentSegment = [point];
+    } else {
+      currentSegment.push(point);
+    }
+  }
+  if (currentSegment.length >= 2) normalSegments.push(currentSegment);
+
+  return { normalSegments, gapSegments };
+};
+
 // Builds a Mapbox Static Images API URL rendering the given route as a
 // glowing accent-colored path over Mapbox's own dark style, matching the
 // app's dark theme rather than a generic default map look. Uses "auto"
@@ -16896,6 +16950,13 @@ const useRouteMapSnapshot = (
       [Math.min(...lngs), Math.min(...lats)],
       [Math.max(...lngs), Math.max(...lats)],
     ];
+    // Same gap handling as InteractiveRouteMap - see its own comment for
+    // the full explanation (a real background-app-switch suspends GPS
+    // tracking entirely, and the resulting straight-line gap needs to
+    // read as an estimate, not real tracked data).
+    const { normalSegments, gapSegments } = splitRouteIntoSegments(route);
+    const normalCoords = normalSegments.map((seg) => seg.map((p) => [p.lng, p.lat]));
+    const gapCoords = gapSegments.map((seg) => seg.map((p) => [p.lng, p.lat]));
 
     const cleanup = () => {
       if (mapInstance) mapInstance.remove();
@@ -16947,7 +17008,11 @@ const useRouteMapSnapshot = (
         if (cancelled) return;
         map.addSource("route-line", {
           type: "geojson",
-          data: { type: "Feature", geometry: { type: "LineString", coordinates }, properties: {} },
+          data: { type: "Feature", geometry: { type: "MultiLineString", coordinates: normalCoords }, properties: {} },
+        });
+        map.addSource("route-gap", {
+          type: "geojson",
+          data: { type: "Feature", geometry: { type: "MultiLineString", coordinates: gapCoords }, properties: {} },
         });
         map.addLayer({
           id: "route-outline", type: "line", source: "route-line",
@@ -16957,6 +17022,11 @@ const useRouteMapSnapshot = (
         map.addLayer({
           id: "route-line-accent", type: "line", source: "route-line",
           paint: { "line-color": accentColor, "line-width": 7, "line-opacity": 1 },
+          layout: { "line-cap": "round", "line-join": "round" },
+        });
+        map.addLayer({
+          id: "route-gap-line", type: "line", source: "route-gap",
+          paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.6, "line-dasharray": [2, 2] },
           layout: { "line-cap": "round", "line-join": "round" },
         });
         map.fitBounds(bounds, { padding: Math.round(Math.min(width, height) * 0.1), animate: false });
@@ -17220,6 +17290,20 @@ const buildCourtIllustrationUrl = (courtType: "basketball" | "soccer" | "padel" 
 // sky is typically 5-15m - so this only discards fixes that are genuinely
 // unreliable, not merely imperfect.
 const GPS_ACCURACY_REJECT_METERS = 50;
+// Real fix for a genuine bug found via real-device testing: switching
+// apps (or the screen locking) suspends this page's JS entirely,
+// including GPS tracking - watchPosition simply stops firing for the
+// whole backgrounded stretch, even though the plain elapsed-time timer
+// (a separate, unrelated setInterval) keeps counting normally the whole
+// time. The result: two real, genuine GPS points with a huge real time
+// gap between them, connected on the map by nothing but a fabricated
+// straight line - not what the person actually walked, just the only
+// two real data points available. A normal watchPosition update cadence
+// (even generously accounting for real-world signal jitter) is measured
+// in single-digit seconds, never anywhere close to a full minute - so a
+// gap this large is a reliable signal of an actual background
+// suspension, not routine GPS timing variance.
+const ROUTE_GAP_THRESHOLD_SECONDS = 60;
 // Browsers commonly report altitude with much worse confidence than
 // horizontal position - phone GPS chips are inherently weaker at
 // vertical accuracy than horizontal. A fix whose altitudeAccuracy
@@ -17616,7 +17700,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
 
   const watchIdRef = React.useRef<number | null>(null);
   const timerIntervalRef = React.useRef<any>(null);
-  const routeRef = React.useRef<{ lat: number; lng: number; timestamp: number; altitude?: number; accuracy?: number }[]>([]);
+  const routeRef = React.useRef<{ lat: number; lng: number; timestamp: number; altitude?: number; accuracy?: number; isGapStart?: boolean }[]>([]);
   // courtType hoisted here (not just inside the "finished" block below)
   // so this hook can be called unconditionally at the top level, as
   // required - this component has several conditional early returns
@@ -17688,9 +17772,13 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     // and lastAcceptedPointRef now only ever get updated once a point is
     // judged plausible below - same single source of truth as distance.
     let pointIsPlausible = true;
+    let isGapStart = false;
 
     if (last) {
       const dtSeconds = (now - last.timestamp) / 1000;
+      if (dtSeconds > ROUTE_GAP_THRESHOLD_SECONDS) {
+        isGapStart = true;
+      }
       if (dtSeconds > 0.5) {
         const d = haversineDistanceMeters(last.lat, last.lng, latitude, longitude);
         const speedMps = d / dtSeconds;
@@ -17754,7 +17842,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     }
 
     if (pointIsPlausible) {
-      routeRef.current.push({ lat: latitude, lng: longitude, timestamp: now, altitude: validAltitude, accuracy: typeof accuracy === "number" ? accuracy : undefined });
+      routeRef.current.push({ lat: latitude, lng: longitude, timestamp: now, altitude: validAltitude, accuracy: typeof accuracy === "number" ? accuracy : undefined, isGapStart });
       lastAcceptedPointRef.current = { lat: latitude, lng: longitude, timestamp: now };
     }
   };
