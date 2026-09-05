@@ -15085,6 +15085,36 @@ const InteractiveRouteMap = ({
             paint: { "line-color": accentColor, "line-width": 4, "line-opacity": 0.6, "line-dasharray": [2, 2] },
             layout: { "line-cap": "round", "line-join": "round" },
           });
+          // Real fix for a genuine bug found via real-device testing:
+          // the route line rendered correctly in the Share/Sticker
+          // snapshot (its own map lives in a fixed-size, off-screen
+          // container, completely outside normal page layout) but not
+          // on this live map, which renders into a normal in-page
+          // container subject to real scrolling/layout. A well-known
+          // MapLibre/Mapbox GL quirk: if a map's container is resized by
+          // page layout after construction without an explicit resize()
+          // call, the base tile layer still repaints fine at the new
+          // size, but vector layers (like this route line) can end up
+          // positioned using stale internal calculations - invisible or
+          // misplaced, even though the map itself looks completely
+          // normal. Forcing a resize once loaded/settled guarantees the
+          // line's positioning matches the container's real, current size.
+          map.resize();
+          // Real fix for a genuine bug found via real-device testing:
+          // the route line rendered correctly in the Share/Sticker
+          // snapshot (its own map lives in a fixed-size, off-screen
+          // container, completely outside normal page layout) but not
+          // on this live map, which renders into a normal in-page
+          // container subject to real scrolling/layout. A well-known
+          // MapLibre/Mapbox GL quirk: if a map's container is resized by
+          // page layout after construction without an explicit resize()
+          // call, the base tile layer still repaints fine at the new
+          // size, but vector layers (like this route line) can end up
+          // positioned using stale internal calculations - invisible or
+          // misplaced, even though the map itself looks completely
+          // normal. Forcing a resize once loaded/settled guarantees the
+          // line's positioning matches the container's real, current size.
+          map.resize();
           map.fitBounds(bounds, { padding: 40, animate: false });
         } catch (e) {
           console.error("Failed to draw route line on map:", e);
