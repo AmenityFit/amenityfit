@@ -5672,6 +5672,22 @@ const getWorkoutImage = (type: string, programDay: number = 1): string => {
   return pool[chosenIndex];
 };
 
+// Real fix for a genuine bug found via real-device testing: both
+// Dashboard ("This Week's Activity") and ProgressScreen (Active Weeks,
+// Workout History) fetch the exact same underlying data
+// (fetchWorkoutHistory) independently, and since every screen in this
+// app fully unmounts/remounts on every tab switch, each one showed a
+// visible blank/loading flash every single time it was revisited, even
+// seconds after already having the data. A single shared, module-level
+// cache (outside any component, so it survives unmount/remount) means
+// whichever screen loads first populates it for both - returning to
+// either one renders the last-known-good data INSTANTLY, while still
+// quietly re-fetching in the background afterward to stay eventually
+// correct. This does not eliminate the remount itself (a bigger,
+// separate architectural change, deliberately not undertaken tonight
+// given its size and risk) - it only removes the visible loading flash.
+const workoutHistoryCache: { uid: string | null; sessions: any[] } = { uid: null, sessions: [] };
+
 const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, workoutDoneToday = false, isInProgress = false, onNavigate = (s) => {}, onViewWeekly = () => {}, reEntryMode = false, reEntrySessions = 0, reEntryTarget = 6, wearableModifier = null, onWearableOverride = () => {} }) => {
   // Raw session history, fetched once per Dashboard mount alongside
   // notifications below - workoutDoneToday changing (passed in the key
@@ -5681,12 +5697,16 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
   // pre-aggregated) so both the "This Week" and "Today" views below can
   // be derived from the same single fetch via computeActivityStats,
   // rather than needing a separate query per view.
-  const [activitySessions, setActivitySessions] = useState<any[] | null>(null);
+  const [activitySessions, setActivitySessions] = useState<any[] | null>(() =>
+    workoutHistoryCache.uid === profile?.uid ? workoutHistoryCache.sessions : null
+  );
   const [activityStatsRange, setActivityStatsRange] = useState<"week" | "today">("week");
   useEffect(() => {
     if (!profile?.uid) return;
     fetchWorkoutHistory(profile.uid).then((sessions) => {
       setActivitySessions(sessions);
+      workoutHistoryCache.uid = profile.uid;
+      workoutHistoryCache.sessions = sessions;
     });
   }, [profile?.uid]);
   const activityStats = activitySessions ? computeActivityStats(activitySessions, activityStatsRange === "today" ? 1 : 7) : null;
@@ -15543,9 +15563,15 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
   const [chartRange, setChartRange] = useState<"1M" | "3M" | "6M" | "All">("All");
   const [showLogModal, setShowLogModal] = useState(false);
   // Workout history state — must live at component top level (React hooks rules)
-  const [historyLoaded, setHistoryLoaded] = useState(false);
+  // Same shared workoutHistoryCache Dashboard uses (see its own comment
+  // for the full explanation) - whichever screen loads first populates
+  // it for both, so returning here renders instantly from the
+  // last-known data instead of a loading flash every single time.
+  const [historyLoaded, setHistoryLoaded] = useState(() => workoutHistoryCache.uid === profile?.uid);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [sessionHistory, setSessionHistory] = useState<any[]>([]);
+  const [sessionHistory, setSessionHistory] = useState<any[]>(() =>
+    workoutHistoryCache.uid === profile?.uid ? workoutHistoryCache.sessions : []
+  );
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [selectedSession, setSelectedSession] = useState<any>(null);
 
@@ -15559,6 +15585,8 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
       // Small delay to ensure Firestore write from workout completion has propagated
       fetchWorkoutHistory(profile.uid, (fastSessions) => setSessionHistory(fastSessions)).then(sessions => {
         setSessionHistory(sessions);
+        workoutHistoryCache.uid = profile.uid;
+        workoutHistoryCache.sessions = sessions;
         setHistoryLoaded(true);
         setHistoryLoading(false);
       });
@@ -15570,6 +15598,8 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
     if (uid) {
       fetchWorkoutHistory(uid, (fastSessions) => setSessionHistory(fastSessions)).then(sessions => {
         setSessionHistory(sessions);
+        workoutHistoryCache.uid = uid;
+        workoutHistoryCache.sessions = sessions;
         setHistoryLoaded(true);
         setHistoryLoading(false);
       });
