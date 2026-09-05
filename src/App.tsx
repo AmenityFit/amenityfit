@@ -11489,7 +11489,7 @@ const getMotivationalMessage = (sessionCount: number, uid: string = ""): string 
 };
 
 // ─── Session Complete Screen ───────────────────────────────────────────────────
-const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount = 0, uid = "", onDone, weightsLogged = {}, liftPRs = {}, dayTitle = "", sessionId = "" }) => {
+const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount = 0, uid = "", onDone, weightsLogged = {}, liftPRs = {}, dayTitle = "", sessionId = "", profile = null }: any) => {
   const mins = Math.floor(timeSeconds / 60);
   const secs = timeSeconds % 60;
   const message = getMotivationalMessage(sessionCount, uid);
@@ -11586,8 +11586,9 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
         ? buildCourtIllustrationUrl(cardioCourtType, ROUTE_LINE_COLOR)
         : cardioRouteSnapshotUrl)
     : null;
+  const distanceUnit = getDistanceUnit(profile);
   const cardioPaceLabel = cardioHasDistance && linkedCardioSession?.avgPaceSecondsPerKm
-    ? `${Math.floor(linkedCardioSession.avgPaceSecondsPerKm / 60)}:${String(Math.round(linkedCardioSession.avgPaceSecondsPerKm % 60)).padStart(2, "0")}/km`
+    ? formatPaceLabel(linkedCardioSession.avgPaceSecondsPerKm, distanceUnit)
     : null;
   const cardioDisplayName = linkedCardioSession?.customActivityName || cardioMeta?.label || linkedCardioSession?.type;
   const cardioMinutes = linkedCardioSession ? Math.round((linkedCardioSession.durationSeconds || 0) / 60) : 0;
@@ -11605,7 +11606,7 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
     ...(sessionRpe !== null ? [{ label: "RPE", value: `${sessionRpe}/10` }] : []),
   ];
   const cardioStatsForShare = linkedCardioSession ? [
-    ...(cardioHasDistance ? [{ label: `${cardioDisplayName} Distance`, value: `${(linkedCardioSession.distanceMeters / 1000).toFixed(2)} km` }] : []),
+    ...(cardioHasDistance ? [{ label: `${cardioDisplayName} Distance`, value: formatDistanceLabel(linkedCardioSession.distanceMeters, distanceUnit) }] : []),
     { label: `${cardioDisplayName} Time`, value: `${cardioMinutes} min` },
     ...(cardioPaceLabel ? [{ label: `${cardioDisplayName} Pace`, value: cardioPaceLabel }] : []),
   ] : [];
@@ -13101,6 +13102,7 @@ onSaveState={(round: number, exerciseIndex: number, cells?: string[]) => {
       userName={profile?.name ? (profile.name.split(" ")[0].charAt(0).toUpperCase() + profile.name.split(" ")[0].slice(1).toLowerCase()) : ""}
       sessionCount={profile?.sessionsCompleted || 0}
       uid={profile?.uid || ""}
+      profile={profile}
       weightsLogged={workoutFlowWeights}
       liftPRs={liftPRs}
       dayTitle={deriveWorkoutTitle(workoutGroups)}
@@ -15205,8 +15207,9 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
   const mapUrl = courtType
     ? buildCourtIllustrationUrl(courtType, ROUTE_LINE_COLOR)
     : routeSnapshotUrl;
+  const distanceUnit = getDistanceUnit(profile);
   const paceLabel = hasDistance && session.avgPaceSecondsPerKm
-    ? `${Math.floor(session.avgPaceSecondsPerKm / 60)}:${String(Math.round(session.avgPaceSecondsPerKm % 60)).padStart(2, "0")}/km`
+    ? formatPaceLabel(session.avgPaceSecondsPerKm, distanceUnit)
     : null;
   const dateLabel = session.completedAt?.toDate
     ? session.completedAt.toDate().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
@@ -15236,7 +15239,7 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
   // session.isPR is written once, at save time (see finishActivity) -
   // reading it back here is what makes the badge persist correctly.
   const stats: { label: string; value: string; isPR?: boolean }[] = [];
-  if (hasDistance) stats.push({ label: "Distance", value: `${(session.distanceMeters / 1000).toFixed(2)} km`, isPR: !!session.isPR?.distance });
+  if (hasDistance) stats.push({ label: "Distance", value: formatDistanceLabel(session.distanceMeters, distanceUnit), isPR: !!session.isPR?.distance });
   stats.push({ label: "Time", value: formatTime(session.durationSeconds || 0), isPR: !!session.isPR?.duration });
   if (paceLabel) stats.push({ label: "Pace", value: paceLabel, isPR: !!session.isPR?.pace });
   if (session.calories) stats.push({ label: "Calories", value: `~${session.calories}` });
@@ -15268,7 +15271,7 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
       const dateLabel = s.completedAt?.toDate ? s.completedAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
       if (trendUsesPace) {
         if (!s.avgPaceSecondsPerKm) return null;
-        return { label: dateLabel, value: s.avgPaceSecondsPerKm / 60 };
+        return { label: dateLabel, value: (distanceUnit === "imperial" ? s.avgPaceSecondsPerKm * (METERS_PER_MILE / 1000) : s.avgPaceSecondsPerKm) / 60 };
       }
       return { label: dateLabel, value: (s.durationSeconds || 0) / 60 };
     })
@@ -15280,7 +15283,7 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
   // splits - a single split is just the overall pace already shown
   // above, so a "Splits" section with one bar adds nothing.
   const splitPoints = (!isMindBody && hasDistance && session.route?.length > 1)
-    ? computeKilometerSplits(session.route).map((s) => ({ label: `KM ${s.km}`, value: s.paceSecondsPerKm / 60 }))
+    ? computeKilometerSplits(session.route, distanceUnit === "imperial" ? METERS_PER_MILE : 1000).map((s) => ({ label: `${distanceUnit === "imperial" ? "MI" : "KM"} ${s.km}`, value: s.paceSecondsPerKm / 60 }))
     : [];
 
   return (
@@ -15345,7 +15348,7 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
           </p>
           <TrendChart
             points={splitPoints}
-            unit=" min/km"
+            unit={distanceUnit === "imperial" ? " min/mi" : " min/km"}
             showBest={true}
             higherIsBetter={false}
           />
@@ -15359,7 +15362,7 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
           </p>
           <TrendChart
             points={trendPoints}
-            unit={trendUsesPace ? " min/km" : " min"}
+            unit={trendUsesPace ? (distanceUnit === "imperial" ? " min/mi" : " min/km") : " min"}
             // Only pace has a real better/worse direction - duration
             // trends (mind-body, or cardio with no distance) show the
             // shape of the data with no "Best" claim attached, since
@@ -17232,12 +17235,21 @@ const computeElevationGainMeters = (route: { lat: number; lng: number; altitude?
 // closest"), giving a real per-km pace rather than a rough
 // approximation. Only emits COMPLETE kilometers - a session that ran
 // 3.4km correctly shows 3 splits, not a misleading partial 4th one.
-const computeKilometerSplits = (route: { lat: number; lng: number; timestamp: number }[] | null | undefined): { km: number; paceSecondsPerKm: number }[] => {
+// Real fix for a genuine bug found while auditing unit handling: this
+// used to hardcode a 1000m boundary regardless of the person's actual
+// unit preference - a "km 1, km 2..." breakdown for someone on
+// imperial units, silently mislabeled as if it meant miles. boundaryMeters
+// now genuinely changes WHERE each split falls (every real mile, not
+// every km with a relabeled unit), not just how the number gets displayed.
+const computeKilometerSplits = (
+  route: { lat: number; lng: number; timestamp: number }[] | null | undefined,
+  boundaryMeters: number = 1000
+): { km: number; paceSecondsPerKm: number }[] => {
   if (!route || route.length < 2) return [];
   const splits: { km: number; paceSecondsPerKm: number }[] = [];
   let cumulativeMeters = 0;
   let currentKmStartTimestamp = route[0].timestamp;
-  let nextKmBoundary = 1000;
+  let nextKmBoundary = boundaryMeters;
 
   for (let i = 1; i < route.length; i++) {
     const prev = route[i - 1];
@@ -17254,7 +17266,7 @@ const computeKilometerSplits = (route: { lat: number; lng: number; timestamp: nu
       splits.push({ km: splits.length + 1, paceSecondsPerKm: splitSeconds });
 
       currentKmStartTimestamp = boundaryTimestamp;
-      nextKmBoundary += 1000;
+      nextKmBoundary += boundaryMeters;
     }
     cumulativeMeters += segmentMeters;
   }
@@ -17426,6 +17438,34 @@ const GPS_ALTITUDE_ACCURACY_REJECT_METERS = 25;
 const getMaxPlausibleSpeedMps = (activityType: string | null): number => {
   if (activityType === "bike") return 36.1; // ~130 km/h - comfortable headroom above even an extreme pro descent
   return 12.5; // ~45 km/h - well above realistic run/walk/hike speed
+};
+
+// Real, unified unit-preference helper - reuses the exact same
+// imperial/metric determination already established for body
+// measurements (based on whether height was entered in ft or cm at
+// onboarding), so cardio distance/pace follows the SAME single
+// preference rather than a second, separately-tracked setting a person
+// would have to configure twice.
+const getDistanceUnit = (profile: any): "imperial" | "metric" =>
+  (profile?.heightFt && Number(profile.heightFt) > 0) ? "imperial" : (profile?.heightCm ? "metric" : "imperial");
+
+const METERS_PER_MILE = 1609.344;
+
+// Real, unit-aware distance formatting - miles for imperial, km for
+// metric. Replaces 9 separate hardcoded "km" occurrences across the app
+// that ignored the person's actual stated unit preference entirely.
+const formatDistanceLabel = (meters: number, unit: "imperial" | "metric"): string =>
+  unit === "imperial" ? `${(meters / METERS_PER_MILE).toFixed(2)} mi` : `${(meters / 1000).toFixed(2)} km`;
+
+// Same for pace - min/mi for imperial, min/km for metric. Takes pace
+// stored as seconds-per-km (the format already used everywhere in this
+// app's data layer) and converts to whichever unit the person actually
+// uses, only at the final display step.
+const formatPaceLabel = (secondsPerKm: number, unit: "imperial" | "metric"): string => {
+  const secondsPerUnit = unit === "imperial" ? secondsPerKm * (METERS_PER_MILE / 1000) : secondsPerKm;
+  const m = Math.floor(secondsPerUnit / 60);
+  const s = Math.round(secondsPerUnit % 60);
+  return `${m}:${String(s).padStart(2, "0")}/${unit === "imperial" ? "mi" : "km"}`;
 };
 
 // Custom icons for sports lucide genuinely doesn't have (verified by
@@ -18319,13 +18359,12 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
       : `${m}:${String(s).padStart(2, "0")}`;
   };
 
+  const distanceUnit = getDistanceUnit(profile);
   const paceLabel = (() => {
     const distanceKm = distanceMeters / 1000;
     if (distanceKm < 0.05 || elapsedSeconds < 10) return "--:--";
     const paceSecondsPerKm = elapsedSeconds / distanceKm;
-    const m = Math.floor(paceSecondsPerKm / 60);
-    const s = Math.round(paceSecondsPerKm % 60);
-    return `${m}:${String(s).padStart(2, "0")} /km`;
+    return formatPaceLabel(paceSecondsPerKm, distanceUnit).replace("/", " /");
   })();
 
   // Real detour, checked BEFORE the normal completion screen below so it
@@ -18571,7 +18610,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             locationLabel={finishLocationLabel}
             stats={[
               distanceMeters > 0
-                ? { label: "Distance", value: `${(distanceMeters / 1000).toFixed(2)} km`, isPR: sessionPRs.distance }
+                ? { label: "Distance", value: formatDistanceLabel(distanceMeters, distanceUnit), isPR: sessionPRs.distance }
                 : { label: "Time", value: formatTime(elapsedSeconds), isPR: sessionPRs.duration },
               ...(distanceMeters > 0 ? [{ label: "Time", value: formatTime(elapsedSeconds), isPR: sessionPRs.duration }] : []),
               ...(distanceMeters > 0 ? [{ label: "Pace", value: paceLabel, isPR: sessionPRs.pace }] : []),
@@ -18592,7 +18631,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             locationLabel={finishLocationLabel}
             stats={[
               distanceMeters > 0
-                ? { label: "Distance", value: `${(distanceMeters / 1000).toFixed(2)} km`, isPR: sessionPRs.distance }
+                ? { label: "Distance", value: formatDistanceLabel(distanceMeters, distanceUnit), isPR: sessionPRs.distance }
                 : { label: "Time", value: formatTime(elapsedSeconds), isPR: sessionPRs.duration },
               ...(distanceMeters > 0 ? [{ label: "Time", value: formatTime(elapsedSeconds), isPR: sessionPRs.duration }] : []),
               ...(finalCalories ? [{ label: "Calories", value: `~${finalCalories}` }] : []),
