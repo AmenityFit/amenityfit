@@ -25,6 +25,22 @@ import iconStretching from "./assets/icons/stretching.png";
 import iconYoga from "./assets/icons/yoga.png";
 import leoProfanity from "leo-profanity";
 
+// Real fix for a genuine bug found via real-device testing: a person
+// noticed the rowing icon visibly "pop in" the first time they opened
+// the Track an Activity picker - imported images in Vite don't actually
+// get their bytes fetched until the FIRST <img> tag using them renders,
+// so if that first render happens to be on a screen the person visits
+// mid-session (like this picker), it can show a brief blank/loading
+// flash. Preloading here starts the real network fetch the moment the
+// app itself loads, well before anyone ever reaches that screen.
+if (typeof document !== "undefined") {
+  const preloadLink = document.createElement("link");
+  preloadLink.rel = "preload";
+  preloadLink.as = "image";
+  preloadLink.href = iconRowing;
+  document.head.appendChild(preloadLink);
+}
+
 // "Other" custom activity naming - client-side, instant word-list check.
 // This is layer 1 of 2 (see roadmap): catches obvious profanity immediately
 // on submit, before anything is saved. Layer 2 (server-side, real
