@@ -8138,6 +8138,15 @@ const shouldUseAccessibilityTrack = (profile: any): boolean => {
 };
 
 const getProgramDay = (programKey: string, programDay: number, generatedDays?: any[]) => {
+  // Real fix - see REST_DAY_SENTINEL's own comment for the full
+  // explanation. JS modulo can return a negative result for a negative
+  // input (unlike some other languages), so -1 fed into the normal
+  // (programDay - 1) % length math below would silently return
+  // undefined instead of wrapping to a real day - this returns a real,
+  // safe rest-day object immediately instead.
+  if (programDay === REST_DAY_SENTINEL) {
+    return { title: "Rest Day", focus: "Recovery", type: "rest", isRest: true, groups: [], notes: [] };
+  }
   // Month 4+ — use generated days if provided
   if (generatedDays && generatedDays.length > 0) {
     const idx = (programDay - 1) % generatedDays.length;
@@ -11821,6 +11830,13 @@ const deriveWorkoutSubtitle = (groups: any[]): string => {
   return hasCardio ? (parts ? parts + " & Cardio" : "Cardio") : parts;
 };
 
+// Never a real session number in any program - always means "this
+// date is temporarily marked rest," completely separate from the
+// person's real, sequential progression. See the comment inside
+// getWorkoutTypeForProgramDay for the full explanation of why this
+// exists.
+const REST_DAY_SENTINEL = -1;
+
 const getWorkoutTypeForProgramDay = (
   programDay: number,
   frequency: number,
@@ -11829,6 +11845,19 @@ const getWorkoutTypeForProgramDay = (
   generatedDays?: any[]
 ): { type: string; label: string; focus: string; isRest: boolean } => {
   const restDefault = { type: "rest", label: "Rest Day", focus: "Recovery", isRest: true };
+
+  // Real fix for a genuine confusion found tonight: Flex Week and manual
+  // day-swaps used to convert a date to rest by borrowing an existing,
+  // real REST_DAY_SENTINEL from later in the program's own sequence -
+  // meaning that real session number got "used up" early, disconnected
+  // from whenever the person's actual progression later reached it for
+  // real. That created a genuinely confusing moment: the 30-Day Grid
+  // would show that session already checked off before the person had
+  // ever actually done its real content. -1 is never a real session
+  // number in any program, so it can never collide with one - it always
+  // means "temporarily marked rest for this date," completely separate
+  // from the person's real, untouched sequence progression.
+  if (programDay === REST_DAY_SENTINEL) return restDefault;
 
   // Month 6+ — read from generatedDays but override isRest from frequency
   if (programKey?.startsWith("month6-") && generatedDays && generatedDays.length > 0) {
@@ -12122,19 +12151,20 @@ const computeFlexWeekOverrides = (profile: any, targetSessionCount: number): Rec
     picked.push(pool[picked.length % pool.length]);
   }
 
-  // Find a real rest day already in this program's own cycle - reused
-  // for every eligible date that isn't one of the diversified picks.
-  let restDayProgramNumber: number | null = null;
-  for (let d = 1; d <= 30; d++) {
-    const w = getWorkoutTypeForProgramDay(d, profile?.frequency || 4, undefined, profile?.programKey, profile?.generatedDays);
-    if (w.isRest) { restDayProgramNumber = d; break; }
-  }
-  if (restDayProgramNumber === null) return null;
-
+  // Real fix for a genuine confusion found tonight: this used to borrow
+  // a real, future rest day's own session number from the program's
+  // cycle and reuse it here - meaning that real number got marked
+  // complete early, disconnected from whenever the person's actual
+  // sequential progression later reached it for real, creating a
+  // genuinely confusing "wait, didn't I already do this?" moment on the
+  // 30-Day Grid. REST_DAY_SENTINEL is never a real session number in any
+  // program, so using it here can never collide with the person's real,
+  // untouched progression - it's a real, standalone "rest today" marker,
+  // not a borrowed placeholder.
   const patch: Record<string, number> = { ...(profile?.dayOverrides || {}) };
   eligibleDates.forEach((d: any, i: number) => {
     const dateKey = d.date.toDateString();
-    patch[dateKey] = i < picked.length ? picked[i].day : (restDayProgramNumber as number);
+    patch[dateKey] = i < picked.length ? picked[i].day : REST_DAY_SENTINEL;
   });
   return patch;
 };
@@ -27480,8 +27510,22 @@ const isInitialLoad = React.useRef(true);
       lastWeekReset: needsWeekReset ? startOfWeek.toISOString() : (userProfile.lastWeekReset || null),
       lastSessionDate: todayStr,
       programDay: newProgramDay,
-      cycleSessionsCompleted: (userProfile.cycleSessionsCompleted || 0) + 1,
-      completedProgramDays: [...new Set([...(userProfile.completedProgramDays || []), resolvedCompletedDay])],
+      // Real fix for a genuine gap found tonight: this used to
+      // increment for ANY completion, including a rest day (real or
+      // Flex Week-induced) - meaning "sessions completed" and the
+      // Program Completion percentage that drives real milestones (like
+      // the 3-month, 80%-completion threshold for Month 6+ eligibility)
+      // could be inflated by rest days that were never actual training.
+      // Only counts a completion with real exercise groups as a session.
+      cycleSessionsCompleted: (userProfile.cycleSessionsCompleted || 0) + (completedGroups.length > 0 ? 1 : 0),
+      // Real fix - see REST_DAY_SENTINEL's own comment for the full
+      // explanation. A Flex Week rest completion resolves to the
+      // sentinel, not a real session number - it was never meant to be
+      // tracked as "session -1 done" on the 30-Day Grid, so it's
+      // excluded here rather than added alongside real completions.
+      completedProgramDays: resolvedCompletedDay === REST_DAY_SENTINEL
+        ? (userProfile.completedProgramDays || [])
+        : [...new Set([...(userProfile.completedProgramDays || []), resolvedCompletedDay])],
       reEntrySessions: newReEntrySessions,
       lastWorkoutSnapshot: {
         groups: completedGroups,
