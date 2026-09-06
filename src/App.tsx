@@ -11999,6 +11999,108 @@ const getWeekSchedule = (
   return days;
 };
 
+// ─── Flex Week ──────────────────────────────────────────────────────────────
+// Real fix for a genuine gap: someone set to train 5x/week who has one
+// unusually busy week shouldn't have to either push through anyway or
+// reset their whole program (which resets progression/streak) just to
+// train less for seven days. This computes a real dayOverrides patch -
+// the exact same mechanism the existing day-swap feature already uses and
+// every screen already reads live - so nothing new needs wiring anywhere
+// else, and it composes cleanly with a manual rearrange the person may
+// have already done this same week.
+//
+// Deliberately scale-down only: there's no path here that removes a rest
+// day or adds a workout day beyond what the program already calls for.
+// Widening the week would touch progression logic this function has no
+// business touching.
+//
+// Selection is not "take the last N days" - that would happily leave
+// three consecutive leg days if the trimmed days happened to fall
+// earlier in the week. It specifically targets days that are back-to-back
+// with another day sharing the same focus first (directly fixing the
+// "four leg days in a row" problem), then falls back to an evenly-spaced
+// pick across whatever's left, so the kept sessions land with real spacing
+// through the week rather than clustering at one end of it.
+const computeFlexWeekOverrides = (profile: any, targetSessionCount: number): Record<string, number> | null => {
+  const weekDays = getWeekSchedule(
+    profile?.programDay || 1,
+    profile?.frequency || 4,
+    profile?.completedProgramDays || [],
+    profile?.lastSessionDate || "",
+    profile?.programKey,
+    new Date(),
+    profile?.generatedDays,
+    profile?.injuries,
+    profile?.equipmentPreference,
+    profile?.buildingEquipment,
+    parseInt(String(profile?.age)) || 30,
+    profile?.sessionLength || 60,
+    profile?.effectiveLevel || profile?.experience || "intermediate",
+    profile?.dayOverrides
+  );
+
+  const totalWorkoutDays = weekDays.filter((d: any) => !d.isRest);
+  const alreadyCompleted = totalWorkoutDays.filter((d: any) => d.isCompleted).length;
+  // Only days that are genuinely still changeable - not already done,
+  // not already in the past. Today stays eligible as long as it hasn't
+  // been completed yet, since adjusting the week ahead of a busy day is
+  // exactly the real use case.
+  const eligible = totalWorkoutDays.filter((d: any) => !d.isCompleted && !d.isPast);
+
+  const remainingNeeded = Math.max(0, targetSessionCount - alreadyCompleted);
+  const numToConvert = eligible.length - remainingNeeded;
+  // Nothing to do: either already at/below the target, or the target is
+  // impossible to reach downward (e.g. more sessions already completed
+  // this week than the requested target) - either way, no safe change
+  // to make, so this deliberately no-ops rather than guessing.
+  if (numToConvert <= 0) return null;
+
+  // Find a real rest day already in this program's own cycle - reused as
+  // the override value for every converted date, rather than inventing a
+  // synthetic "rest" concept the rest of the app doesn't already know
+  // about. Searches a full month of program-days, which is comfortably
+  // more than any real cycle length in use.
+  let restDayProgramNumber: number | null = null;
+  for (let d = 1; d <= 30; d++) {
+    const w = getWorkoutTypeForProgramDay(d, profile?.frequency || 4, undefined, profile?.programKey, profile?.generatedDays);
+    if (w.isRest) { restDayProgramNumber = d; break; }
+  }
+  if (restDayProgramNumber === null) return null;
+
+  // Group consecutive eligible days sharing the same focus - these are
+  // the real, concrete "back to back" cases worth breaking up first.
+  const runBreakCandidates: number[] = [];
+  for (let i = 1; i < eligible.length; i++) {
+    if (eligible[i].focus && eligible[i].focus === eligible[i - 1].focus) {
+      runBreakCandidates.push(i); // remove the later day of the matching pair
+    }
+  }
+
+  const toConvertIndices = new Set<number>();
+  for (const idx of runBreakCandidates) {
+    if (toConvertIndices.size >= numToConvert) break;
+    toConvertIndices.add(idx);
+  }
+  // Still need more removals beyond the same-focus runs - spread the
+  // remaining picks evenly across whatever's left rather than trimming
+  // from one end, so the days that stay are genuinely spaced through
+  // the week.
+  if (toConvertIndices.size < numToConvert) {
+    const remainingPool = eligible.map((_: any, i: number) => i).filter((i: number) => !toConvertIndices.has(i));
+    const stillNeeded = numToConvert - toConvertIndices.size;
+    const stride = remainingPool.length / stillNeeded;
+    for (let k = 0; k < stillNeeded; k++) {
+      toConvertIndices.add(remainingPool[Math.floor(k * stride)]);
+    }
+  }
+
+  const patch: Record<string, number> = { ...(profile?.dayOverrides || {}) };
+  toConvertIndices.forEach((idx) => {
+    patch[eligible[idx].date.toDateString()] = restDayProgramNumber as number;
+  });
+  return patch;
+};
+
 // ─── Weekly Program View Screen ───────────────────────────────────────────────
 
 const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay = () => {}, onReviewWorkout, workoutDoneToday, isInProgress = false, onPreviewWorkout = null as any, initialSelectedDay = null as any, onProfileUpdate = (updates: any) => {} }) => {
@@ -12049,6 +12151,26 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
     await setDoc(doc(db, "users", profile.uid), { dayOverrides: {} }, { merge: true });
     deleteDoc(doc(db, "users", profile.uid, "assistantChat", "today")).catch(() => {});
     onProfileUpdate?.({ dayOverrides: {} });
+  };
+
+  // Flex Week - see computeFlexWeekOverrides for the real selection logic.
+  // Only ever needs to touch dayOverrides, the same field every other
+  // screen (including the Fitness Assistant's own prompt) already reads
+  // live - so the assistant stays accurate about exactly how many
+  // sessions remain this week automatically, with no separate wiring.
+  const [showFlexWeek, setShowFlexWeek] = useState(false);
+  const [flexWeekBusy, setFlexWeekBusy] = useState(false);
+  const applyFlexWeek = async (targetCount: number) => {
+    if (!profile?.uid) return;
+    setFlexWeekBusy(true);
+    const patch = computeFlexWeekOverrides(profile, targetCount);
+    if (patch) {
+      await setDoc(doc(db, "users", profile.uid), { dayOverrides: patch }, { merge: true });
+      deleteDoc(doc(db, "users", profile.uid, "assistantChat", "today")).catch(() => {});
+      onProfileUpdate?.({ dayOverrides: patch });
+    }
+    setFlexWeekBusy(false);
+    setShowFlexWeek(false);
   };
 
   // Long-press picks a day up (matching the same timer-based long-press
@@ -12522,10 +12644,38 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
         <div style={{ background: COLORS.card, borderRadius: 18, padding: "16px 20px", border: `1px solid ${COLORS.border}`, marginBottom: 80 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" as const, margin: 0 }}>Week at a Glance</p>
-            {profile?.dayOverrides && Object.keys(profile.dayOverrides).length > 0 && (
-              <button onClick={resetWeek} style={{ background: "none", border: "none", color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Reset Week</button>
-            )}
+            <div style={{ display: "flex", gap: 14 }}>
+              <button onClick={() => setShowFlexWeek((v) => !v)} style={{ background: "none", border: "none", color: COLORS.accent, fontSize: 11, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Adjust This Week</button>
+              {profile?.dayOverrides && Object.keys(profile.dayOverrides).length > 0 && (
+                <button onClick={resetWeek} style={{ background: "none", border: "none", color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Reset Week</button>
+              )}
+            </div>
           </div>
+
+          {showFlexWeek && (() => {
+            const currentTotal = weekDays.filter((d: any) => !d.isRest).length;
+            const alreadyDone = weekDays.filter((d: any) => !d.isRest && d.isCompleted).length;
+            // Scale-down only, by design - see computeFlexWeekOverrides for
+            // the full reasoning. Only offers counts genuinely below what
+            // this week already has, and never below what's already done.
+            const options = Array.from({ length: currentTotal - 1 }, (_, i) => i + 1).filter((n) => n >= alreadyDone && n < currentTotal);
+            return (
+              <div style={{ background: `${COLORS.accent}10`, border: `1px solid ${COLORS.accent}30`, borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
+                <p style={{ color: COLORS.white, fontSize: 12, margin: "0 0 10px", lineHeight: 1.4 }}>Busy week? Pick how many sessions you actually want this week - your program and streak stay exactly as they are.</p>
+                {options.length > 0 ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {options.map((n) => (
+                      <button key={n} disabled={flexWeekBusy} onClick={() => applyFlexWeek(n)} style={{ width: 40, height: 40, borderRadius: 12, border: `1px solid ${COLORS.accent}60`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 800, cursor: flexWeekBusy ? "default" : "pointer", opacity: flexWeekBusy ? 0.6 : 1 }}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>No lower option available this week.</p>
+                )}
+              </div>
+            );
+          })()}
           {weekDays.map((day, i) => {
             const isEligible = !day.isCompleted && !day.isPast;
             const isPickedUp = pickedUpDay && pickedUpDay.date.toDateString() === day.date.toDateString();
