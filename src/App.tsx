@@ -19750,6 +19750,19 @@ const StickerShareScreenInner = ({
   const activePointers = React.useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchStartDist = React.useRef<number | null>(null);
   const pinchStartScale = React.useRef(1);
+  // Real fix for a genuine bug found via real-device testing: calling
+  // setPos/setScale on every single pointermove event (which can fire
+  // dozens of times per second during a real drag) triggers a full React
+  // re-render each time - exactly what "stiff, not fluid, like regular
+  // iOS" describes. These refs hold the CURRENT in-gesture values and
+  // get applied directly to the DOM element below, completely
+  // bypassing React's render cycle for the continuous part of the
+  // gesture - the same technique native apps use. React state
+  // (pos/scale) is only ever updated ONCE, when the gesture actually
+  // ends, which is both when it's actually needed (for html2canvas
+  // capture) and cheap (a single re-render, not dozens).
+  const livePosRef = React.useRef({ x: 0.5, y: 0.5 });
+  const liveScaleRef = React.useRef(1);
 
   const getPinchDistance = (): number | null => {
     const pts = Array.from(activePointers.current.values());
@@ -19757,10 +19770,25 @@ const StickerShareScreenInner = ({
     return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
   };
 
+  // Applies the current live position/scale directly to the sticker's
+  // DOM element - the whole point of the refs above, so a real drag/pinch
+  // feels instant and native rather than waiting on a React re-render.
+  const applyLiveTransform = () => {
+    if (!stickerRef.current) return;
+    stickerRef.current.style.left = `${livePosRef.current.x * 100}%`;
+    stickerRef.current.style.top = `${livePosRef.current.y * 100}%`;
+    stickerRef.current.style.transform = `translate(-50%, -50%) scale(${liveScaleRef.current})`;
+  };
+
   const handleStickerPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // Seed the live refs from React state right at gesture start, so
+    // the very first move computes a delta from the real current
+    // position/scale, not a stale value from an earlier gesture.
+    livePosRef.current = { x: pos.x, y: pos.y };
+    liveScaleRef.current = scale;
     if (activePointers.current.size === 2) {
       pinchStartDist.current = getPinchDistance();
       pinchStartScale.current = scale;
@@ -19782,7 +19810,8 @@ const StickerShareScreenInner = ({
         // sticker becomes genuinely illegible clutter, and above 4 it can
         // clip outside the visible frame or lose sharpness once exported
         // at the fixed 2x/3x scale used by html2canvas below.
-        setScale(Math.max(0.4, Math.min(4, pinchStartScale.current * ratio)));
+        liveScaleRef.current = Math.max(0.4, Math.min(4, pinchStartScale.current * ratio));
+        applyLiveTransform();
       }
       return;
     }
@@ -19791,7 +19820,8 @@ const StickerShareScreenInner = ({
     const rect = containerRef.current.getBoundingClientRect();
     const dx = (e.clientX - dragState.current.startX) / rect.width;
     const dy = (e.clientY - dragState.current.startY) / rect.height;
-    setPos({ x: clamp01(dragState.current.origX + dx), y: clamp01(dragState.current.origY + dy) });
+    livePosRef.current = { x: clamp01(dragState.current.origX + dx), y: clamp01(dragState.current.origY + dy) };
+    applyLiveTransform();
   };
   const handleStickerPointerUp = (e: React.PointerEvent) => {
     activePointers.current.delete(e.pointerId);
@@ -19805,6 +19835,11 @@ const StickerShareScreenInner = ({
         if (moved < 6) setOverlayTier((t) => (t === 0 ? 1 : 0));
       }
       dragState.current = null;
+      // Commit the final in-gesture values to real React state exactly
+      // once here, now that the gesture has actually ended - this is
+      // the only point during a drag/pinch that triggers a re-render.
+      setPos(livePosRef.current);
+      setScale(liveScaleRef.current);
       sampleContrast();
     }
   };
