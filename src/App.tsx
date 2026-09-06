@@ -121,6 +121,7 @@ import {
   Crown,
   Calendar,
   Clock,
+  Moon,
   User,
   Bell,
   Shield,
@@ -9634,6 +9635,39 @@ const expandDayTitle = (title: string): string => {
 };
 
 // ─── Workout Exercise List Screen ─────────────────────────────────────────────
+// ─── Rest Day Screen ────────────────────────────────────────────────────────
+// Real fix for a genuine bug found via real-device testing: rest days used
+// to route through this same WorkoutListScreen, which renders a list of
+// exercise groups - for a rest day (zero groups, by definition) that meant
+// a completely blank screen with nothing on it at all. Rest days now get
+// their own real, distinct presentation instead of an empty version of the
+// workout screen.
+const RestDayScreen = ({ onBack, onComplete, isCompleted = false }: any) => {
+  return (
+    <div style={{ minHeight: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "calc(48px + env(safe-area-inset-top, 0px)) 24px 0" }}>
+        <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <ArrowLeft size={18} color={COLORS.white} />
+        </button>
+      </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 32px", textAlign: "center" }}>
+        <div style={{ width: 88, height: 88, borderRadius: 24, background: `${COLORS.primary}18`, border: `1px solid ${COLORS.primary}30`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
+          <Moon size={40} color={COLORS.primary} strokeWidth={1.5} />
+        </div>
+        <h1 style={{ color: COLORS.white, fontSize: 26, fontWeight: 900, margin: "0 0 10px", letterSpacing: -0.6 }}>Rest Day</h1>
+        <p style={{ color: COLORS.textSecondary, fontSize: 15, lineHeight: 1.6, margin: "0 0 32px", maxWidth: 320 }}>
+          Recovery is part of the program, not a pause from it - this is where your body actually rebuilds from the work you've put in.
+        </p>
+        {onComplete && (
+          <button onClick={isCompleted ? undefined : onComplete} style={{ padding: "16px 32px", borderRadius: 16, border: "none", background: isCompleted ? `${COLORS.white}10` : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 15, fontWeight: 800, cursor: isCompleted ? "default" : "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+            {isCompleted ? (<><Check size={18} color={COLORS.white} strokeWidth={3} /> Rest Day Complete</>) : "Mark Rest Day Complete"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage = "https://res.cloudinary.com/dk5g9itw8/image/upload/upper-body_n0f8tv", programDay = 1, programWeek = 1, isReview = false, bgPosition = "center top", equipmentPreference = "gym-and-bands", historyMeta = null as any, isInProgress = false, currentGroupIndex = 0, workoutType = "full-body", workoutDoneToday = false, buildingEquipment = [] as string[] }) => {
   const groups = filteredGroups || day.groups;
   const isPureCardio = groups.every(g => g.type === "cardio");
@@ -27766,6 +27800,9 @@ const isInitialLoad = React.useRef(true);
     setScreen("dashboard");
   }} />;
   if (screen === "weekly") return <WeeklyProgramView key={screen + new Date().toDateString()} profile={liveProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString())} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  if (screen === "preview" && previewDay?.isRest) {
+    return <RestDayScreen onBack={() => { setPreviewDay(null); setScreen("weekly"); }} />;
+  }
   if (screen === "preview" && previewDay) {
     const previewType = previewDay.type || "full-body";
     const previewImage = getWorkoutImage(previewType, previewDay.programDay || 1);
