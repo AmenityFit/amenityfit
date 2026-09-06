@@ -19896,7 +19896,17 @@ const ShareableStatCard = ({
   // wherever it was logically triggered from, sidestepping the issue
   // entirely regardless of which scrolling container called it.
   return createPortal(
-    <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", padding: "72px 24px 24px", overflowY: "auto" }}>
+    // Real fix for a genuine bug found via real-device testing: with
+    // alignItems centering tall content in a scrollable container, a
+    // card taller than the screen (e.g. 6 stats at once, like Max
+    // Elevation added tonight) got centered such that its own TOP was
+    // pushed above the visible viewport with no obvious cue to scroll
+    // up - most people scroll down, not up, so this read as "cut off"
+    // even though the content was technically all there. justifyContent:
+    // flex-start anchors the card's top edge at a fixed position
+    // regardless of its height, so any overflow is a normal, expected
+    // scroll-down instead.
+    <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "72px 24px 24px", overflowY: "auto" }}>
       <button onClick={onClose} style={{ position: "absolute", top: "calc(56px + env(safe-area-inset-top, 0px))", right: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer", zIndex: 10 }}>×</button>
 
       {/* Real, selectable sticker layouts - matching Strava's own model
