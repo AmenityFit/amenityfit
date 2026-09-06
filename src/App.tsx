@@ -12101,6 +12101,242 @@ const computeFlexWeekOverrides = (profile: any, targetSessionCount: number): Rec
   return patch;
 };
 
+// ─── Calendar View ──────────────────────────────────────────────────────────
+// Real Google-Calendar-style month view - combines the person's actual
+// scheduled program days (today and future, from the exact same live
+// schedule logic every other screen already uses) with their real
+// completed session history (past - never reconstructed from today's
+// program settings, since a past date may have been under a different
+// program/frequency entirely), plus lightweight manual notes for anything
+// done outside the app (a retreat, an untracked class). Manual notes
+// deliberately never touch stats or streaks - see the roadmap note on why
+// that's the right call, not a limitation.
+const CALENDAR_NOTE_COLOR = "#B892FF";
+
+const getScheduledDayInfo = (profile: any, date: Date): { focus: string; isRest: boolean; type: string } | null => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  const daysSinceToday = Math.round((target.getTime() - today.getTime()) / 86400000);
+  if (daysSinceToday < 0) return null; // Past dates use real history instead - see component comment above.
+  const naturalProgramDay = (profile?.programDay || 1) + daysSinceToday;
+  const programDay = resolveProgramDayForDate(naturalProgramDay, target, profile?.dayOverrides);
+  const workout = getWorkoutTypeForProgramDay(programDay, profile?.frequency || 4, target.getDay(), profile?.programKey, profile?.generatedDays);
+  return { focus: workout.isRest ? "Rest" : (workout.focus || workout.label || "Workout"), isRest: workout.isRest, type: workout.type || "full-body" };
+};
+
+const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any) => {
+  // Self-sufficient rather than requiring every caller to fetch and pass
+  // history down - reads the same shared workoutHistoryCache Dashboard
+  // and Progress already populate (instant if either was visited this
+  // session), with its own background fetch as a fallback for the case
+  // someone opens Calendar as the very first screen this session.
+  const [sessionHistory, setSessionHistory] = useState<any[]>(() =>
+    workoutHistoryCache.uid === profile?.uid ? workoutHistoryCache.sessions : []
+  );
+  useEffect(() => {
+    const uid = profile?.uid;
+    if (!uid) return;
+    fetchWorkoutHistory(uid, (fastSessions) => setSessionHistory(fastSessions)).then((sessions) => {
+      setSessionHistory(sessions);
+      workoutHistoryCache.uid = uid;
+      workoutHistoryCache.sessions = sessions;
+    });
+  }, [profile?.uid]);
+  const [viewMonth, setViewMonth] = useState(() => { const d = new Date(); d.setDate(1); return d; });
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [slideDir, setSlideDir] = useState<"left" | "right" | null>(null);
+  const [noteInput, setNoteInput] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
+  // Real, deliberate slide+fade on month change rather than an instant
+  // swap - matches the smooth, non-stiff feel of real calendar apps
+  // rather than content just jump-cutting to a new month.
+  const changeMonth = (delta: number) => {
+    setSlideDir(delta > 0 ? "left" : "right");
+    setViewMonth((prev) => { const d = new Date(prev); d.setMonth(d.getMonth() + delta); return d; });
+    setSelectedDateKey(null);
+    setTimeout(() => setSlideDir(null), 260);
+  };
+
+  const monthLabel = viewMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const today = new Date();
+  const todayKey = today.toDateString();
+
+  const firstOfMonth = new Date(viewMonth);
+  const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
+  const leadingBlanks = firstOfMonth.getDay();
+  const cells: (Date | null)[] = [
+    ...Array(leadingBlanks).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => new Date(viewMonth.getFullYear(), viewMonth.getMonth(), i + 1)),
+  ];
+
+  const sessionsByDateKey = React.useMemo(() => {
+    const map: Record<string, any[]> = {};
+    (sessionHistory || []).forEach((s: any) => {
+      const d = s.completedAt?.toDate ? s.completedAt.toDate() : null;
+      if (!d) return;
+      const key = d.toDateString();
+      if (!map[key]) map[key] = [];
+      map[key].push(s);
+    });
+    return map;
+  }, [sessionHistory]);
+
+  const getDayItems = (date: Date) => {
+    const key = date.toDateString();
+    const isPast = date < today && key !== todayKey;
+    const completed = sessionsByDateKey[key] || [];
+    const scheduled = !isPast ? getScheduledDayInfo(profile, date) : null;
+    const note = profile?.calendarNotes?.[key] || null;
+    return { completed, scheduled, note, isPast, isToday: key === todayKey };
+  };
+
+  const typeColor = (type: string) => type === "cardio" ? ROUTE_LINE_COLOR : COLORS.primary;
+
+  const saveNote = async () => {
+    if (!selectedDateKey || !noteInput.trim() || !profile?.uid) return;
+    setSavingNote(true);
+    const updated = { ...(profile?.calendarNotes || {}), [selectedDateKey]: noteInput.trim() };
+    await setDoc(doc(db, "users", profile.uid), { calendarNotes: updated }, { merge: true });
+    onProfileUpdate?.({ calendarNotes: updated });
+    setNoteInput("");
+    setSavingNote(false);
+  };
+
+  const deleteNote = async (dateKey: string) => {
+    if (!profile?.uid) return;
+    const updated = { ...(profile?.calendarNotes || {}) };
+    delete updated[dateKey];
+    await setDoc(doc(db, "users", profile.uid), { calendarNotes: updated }, { merge: true });
+    onProfileUpdate?.({ calendarNotes: updated });
+  };
+
+  const selectedDate = selectedDateKey ? cells.find((c) => c && c.toDateString() === selectedDateKey) : null;
+  const selectedItems = selectedDate ? getDayItems(selectedDate) : null;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: COLORS.background, display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(16px + env(safe-area-inset-top, 0px)) 20px 16px" }}>
+        <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer" }}>←</button>
+        <p style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: 0 }}>{monthLabel}</p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => changeMonth(-1)} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, color: COLORS.white, fontSize: 16, cursor: "pointer" }}>‹</button>
+          <button onClick={() => changeMonth(1)} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, color: COLORS.white, fontSize: 16, cursor: "pointer" }}>›</button>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", padding: "0 12px", marginBottom: 4 }}>
+        {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+          <p key={i} style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, textAlign: "center", margin: "0 0 8px" }}>{d}</p>
+        ))}
+      </div>
+
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, padding: "0 12px",
+        transform: slideDir === "left" ? "translateX(-8px)" : slideDir === "right" ? "translateX(8px)" : "translateX(0)",
+        opacity: slideDir ? 0.4 : 1,
+        transition: "transform 0.26s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.26s ease",
+      }}>
+        {cells.map((date, i) => {
+          if (!date) return <div key={i} />;
+          const key = date.toDateString();
+          const items = getDayItems(date);
+          const isSelected = selectedDateKey === key;
+          const hasCompleted = items.completed.length > 0;
+          const hasScheduledWorkout = items.scheduled && !items.scheduled.isRest;
+          const dotColor = hasCompleted ? typeColor(items.completed[0].type) : (hasScheduledWorkout ? typeColor(items.scheduled!.type) : null);
+          return (
+            <button
+              key={i}
+              onClick={() => setSelectedDateKey(isSelected ? null : key)}
+              style={{
+                aspectRatio: "1", borderRadius: 12, border: items.isToday ? `1.5px solid ${COLORS.accent}` : isSelected ? `1.5px solid ${COLORS.white}` : "1.5px solid transparent",
+                background: isSelected ? `${COLORS.white}12` : "transparent",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+                cursor: "pointer", padding: 0,
+                transition: "background 0.16s ease, border-color 0.16s ease",
+              }}
+            >
+              <span style={{ color: items.isPast && !hasCompleted && !items.note ? COLORS.textSecondary : COLORS.white, fontSize: 13, fontWeight: items.isToday ? 800 : 600, opacity: items.isPast && !hasCompleted ? 0.5 : 1 }}>{date.getDate()}</span>
+              <div style={{ display: "flex", gap: 3, height: 5, alignItems: "center" }}>
+                {dotColor && (
+                  <div style={{ width: 5, height: 5, borderRadius: 3, background: dotColor, opacity: hasCompleted ? 1 : 0.4 }} />
+                )}
+                {items.note && (
+                  <div style={{ width: 5, height: 5, borderRadius: 3, background: CALENDAR_NOTE_COLOR }} />
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 20px calc(20px + env(safe-area-inset-bottom, 0px))" }}>
+        {selectedDate && selectedItems ? (
+          <div style={{ animation: "calendarDetailIn 0.2s cubic-bezier(0.22, 1, 0.36, 1)" }}>
+            <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 800, margin: "0 0 14px" }}>
+              {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+            </p>
+
+            {selectedItems.completed.map((s: any, i: number) => (
+              <div key={i} onClick={() => onSelectSession?.(s)} style={{ display: "flex", alignItems: "center", gap: 12, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
+                <div style={{ width: 8, height: 8, borderRadius: 4, background: typeColor(s.type), flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{s.customActivityName || s.type}</p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>Completed</p>
+                </div>
+              </div>
+            ))}
+
+            {selectedItems.scheduled && !selectedItems.completed.length && (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, background: `${COLORS.white}08`, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 4, background: selectedItems.scheduled.isRest ? COLORS.textSecondary : typeColor(selectedItems.scheduled.type), flexShrink: 0, opacity: 0.5 }} />
+                <div style={{ flex: 1 }}>
+                  <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{selectedItems.scheduled.focus}</p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{selectedItems.scheduled.isRest ? "Rest day" : "Scheduled"}</p>
+                </div>
+              </div>
+            )}
+
+            {selectedItems.note && (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: `${CALENDAR_NOTE_COLOR}12`, border: `1px solid ${CALENDAR_NOTE_COLOR}40`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 4, background: CALENDAR_NOTE_COLOR, flexShrink: 0, marginTop: 4 }} />
+                <p style={{ color: COLORS.white, fontSize: 14, margin: 0, flex: 1, lineHeight: 1.4 }}>{selectedItems.note}</p>
+                <button onClick={() => deleteNote(selectedDateKey!)} style={{ background: "none", border: "none", color: COLORS.textSecondary, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>Remove</button>
+              </div>
+            )}
+
+            {!selectedItems.note && (
+              <div style={{ marginTop: 8 }}>
+                <input
+                  value={noteInput}
+                  onChange={(e) => setNoteInput(e.target.value)}
+                  placeholder="Add a note — e.g. Pilates class, retreat..."
+                  style={{ width: "100%", background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "12px 14px", color: COLORS.white, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+                />
+                <button onClick={saveNote} disabled={!noteInput.trim() || savingNote} style={{ width: "100%", padding: "12px", borderRadius: 12, border: "none", background: noteInput.trim() ? COLORS.accent : COLORS.card, color: noteInput.trim() ? "#0A0A0A" : COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: noteInput.trim() ? "pointer" : "default" }}>
+                  {savingNote ? "Saving..." : "Add Note"}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p style={{ color: COLORS.textSecondary, fontSize: 13, textAlign: "center", marginTop: 40 }}>Tap a day to see what's scheduled, what you completed, or add a note.</p>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes calendarDetailIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+};
+
 // ─── Weekly Program View Screen ───────────────────────────────────────────────
 
 const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay = () => {}, onReviewWorkout, workoutDoneToday, isInProgress = false, onPreviewWorkout = null as any, initialSelectedDay = null as any, onProfileUpdate = (updates: any) => {} }) => {
@@ -12160,6 +12396,7 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
   // sessions remain this week automatically, with no separate wiring.
   const [showFlexWeek, setShowFlexWeek] = useState(false);
   const [flexWeekBusy, setFlexWeekBusy] = useState(false);
+  const [showCalendarView, setShowCalendarView] = useState(false);
   const applyFlexWeek = async (targetCount: number) => {
     if (!profile?.uid) return;
     setFlexWeekBusy(true);
@@ -12391,12 +12628,25 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
 
       {/* Header */}
       <div style={{ padding: "calc(48px + env(safe-area-inset-top, 0px)) 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}20 0%, transparent 100%)` }}>
-        <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", marginBottom: 20 }}>
-          <ArrowLeft size={18} color={COLORS.white} />
-        </button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <ArrowLeft size={18} color={COLORS.white} />
+          </button>
+          <button onClick={() => setShowCalendarView(true)} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <Calendar size={18} color={COLORS.white} />
+          </button>
+        </div>
         <h1 style={{ color: COLORS.white, fontSize: 26, fontWeight: 900, margin: "0 0 4px", letterSpacing: -0.5 }}>This Week</h1>
         <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: 0 }}>{weeklySubtitle}</p>
       </div>
+
+      {showCalendarView && (
+        <CalendarView
+          profile={profile}
+          onBack={() => setShowCalendarView(false)}
+          onProfileUpdate={onProfileUpdate}
+        />
+      )}
 
       <div style={{ padding: "0 24px 12px" }}>
 
