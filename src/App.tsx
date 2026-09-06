@@ -20153,10 +20153,18 @@ const StickerShareScreenInner = ({
     const textShadowStyle = fontColor === "white"
       ? "0 2px 10px rgba(0,0,0,0.65), 0 1px 3px rgba(0,0,0,0.9)"
       : "0 2px 10px rgba(255,255,255,0.55), 0 1px 3px rgba(255,255,255,0.85)";
+    // Real fix for a genuine inconsistency: the AMENITYFIT text already
+    // correctly switches between white and black to match whatever's
+    // behind it, but the logo image itself stayed its normal blue
+    // regardless - white mode (used over dark/busy backgrounds) ended up
+    // with white text next to a blue logo that never matched it. Standard
+    // technique for forcing any logo to solid white or solid black without
+    // needing separate asset files - brightness(0) alone collapses every
+    // pixel to black, invert(1) then flips that to white when needed.
     const logoRow = (
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-        <img src={amenityfitLogo} alt="" style={{ width: 12, height: 12, objectFit: "contain", filter: `drop-shadow(${textShadowStyle.split(",")[0]})` }} />
-        <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 9, fontWeight: 900, letterSpacing: 0.6, opacity: 0.85 }}>AMENITYFIT</span>
+        <img src={amenityfitLogo} alt="" style={{ width: 16, height: 16, objectFit: "contain", filter: `brightness(0) ${fontColor === "white" ? "invert(1)" : ""} drop-shadow(${textShadowStyle.split(",")[0]})` }} />
+        <span style={{ color: textColor, textShadow: textShadowStyle, fontSize: 11, fontWeight: 900, letterSpacing: 0.6, opacity: 0.85 }}>AMENITYFIT</span>
       </div>
     );
     const titleRow = (
