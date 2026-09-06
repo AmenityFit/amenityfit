@@ -12149,7 +12149,13 @@ const computeFlexWeekOverrides = (profile: any, targetSessionCount: number): Rec
 // done outside the app (a retreat, an untracked class). Manual notes
 // deliberately never touch stats or streaks - see the roadmap note on why
 // that's the right call, not a limitation.
-const CALENDAR_NOTE_COLOR = "#B892FF";
+// Real fix for a genuine complaint found via real-device testing: every
+// manually-added activity used to show the exact same purple regardless
+// of how many were logged for a day - two real, different things (a
+// Pilates class, a core session) reading as visually identical. A real,
+// distinct palette cycling by position, instead of one fixed color.
+const CALENDAR_NOTE_COLORS = ["#B892FF", "#4ECDC4", "#FF6B9D", "#FFD166", "#7C9EF5"];
+const getNoteColor = (index: number): string => CALENDAR_NOTE_COLORS[index % CALENDAR_NOTE_COLORS.length];
 
 const getScheduledDayInfo = (profile: any, date: Date): { focus: string; isRest: boolean; type: string } | null => {
   const today = new Date();
@@ -12375,9 +12381,9 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
                 {IconComp && (
                   <IconComp size={11} color={items.isToday ? COLORS.white : cellColor} strokeWidth={2.5} style={{ opacity: hasCompleted || items.isToday ? 1 : 0.6 }} />
                 )}
-                {items.notes.length > 0 && (
-                  <div style={{ width: 5, height: 5, borderRadius: 3, background: items.isToday ? COLORS.white : CALENDAR_NOTE_COLOR }} />
-                )}
+                {items.notes.slice(0, 3).map((_: string, ni: number) => (
+                  <div key={ni} style={{ width: 5, height: 5, borderRadius: 3, background: items.isToday ? COLORS.white : getNoteColor(ni) }} />
+                ))}
               </div>
             </button>
           );
@@ -12437,13 +12443,16 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
               );
             })()}
 
-            {selectedItems.notes.map((n: string, i: number) => (
-              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: `${CALENDAR_NOTE_COLOR}12`, border: `1px solid ${CALENDAR_NOTE_COLOR}40`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
-                <div style={{ width: 8, height: 8, borderRadius: 4, background: CALENDAR_NOTE_COLOR, flexShrink: 0, marginTop: 4 }} />
-                <p style={{ color: COLORS.white, fontSize: 14, margin: 0, flex: 1, lineHeight: 1.4 }}>{n}</p>
-                <button onClick={() => deleteNote(selectedDateKey!, i)} style={{ background: "none", border: "none", color: COLORS.textSecondary, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>Remove</button>
-              </div>
-            ))}
+            {selectedItems.notes.map((n: string, i: number) => {
+              const nColor = getNoteColor(i);
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: `${nColor}12`, border: `1px solid ${nColor}40`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 4, background: nColor, flexShrink: 0, marginTop: 4 }} />
+                  <p style={{ color: COLORS.white, fontSize: 14, margin: 0, flex: 1, lineHeight: 1.4 }}>{n}</p>
+                  <button onClick={() => deleteNote(selectedDateKey!, i)} style={{ background: "none", border: "none", color: COLORS.textSecondary, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>Remove</button>
+                </div>
+              );
+            })}
 
             <div style={{ marginTop: 8 }}>
               <input
