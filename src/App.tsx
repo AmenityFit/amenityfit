@@ -16007,6 +16007,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
   // someone taps a different range).
   const [chartRange, setChartRange] = useState<"1M" | "3M" | "6M" | "All">("All");
   const [showLogModal, setShowLogModal] = useState(false);
+  const [showCalendarView, setShowCalendarView] = useState(false);
   // Workout history state — must live at component top level (React hooks rules)
   // Same shared workoutHistoryCache Dashboard uses (see its own comment
   // for the full explanation) - whichever screen loads first populates
@@ -16321,8 +16322,12 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
       <div style={{ flexShrink: 0, padding: "calc(16px + env(safe-area-inset-top, 0px)) 24px 20px", background: `linear-gradient(180deg, ${COLORS.primary}18 0%, transparent 100%)` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <h1 style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: -0.8 }}>Progress</h1>
-          <button
-            onClick={() => setShowLogModal(true)}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => setShowCalendarView(true)} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <Calendar size={18} color={COLORS.white} />
+            </button>
+            <button
+              onClick={() => setShowLogModal(true)}
             title={!canLogToday ? `All metrics locked for now` : ""}
             style={{
               padding: "10px 18px", borderRadius: 12, border: "none",
@@ -16334,9 +16339,19 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
               transition: "all 0.2s ease",
             }}
           >
-            {wellnessMode ? (canLogToday ? "Log Weight" : `Log in ${daysUntilNextLog}d`) : (canLogToday ? "+ Log Stats" : `Log in ${daysUntilNextLog}d`)}
-          </button>
+              {wellnessMode ? (canLogToday ? "Log Weight" : `Log in ${daysUntilNextLog}d`) : (canLogToday ? "+ Log Stats" : `Log in ${daysUntilNextLog}d`)}
+            </button>
+          </div>
         </div>
+
+        {showCalendarView && (
+          <CalendarView
+            profile={profile}
+            onBack={() => setShowCalendarView(false)}
+            onSelectSession={(s: any) => { setShowCalendarView(false); setSelectedSession(s); }}
+            onProfileUpdate={onUpdate}
+          />
+        )}
         <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: 0 }}>
           {(() => {
             const isMonth6 = profile?.programKey?.startsWith("month6-");
