@@ -12157,7 +12157,7 @@ const computeFlexWeekOverrides = (profile: any, targetSessionCount: number): Rec
 const CALENDAR_NOTE_COLORS = ["#B892FF", "#4ECDC4", "#FF6B9D", "#FFD166", "#7C9EF5"];
 const getNoteColor = (index: number): string => CALENDAR_NOTE_COLORS[index % CALENDAR_NOTE_COLORS.length];
 
-const getScheduledDayInfo = (profile: any, date: Date): { focus: string; isRest: boolean; type: string } | null => {
+const getScheduledDayInfo = (profile: any, date: Date): { focus: string; isRest: boolean; type: string; isCompletedToday: boolean } | null => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const target = new Date(date);
@@ -12167,7 +12167,8 @@ const getScheduledDayInfo = (profile: any, date: Date): { focus: string; isRest:
   const naturalProgramDay = (profile?.programDay || 1) + daysSinceToday;
   const programDay = resolveProgramDayForDate(naturalProgramDay, target, profile?.dayOverrides);
   const workout = getWorkoutTypeForProgramDay(programDay, profile?.frequency || 4, target.getDay(), profile?.programKey, profile?.generatedDays);
-  return { focus: workout.isRest ? "Rest" : (workout.focus || workout.label || "Workout"), isRest: workout.isRest, type: workout.type || "full-body" };
+  const isCompletedToday = daysSinceToday === 0 && profile?.lastSessionDate === target.toDateString();
+  return { focus: workout.isRest ? "Rest Day" : (workout.focus || workout.label || "Workout"), isRest: workout.isRest, type: workout.type || "full-body", isCompletedToday };
 };
 
 const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any) => {
@@ -12344,8 +12345,12 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
           const hasCompleted = items.completed.length > 0;
           const hasScheduledWorkout = items.scheduled && !items.scheduled.isRest;
           const primarySession = hasCompleted ? items.completed[0] : null;
-          const cellColor = hasCompleted ? typeColor(primarySession.type) : (hasScheduledWorkout ? typeColor(items.scheduled!.type) : null);
-          const iconInfo = hasCompleted ? activityIcon(primarySession) : (hasScheduledWorkout ? (items.scheduled!.type === "cardio" ? { icon: Activity } : { icon: Dumbbell }) : null);
+          const cellColor = hasCompleted ? typeColor(primarySession.type) : (hasScheduledWorkout ? typeColor(items.scheduled!.type) : (items.scheduled?.isRest ? COLORS.textSecondary : null));
+          // Real fix for a genuine complaint: a rest day used to show
+          // nothing at all in its cell - no icon, no indication it was
+          // even a real, intentional rest day rather than just empty.
+          const isRestDayCell = items.scheduled?.isRest && !hasCompleted;
+          const iconInfo = hasCompleted ? activityIcon(primarySession) : (hasScheduledWorkout ? (items.scheduled!.type === "cardio" ? { icon: Activity } : { icon: Dumbbell }) : (isRestDayCell ? { icon: Moon } : null));
           const IconComp = iconInfo?.icon;
           const dayPRs = hasCompleted ? items.completed.flatMap((s: any) => getSessionPRs(s)) : [];
           return (
@@ -12430,15 +12435,17 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
             {selectedItems.scheduled && !selectedItems.completed.length && (() => {
               const sColor = selectedItems.scheduled.isRest ? COLORS.textSecondary : typeColor(selectedItems.scheduled.type);
               const SIcon = selectedItems.scheduled.isRest ? Moon : (selectedItems.scheduled.type === "cardio" ? Activity : Dumbbell);
+              const isDone = selectedItems.scheduled.isCompletedToday;
               return (
-                <div style={{ display: "flex", alignItems: "center", gap: 14, background: `${COLORS.white}08`, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 12, background: `${sColor}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: 0.8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14, background: isDone ? `${COLORS.accent}12` : `${COLORS.white}08`, border: `1px solid ${isDone ? COLORS.accent + "50" : COLORS.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 12, background: `${sColor}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: isDone ? 1 : 0.8 }}>
                     <SIcon size={18} color={sColor} strokeWidth={2} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{selectedItems.scheduled.focus}</p>
-                    <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{selectedItems.scheduled.isRest ? "Rest day" : "Scheduled"}</p>
+                    <p style={{ color: isDone ? COLORS.accent : COLORS.textSecondary, fontSize: 12, fontWeight: isDone ? 700 : 400, margin: 0 }}>{isDone ? "Completed" : (selectedItems.scheduled.isRest ? "Recovery" : "Scheduled")}</p>
                   </div>
+                  {isDone && <Check size={16} color={COLORS.accent} strokeWidth={3} />}
                 </div>
               );
             })()}
