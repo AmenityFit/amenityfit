@@ -3953,6 +3953,63 @@ const findSubstitute = (originalId: string, usedInDay: string[], groupMuscles: s
   return { programKey: `month6-${baseKey}`, generatedDays: cleanDays };
 };
 
+// ─── Program Randomization ───────────────────────────────────────────────────
+// Real fix for a genuine gap: intermediate and advanced users used to get
+// programs in a fixed, predictable order (always the same first program
+// for a given gender/goal/frequency, always the first unused pool entry
+// on every later cycle) - beginner intentionally keeps its existing,
+// unchanged ordered behavior per direct confirmation. Deterministic, not
+// truly random - seeded by the person's own uid so the SAME person
+// always gets the SAME result on every call (this runs on every render,
+// so real randomness would make their program appear to change
+// unpredictably), while DIFFERENT people get different, varied results.
+const seededHash = (str: string): number => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+};
+
+const seededShuffle = <T,>(arr: T[], seed: string): T[] => {
+  const result = [...arr];
+  let seedNum = seededHash(seed);
+  const nextRand = () => {
+    seedNum = (seedNum * 9301 + 49297) % 233280;
+    return seedNum / 233280;
+  };
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(nextRand() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+};
+
+// Confirmed directly: "-month-N" naming (e.g. advanced-hypertrophy-month-1,
+// -month-2, -month-3) is the one real sequential dependency in these
+// program arrays - those entries must stay in their exact relative order.
+// Every other entry is genuinely interchangeable and safe to vary. This
+// shuffles only the interchangeable ones, leaving sequential entries
+// pinned at their original positions untouched.
+const SEQUENTIAL_PROGRAM_PATTERN = /-month-\d+/i;
+const shuffleInterchangeablePrograms = (arr: string[], seed: string): string[] => {
+  const interchangeableIndices: number[] = [];
+  const interchangeableValues: string[] = [];
+  arr.forEach((key, i) => {
+    if (!SEQUENTIAL_PROGRAM_PATTERN.test(key)) {
+      interchangeableIndices.push(i);
+      interchangeableValues.push(key);
+    }
+  });
+  const shuffledValues = seededShuffle(interchangeableValues, seed);
+  const result = [...arr];
+  interchangeableIndices.forEach((origIdx, i) => {
+    result[origIdx] = shuffledValues[i];
+  });
+  return result;
+};
+
 const pools: Record<string, string[]> = {
   // BEGINNER GYM
   "beginner-gym": [
@@ -7820,8 +7877,12 @@ const getAdvancedProgramPath = (
       "shred-month-2",
       "shred-month-3",
     ];
-    const idx = Math.min((cycleNumber || 1) - 1, bandPath.length - 1);
-    return bandPath[idx];
+    // Same seeded-shuffle fix as the main path below - shred-month-1/2/3
+    // correctly stay pinned in order via the same sequential pattern
+    // match, only the other entries vary per person.
+    const shuffledBandPath = profile?.uid ? shuffleInterchangeablePrograms(bandPath, profile.uid) : bandPath;
+    const idx = Math.min((cycleNumber || 1) - 1, shuffledBandPath.length - 1);
+    return shuffledBandPath[idx];
   }
 
   const paths: Record<string, Record<string, string[]>> = {
@@ -7959,7 +8020,14 @@ const getAdvancedProgramPath = (
   const goalKey = (goal || "general_fitness") in (paths[genderKey] || {})
     ? goal
     : "general_fitness";
-  const path = paths[genderKey][goalKey];
+  const rawPath = paths[genderKey][goalKey];
+  // Real fix - see shuffleInterchangeablePrograms' own comment for the
+  // full explanation. Seeded by the person's own uid, so this same
+  // person always gets the same result every time this runs (it's
+  // called on every render), while different people get genuinely
+  // varied first-and-subsequent programs instead of everyone with the
+  // same gender/goal/frequency getting the identical sequence.
+  const path = profile?.uid ? shuffleInterchangeablePrograms(rawPath, profile.uid) : rawPath;
   // cycleNumber is 1-indexed; clamp to path length
   const idx = Math.min((cycleNumber || 1) - 1, path.length - 1);
   return path[idx];
