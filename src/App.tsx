@@ -8146,8 +8146,19 @@ const selectProgram = (profile: any): string => {
       const cycleNum = profile.cycleNumber || 1;
       return ensureFrequencyMatch(getAdvancedProgramPath(gender, goal, correctedFreq, cycleNum, profile), correctedFreq, "advanced");
     }
-    // Intermediate band-only — use frequency-matched intermediate program (works with bands)
+    // Real fix for a genuine gap: intermediate users used to always get
+    // the exact same single program, every time, with zero variety at
+    // all - there was no pool to even draw from. intermediate-bands is
+    // a real, existing pool with genuinely equipment-safe options for a
+    // band-only person specifically (not the general intermediate pool,
+    // which mixes in gym-only programs). Same seeded, gender-filtered,
+    // frequency-adapted approach as advanced above.
     if (exp === "intermediate") {
+      const bandPool = ((pools as any)["intermediate-bands"] || []).filter((k: string) => isProgramGenderCompatible(k, profile.gender));
+      if (bandPool.length > 0) {
+        const shuffled = profile.uid ? shuffleInterchangeablePrograms(bandPool, profile.uid) : bandPool;
+        return ensureFrequencyMatch(shuffled[0], correctedFreq, "intermediate");
+      }
       return `intermediate-${correctedFreq}x`;
     }
     // Beginner band-only — use band-friendly beginner program
@@ -8162,9 +8173,19 @@ const selectProgram = (profile: any): string => {
     return ensureFrequencyMatch(getAdvancedProgramPath(gender, goal, correctedFreq, cycleNum, profile), correctedFreq, "advanced");
   }
 
-  // Intermediate users — use frequency-matched generic program
-  // Goal differentiation at intermediate level comes from the named program variants
+  // Real fix for a genuine gap: intermediate users used to always get
+  // the exact same single program, every time, with zero variety - there
+  // was no pool to even draw from, unlike beginner and advanced, which
+  // both have real pools of multiple programs. intermediate-gym-and-bands
+  // is a real, existing pool - same seeded, gender-filtered,
+  // frequency-adapted approach as advanced above, applied here for the
+  // first time to give intermediate users genuine first-program variety.
   if (exp === "intermediate") {
+    const genericPool = ((pools as any)["intermediate-gym-and-bands"] || []).filter((k: string) => isProgramGenderCompatible(k, profile.gender));
+    if (genericPool.length > 0) {
+      const shuffled = profile.uid ? shuffleInterchangeablePrograms(genericPool, profile.uid) : genericPool;
+      return ensureFrequencyMatch(shuffled[0], correctedFreq, "intermediate");
+    }
     return `intermediate-${correctedFreq}x`;
   }
 
