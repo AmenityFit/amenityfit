@@ -12545,6 +12545,27 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
     setShowFlexWeek(false);
   };
 
+  // Real fix for a genuine gap found via real-device testing: tapping a
+  // completed session from Calendar (when opened via Weekly View
+  // specifically) did nothing at all - no working handler was ever wired
+  // for this entry point. Self-sufficient sessionHistory fetch, same
+  // pattern already used by Calendar/Progress - reads the shared cache
+  // instantly if either was visited this session, with its own fetch as
+  // a fallback.
+  const [selectedSessionForDetail, setSelectedSessionForDetail] = useState<any>(null);
+  const [weeklySessionHistory, setWeeklySessionHistory] = useState<any[]>(() =>
+    workoutHistoryCache.uid === profile?.uid ? workoutHistoryCache.sessions : []
+  );
+  useEffect(() => {
+    const uid = profile?.uid;
+    if (!uid) return;
+    fetchWorkoutHistory(uid, (fastSessions) => setWeeklySessionHistory(fastSessions)).then((sessions) => {
+      setWeeklySessionHistory(sessions);
+      workoutHistoryCache.uid = uid;
+      workoutHistoryCache.sessions = sessions;
+    });
+  }, [profile?.uid]);
+
   // Long-press picks a day up (matching the same timer-based long-press
   // pattern already used in the Fitness Assistant chat), then a single tap
   // on any other eligible day completes the swap - deliberately not
@@ -12779,7 +12800,16 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
         <CalendarView
           profile={profile}
           onBack={() => setShowCalendarView(false)}
+          onSelectSession={(s: any) => { setShowCalendarView(false); setSelectedSessionForDetail(s); }}
           onProfileUpdate={onProfileUpdate}
+        />
+      )}
+      {selectedSessionForDetail && (
+        <ActivityDetailView
+          session={selectedSessionForDetail}
+          sessionHistory={weeklySessionHistory}
+          profile={profile}
+          onClose={() => setSelectedSessionForDetail(null)}
         />
       )}
 
@@ -13046,7 +13076,7 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
             const options = Array.from({ length: currentTotal - 1 }, (_, i) => i + 1).filter((n) => n >= alreadyDone && n < currentTotal);
             return (
               <div style={{ background: `${COLORS.accent}10`, border: `1px solid ${COLORS.accent}30`, borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
-                <p style={{ color: COLORS.white, fontSize: 12, margin: "0 0 10px", lineHeight: 1.4 }}>Busy week? Pick how many sessions you actually want this week - your program and streak stay exactly as they are.</p>
+                <p style={{ color: COLORS.white, fontSize: 12, margin: "0 0 10px", lineHeight: 1.4 }}>Busy week? Pick how many sessions you actually want this week. Your program and streak stay exactly as they are.</p>
                 {options.length > 0 ? (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {options.map((n) => (
