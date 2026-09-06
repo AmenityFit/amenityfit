@@ -5778,19 +5778,19 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  const getNotifIcon = (type: string) => {
-    if (type === "pr") return "🏆";
-    if (type === "streak") return "🔥";
-    if (type === "level-up") return "⚡";
-    if (type === "cycle-complete") return "📈";
+  const getNotifIcon = (type: string): { icon: any; color: string } => {
+    if (type === "pr") return { icon: Trophy, color: COLORS.accent };
+    if (type === "streak") return { icon: Flame, color: "#FF6B35" };
+    if (type === "level-up") return { icon: Zap, color: COLORS.accent };
+    if (type === "cycle-complete") return { icon: TrendingUp, color: COLORS.primary };
     // welcome-back and building intentionally removed - neither type is
     // ever actually written anywhere. welcome-back already has its own
     // dedicated full-screen moment at login (screen === "welcome-back"),
     // same pattern as level-up, so a notification-center entry for it
     // would be pure redundancy. building was speculative and never built.
-    if (type === "workout") return "💪";
-    if (type === "badge-unlocked") return "🏅";
-    return "✓";
+    if (type === "workout") return { icon: Dumbbell, color: COLORS.primary };
+    if (type === "badge-unlocked") return { icon: Crown, color: "#FFD166" };
+    return { icon: Check, color: COLORS.textSecondary };
   };
 
   const rawFirst = (profile.name || "Athlete").split(" ")[0];
@@ -5876,9 +5876,13 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
                       <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 4px" }}>No notifications yet.</p>
                       <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0, opacity: 0.6 }}>Complete workouts to earn them.</p>
                     </div>
-                  ) : notifications.map((n: any) => (
+                  ) : notifications.map((n: any) => {
+                    const { icon: NIcon, color: nColor } = getNotifIcon(n.type);
+                    return (
                     <div key={n.id} style={{ padding: "14px 20px", borderBottom: `1px solid ${COLORS.border}`, display: "flex", alignItems: "flex-start", gap: 12, background: n.read ? "transparent" : `${COLORS.primary}10` }}>
-                      <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{getNotifIcon(n.type)}</span>
+                      <div style={{ width: 32, height: 32, borderRadius: 10, background: `${nColor}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <NIcon size={15} color={nColor} strokeWidth={2.2} />
+                      </div>
                       <div style={{ flex: 1 }}>
                         <p style={{ color: COLORS.white, fontSize: 13, fontWeight: n.read ? 400 : 600, margin: "0 0 2px", lineHeight: 1.4 }}>{n.message}</p>
                         {n.createdAt?.seconds && (
@@ -5889,7 +5893,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
                       </div>
                       {!n.read && <div style={{ width: 6, height: 6, borderRadius: 99, background: COLORS.accent, flexShrink: 0, marginTop: 4 }} />}
                     </div>
-                  ))}
+                  );})}
                 </div>
               </div>
             )}
