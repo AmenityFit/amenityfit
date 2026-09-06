@@ -12228,7 +12228,16 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
     // note the moment a second one was added - someone can genuinely do
     // more than one real thing in a day (a class AND a meditation session
     // AND a pickup game), so this is a real list per day now, not one slot.
-    const notes: string[] = profile?.calendarNotes?.[key] || [];
+    // Real, critical crash fix found via real-device testing: notes for
+    // a given date used to be stored as a single string, before tonight's
+    // multi-note fix changed the format to a real array - any note saved
+    // under the old format is still sitting in real people's data exactly
+    // as a plain string, and calling .map() on that (instead of an array)
+    // crashes the whole screen instantly. This normalizes either shape
+    // into a real array on read, so old data displays correctly instead
+    // of crashing, with no separate migration step required.
+    const rawNotes = profile?.calendarNotes?.[key];
+    const notes: string[] = Array.isArray(rawNotes) ? rawNotes : (typeof rawNotes === "string" && rawNotes ? [rawNotes] : []);
     return { completed, scheduled, notes, isPast, isToday: key === todayKey };
   };
 
@@ -12259,10 +12268,16 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
     return prs;
   };
 
+  // Same old-string-vs-new-array normalization as getDayItems above -
+  // required here too, since a save/delete on an old-format date needs to
+  // read its real existing value correctly before writing, not just
+  // display it.
+  const normalizeNotes = (raw: any): string[] => Array.isArray(raw) ? raw : (typeof raw === "string" && raw ? [raw] : []);
+
   const saveNote = async () => {
     if (!selectedDateKey || !noteInput.trim() || !profile?.uid) return;
     setSavingNote(true);
-    const existing: string[] = profile?.calendarNotes?.[selectedDateKey] || [];
+    const existing = normalizeNotes(profile?.calendarNotes?.[selectedDateKey]);
     const updated = { ...(profile?.calendarNotes || {}), [selectedDateKey]: [...existing, noteInput.trim()] };
     await setDoc(doc(db, "users", profile.uid), { calendarNotes: updated }, { merge: true });
     onProfileUpdate?.({ calendarNotes: updated });
@@ -12272,7 +12287,7 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
 
   const deleteNote = async (dateKey: string, noteIndex: number) => {
     if (!profile?.uid) return;
-    const existing: string[] = profile?.calendarNotes?.[dateKey] || [];
+    const existing = normalizeNotes(profile?.calendarNotes?.[dateKey]);
     const remaining = existing.filter((_, i) => i !== noteIndex);
     const updated = { ...(profile?.calendarNotes || {}) };
     if (remaining.length > 0) updated[dateKey] = remaining; else delete updated[dateKey];
