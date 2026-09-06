@@ -10520,13 +10520,12 @@ const logWeightHistoryInBackground = async (
   today: string,
   isImperial: boolean
 ) => {
-  let allPrevDocs: any[] = [];
-  try {
-    const prevSnap = await getDocs(collection(db, "users", uid, "weightLog"));
-    allPrevDocs = prevSnap.docs;
-  } catch (e) {
-    console.error("Failed to fetch previous weight logs:", e);
-  }
+  // Real fix for a genuine waste found tonight: this used to fetch every
+  // past weight-log entry on every single save, just to run a PR
+  // comparison that's now handled once, authoritatively, at session
+  // completion via the app's real PR system (checkAndUpdateLiftPRs +
+  // personalRecords). That comparison is gone, so this fetch - a real,
+  // unnecessary Firestore read on every save - is gone with it.
 
   const batch: Promise<any>[] = [];
   for (const [exId, weight] of Object.entries(weights)) {
@@ -10561,40 +10560,15 @@ const logWeightHistoryInBackground = async (
       loggedAt: serverTimestamp(),
     }, { merge: true }));
     try {
-      // allPrevDocs was fetched before this new doc was created, so it can
-      // never contain the entry this call is about to write - no id-based
-      // self-exclusion filter is needed anymore, and none of a real
-      // earlier same-day entry gets excluded by accident either.
-      const prevBest = allPrevDocs
-        .filter(d => d.data().exerciseId === exId)
-        .reduce((best, d) => Math.max(best, d.data().weight || 0), 0);
-      if (weight > prevBest && prevBest > 0) {
-        batch.push(addDoc(collection(db, "users", uid, "notifications"), {
-          type: "pr",
-          exerciseId: exId,
-          exerciseName: (EXERCISES_DATA as any)[exId]?.name || exId,
-          weight,
-          previousBest: prevBest,
-          message: `New personal best - ${(EXERCISES_DATA as any)[exId]?.name || exId} at ${weight} lbs`,
-          read: false,
-          createdAt: serverTimestamp(),
-        }));
-        // Real fix for a genuine gap found tonight: this PR was only ever
-        // recorded as a notification, never persisted onto the actual
-        // session document - meaning nothing else in the app (Calendar,
-        // History, SessionCompleteScreen's own "New PR" display, which
-        // reads a completely different, never-populated liftPRs value)
-        // could ever know a lifting PR happened on a given day, unlike
-        // cardio, which already persists this correctly. Dot-notation
-        // merge so each exercise's PR is written independently - this
-        // loop can hit more than one PR in the same session, and each
-        // write here shouldn't overwrite a sibling exercise's entry.
-        if (sessionId) {
-          batch.push(setDoc(doc(db, "workoutSessions", sessionId), {
-            [`liftPRs.${exId}`]: { weight, previousBest: prevBest, exerciseName: (EXERCISES_DATA as any)[exId]?.name || exId },
-          }, { merge: true }));
-        }
-      }
+      // Real fix for a genuine architectural gap found tonight: this used
+      // to compare against every past log entry for this exercise, a
+      // completely separate check from the app's real, existing PR system
+      // (checkAndUpdateLiftPRs + the maintained personalRecords/{uid}
+      // document) - meaning the two could disagree with each other, and
+      // this scan-based version gets slower as history grows, unlike a
+      // maintained summary record. PR detection, notifications, and
+      // Calendar persistence all now happen once, authoritatively, at
+      // session-completion time - see the liftPRCheckDoneRef effect.
     } catch (e) {}
   }
   try {
@@ -13214,7 +13188,34 @@ const WorkoutFlow = ({ profile, onComplete, onBack, onGoHomeSave, onProfileUpdat
       liftPRCheckDoneRef.current = true;
       const uid = profile?.uid;
       if (uid && Object.keys(workoutFlowWeights).length > 0) {
-        checkAndUpdateLiftPRs(uid, workoutFlowWeights).then(setLiftPRs);
+        checkAndUpdateLiftPRs(uid, workoutFlowWeights).then((result) => {
+          setLiftPRs(result);
+          // Real fix for a genuine gap: this is the app's one real,
+          // authoritative PR check (the maintained personalRecords
+          // summary, not a separate historical scan) - notifications and
+          // the Calendar's persisted liftPRs now both derive from this
+          // same result, instead of a second, separate comparison that
+          // could disagree with it.
+          const sessionId = activeSessionIdRef.current;
+          Object.entries(result).forEach(([exerciseId, v]: any) => {
+            if (!v?.isPR) return;
+            const exerciseName = (EXERCISES_DATA as any)[exerciseId]?.name || exerciseId;
+            addDoc(collection(db, "users", uid, "notifications"), {
+              type: "pr",
+              exerciseId,
+              exerciseName,
+              weight: v.weight,
+              message: `New personal best - ${exerciseName} at ${v.weight} lbs`,
+              read: false,
+              createdAt: serverTimestamp(),
+            }).catch(() => {});
+            if (sessionId) {
+              setDoc(doc(db, "workoutSessions", sessionId), {
+                [`liftPRs.${exerciseId}`]: { weight: v.weight, exerciseName },
+              }, { merge: true }).catch(() => {});
+            }
+          });
+        });
       }
     }
   }, [phase]);
