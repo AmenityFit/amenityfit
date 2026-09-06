@@ -2368,6 +2368,10 @@ const TermsOfServiceScreen = ({ onBack }) => {
           <p style={{ margin: 0 }}>Fitmakesenz LLC · amenityfit.app<br />support@fitmakesenz.com</p>
         </Section>
 
+        <Section title="15. Third-Party Assets">
+          <p style={{ margin: 0 }}>Certain icons used in AmenityFit are provided by Font Awesome (fontawesome.com) and used under the Creative Commons Attribution 4.0 International license (CC BY 4.0).</p>
+        </Section>
+
       </div>
     </div>
   );
