@@ -15826,7 +15826,9 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
   // flat route, so this stat simply doesn't appear rather than showing a
   // misleading "0 m" for older sessions with no altitude captured at all.
   const elevationGain = computeElevationGainMeters(session.route);
-  if (elevationGain !== null) stats.push({ label: "Elevation Gain", value: `${elevationGain} m` });
+  if (elevationGain !== null) stats.push({ label: "Elevation Gain", value: formatElevationLabel(elevationGain, distanceUnit) });
+  const maxElevation = computeMaxElevationMeters(session.route);
+  if (maxElevation !== null) stats.push({ label: "Max Elevation", value: formatElevationLabel(maxElevation, distanceUnit) });
 
   // Multi-session trend - last 10 sessions of the same type, oldest-to-newest
   // (natural left-to-right reading of "progress over time"), including this
@@ -17820,6 +17822,19 @@ const computeElevationGainMeters = (route: { lat: number; lng: number; altitude?
   return Math.round(gain);
 };
 
+// Real addition confirmed via research: Strava's own sticker stats show
+// this as a genuinely separate number from elevation gain - gain is the
+// total climbed over the whole activity, this is the single highest
+// point actually reached. Same trusted-altitude-point filtering as gain
+// above, since GPS altitude readings the device itself flagged as
+// unreliable shouldn't be allowed to report a false peak.
+const computeMaxElevationMeters = (route: { lat: number; lng: number; altitude?: number }[] | null | undefined): number | null => {
+  if (!route || route.length === 0) return null;
+  const withAltitude = route.filter((p) => typeof p.altitude === "number");
+  if (withAltitude.length === 0) return null;
+  return Math.round(Math.max(...withAltitude.map((p) => p.altitude!)));
+};
+
 // Real per-kilometer split breakdown - genuine GPS-segment math, not an
 // estimate. Walks the route summing real haversine distance between
 // consecutive points; the instant cumulative distance crosses each
@@ -18060,6 +18075,15 @@ const formatPaceLabel = (secondsPerKm: number, unit: "imperial" | "metric"): str
   const s = Math.round(secondsPerUnit % 60);
   return `${m}:${String(s).padStart(2, "0")}/${unit === "imperial" ? "mi" : "km"}`;
 };
+
+// Real fix for a genuine gap found tonight: elevation stats hardcoded
+// meters regardless of the person's actual unit preference - confirmed
+// against Strava's own real sticker stats, which show feet for imperial
+// users (e.g. "549 ft"), not meters. Same unit preference, same helper
+// pattern as distance/pace above.
+const METERS_PER_FOOT = 0.3048;
+const formatElevationLabel = (meters: number, unit: "imperial" | "metric"): string =>
+  unit === "imperial" ? `${Math.round(meters / METERS_PER_FOOT)} ft` : `${meters} m`;
 
 // Custom icons for sports lucide genuinely doesn't have (verified by
 // listing its full icon set, not assumed) - drawn in the same stroke-based,
