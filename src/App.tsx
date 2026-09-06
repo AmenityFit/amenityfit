@@ -12266,6 +12266,24 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
     const meta = ACTIVITY_TYPES.find((a) => a.key === session?.type);
     return meta ? { icon: meta.icon, iconImage: meta.iconImage } : { icon: Dumbbell };
   };
+  // Real PR detection for both session types - cardio's isPR (distance/
+  // pace/duration flags) and lifting's liftPRs (per-exercise, keyed by
+  // exercise id). A day can have more than one PR at once (two exercises
+  // in the same lifting session, or a cardio session with both a
+  // distance and pace PR) - the grid cell below shows one small marker
+  // regardless of count, not one per PR, so a big session doesn't turn
+  // into a cluttered row of stars; the detail panel is where there's
+  // actual room to list each one individually.
+  const getSessionPRs = (session: any): string[] => {
+    const prs: string[] = [];
+    if (session?.isPR?.distance) prs.push("Distance PR");
+    if (session?.isPR?.pace) prs.push("Pace PR");
+    if (session?.isPR?.duration) prs.push("Duration PR");
+    if (session?.liftPRs) {
+      Object.values(session.liftPRs).forEach((p: any) => prs.push(`${p.exerciseName || "Exercise"} PR - ${p.weight} lbs`));
+    }
+    return prs;
+  };
 
   const saveNote = async () => {
     if (!selectedDateKey || !noteInput.trim() || !profile?.uid) return;
@@ -12330,11 +12348,13 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
           const cellColor = hasCompleted ? typeColor(primarySession.type) : (hasScheduledWorkout ? typeColor(items.scheduled!.type) : null);
           const iconInfo = hasCompleted ? activityIcon(primarySession) : (hasScheduledWorkout ? (items.scheduled!.type === "cardio" ? { icon: Activity } : { icon: Dumbbell }) : null);
           const IconComp = iconInfo?.icon;
+          const dayPRs = hasCompleted ? items.completed.flatMap((s: any) => getSessionPRs(s)) : [];
           return (
             <button
               key={i}
               onClick={() => setSelectedDateKey(isSelected ? null : key)}
               style={{
+                position: "relative",
                 aspectRatio: "1", borderRadius: 14,
                 border: isSelected ? `1.5px solid ${COLORS.white}` : "1.5px solid transparent",
                 // Real color washes instead of a tiny dot - completed days
@@ -12352,6 +12372,11 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
                 transition: "background 0.16s ease, border-color 0.16s ease",
               }}
             >
+              {dayPRs.length > 0 && (
+                <div style={{ position: "absolute", top: 3, right: 3, width: 14, height: 14, borderRadius: 7, background: COLORS.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Star size={8} color="#0A0A0A" fill="#0A0A0A" strokeWidth={0} />
+                </div>
+              )}
               <span style={{ color: items.isToday ? COLORS.white : (items.isPast && !hasCompleted && items.notes.length === 0 ? COLORS.textSecondary : COLORS.white), fontSize: 13, fontWeight: items.isToday ? 800 : 600, opacity: !items.isToday && items.isPast && !hasCompleted ? 0.5 : 1 }}>{date.getDate()}</span>
               <div style={{ display: "flex", gap: 3, height: 12, alignItems: "center" }}>
                 {IconComp && (
@@ -12376,16 +12401,29 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
             {selectedItems.completed.map((s: any, i: number) => {
               const { icon: SIcon, iconImage: sImg } = activityIcon(s);
               const sColor = typeColor(s.type);
+              const sPRs = getSessionPRs(s);
               return (
-                <div key={i} onClick={() => onSelectSession?.(s)} style={{ display: "flex", alignItems: "center", gap: 14, background: COLORS.card, borderLeft: `3px solid ${sColor}`, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 12, background: `${sColor}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {sImg ? <img src={sImg} alt="" style={{ width: 18, height: 18, objectFit: "contain" }} /> : SIcon && <SIcon size={18} color={sColor} strokeWidth={2} />}
+                <div key={i} onClick={() => onSelectSession?.(s)} style={{ background: COLORS.card, borderLeft: `3px solid ${sColor}`, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 12, background: `${sColor}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {sImg ? <img src={sImg} alt="" style={{ width: 18, height: 18, objectFit: "contain" }} /> : SIcon && <SIcon size={18} color={sColor} strokeWidth={2} />}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{s.customActivityName || s.type}</p>
+                      <p style={{ color: sColor, fontSize: 12, fontWeight: 600, margin: 0 }}>Completed</p>
+                    </div>
+                    <ChevronRight size={16} color={COLORS.textSecondary} />
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{s.customActivityName || s.type}</p>
-                    <p style={{ color: sColor, fontSize: 12, fontWeight: 600, margin: 0 }}>Completed</p>
-                  </div>
-                  <ChevronRight size={16} color={COLORS.textSecondary} />
+                  {sPRs.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${COLORS.border}` }}>
+                      {sPRs.map((pr, pi) => (
+                        <div key={pi} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <Star size={11} color={COLORS.accent} fill={COLORS.accent} strokeWidth={0} />
+                          <p style={{ color: COLORS.accent, fontSize: 12, fontWeight: 700, margin: 0 }}>{pr}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
