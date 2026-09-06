@@ -19155,6 +19155,15 @@ const ShareableStatCard = ({
   const cardRef = React.useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+  // Real fix for a genuine bug found via real-device testing: when the
+  // Web Share API isn't available (a known, spotty limitation of the
+  // wrapped app's WKWebView specifically), this used to SILENTLY
+  // auto-trigger a file download - which can fail completely invisibly
+  // in that same environment, leaving the person with literally nothing
+  // visible happening and no way to tell whether anything worked at
+  // all. A real, on-screen button they can see and tap themselves
+  // removes all that ambiguity - it's either there or it isn't.
+  const [fallbackDownloadUrl, setFallbackDownloadUrl] = useState<string | null>(null);
   const [useOutlineMap, setUseOutlineMap] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
   // Real, selectable layout options (matching Strava's own model of
@@ -19197,12 +19206,13 @@ const ShareableStatCard = ({
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: "My AmenityFit Stats" });
       } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "amenityfit-stats.png";
-        a.click();
-        URL.revokeObjectURL(url);
+        // Real fix for a genuine bug found via real-device testing: an
+        // auto-triggered download here can fail completely silently in
+        // the wrapped app's WKWebView specifically - nothing visible
+        // happens at all, no error, no confirmation. Surfacing a real,
+        // on-screen button the person can see and tap themselves removes
+        // that ambiguity entirely.
+        setFallbackDownloadUrl(URL.createObjectURL(blob));
       }
     } catch (e: any) {
       // AbortError fires when the person simply cancels the native share
@@ -19431,6 +19441,11 @@ const ShareableStatCard = ({
       )}
 
       <div style={{ width: 340, marginTop: 20 }}>
+        {fallbackDownloadUrl && (
+          <a href={fallbackDownloadUrl} download="amenityfit-stats.png" onClick={() => setTimeout(() => setFallbackDownloadUrl(null), 300)} style={{ display: "block", textAlign: "center", background: COLORS.accent, color: "#0A0A0A", fontSize: 14, fontWeight: 800, padding: "14px", borderRadius: 14, textDecoration: "none", margin: "0 0 12px" }}>
+            Save Image
+          </a>
+        )}
         {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: "0 0 12px" }}>{shareError}</p>}
         <button onClick={handleShare} disabled={sharing} style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: sharing ? "default" : "pointer", opacity: sharing ? 0.7 : 1 }}>
           {sharing ? "Preparing..." : "Share"}
@@ -19673,6 +19688,9 @@ const StickerShareScreenInner = ({
 
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+  // Same visible-fallback fix as ShareableStatCard - see its own comment
+  // for the full explanation.
+  const [fallbackDownloadUrl, setFallbackDownloadUrl] = useState<string | null>(null);
 
   const handlePhotoChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -19860,12 +19878,9 @@ const StickerShareScreenInner = ({
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: "My AmenityFit Stats" });
       } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "amenityfit-sticker.png";
-        a.click();
-        URL.revokeObjectURL(url);
+        // Same visible-fallback fix as ShareableStatCard - see its own
+        // comment for the full explanation.
+        setFallbackDownloadUrl(URL.createObjectURL(blob));
       }
     } catch (e: any) {
       if (e?.name !== "AbortError") setShareError("Couldn't share right now. Try again.");
@@ -19902,12 +19917,9 @@ const StickerShareScreenInner = ({
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: "My AmenityFit Stats" });
       } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "amenityfit-sticker.png";
-        a.click();
-        URL.revokeObjectURL(url);
+        // Same visible-fallback fix as ShareableStatCard - see its own
+        // comment for the full explanation.
+        setFallbackDownloadUrl(URL.createObjectURL(blob));
       }
     } catch (e: any) {
       if (e?.name !== "AbortError") setShareError("Couldn't share right now. Try again.");
@@ -19964,6 +19976,11 @@ const StickerShareScreenInner = ({
         </div>
 
         <div style={{ padding: "16px 24px 40px", display: "flex", flexDirection: "column", gap: 12 }}>
+          {fallbackDownloadUrl && (
+            <a href={fallbackDownloadUrl} download="amenityfit-sticker.png" onClick={() => setTimeout(() => setFallbackDownloadUrl(null), 300)} style={{ display: "block", textAlign: "center", background: COLORS.accent, color: "#0A0A0A", fontSize: 14, fontWeight: 800, padding: "14px", borderRadius: 14, textDecoration: "none", margin: "0 0 8px" }}>
+              Save Image
+            </a>
+          )}
           {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: 0 }}>{shareError}</p>}
           <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, opacity: 0.6, margin: 0, textAlign: "center" }}>
             {overlayTier === 0 ? "Tap the stats to add more detail" : "Tap the stats to simplify"}
@@ -20065,6 +20082,11 @@ const StickerShareScreenInner = ({
       </div>
 
       <div style={{ padding: "16px 24px 40px", display: "flex", flexDirection: "column", gap: 12, background: COLORS.background }}>
+        {fallbackDownloadUrl && (
+          <a href={fallbackDownloadUrl} download="amenityfit-sticker.png" onClick={() => setTimeout(() => setFallbackDownloadUrl(null), 300)} style={{ display: "block", textAlign: "center", background: COLORS.accent, color: "#0A0A0A", fontSize: 14, fontWeight: 800, padding: "14px", borderRadius: 14, textDecoration: "none", margin: "0 0 8px" }}>
+            Save Image
+          </a>
+        )}
         {shareError && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center", margin: 0 }}>{shareError}</p>}
         <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, opacity: 0.6, margin: 0, textAlign: "center" }}>
           {overlayTier === 0 ? "Tap the stats on your photo to add more detail" : "Tap the stats to simplify"}
