@@ -10579,6 +10579,21 @@ const logWeightHistoryInBackground = async (
           read: false,
           createdAt: serverTimestamp(),
         }));
+        // Real fix for a genuine gap found tonight: this PR was only ever
+        // recorded as a notification, never persisted onto the actual
+        // session document - meaning nothing else in the app (Calendar,
+        // History, SessionCompleteScreen's own "New PR" display, which
+        // reads a completely different, never-populated liftPRs value)
+        // could ever know a lifting PR happened on a given day, unlike
+        // cardio, which already persists this correctly. Dot-notation
+        // merge so each exercise's PR is written independently - this
+        // loop can hit more than one PR in the same session, and each
+        // write here shouldn't overwrite a sibling exercise's entry.
+        if (sessionId) {
+          batch.push(setDoc(doc(db, "workoutSessions", sessionId), {
+            [`liftPRs.${exId}`]: { weight, previousBest: prevBest, exerciseName: (EXERCISES_DATA as any)[exId]?.name || exId },
+          }, { merge: true }));
+        }
       }
     } catch (e) {}
   }
