@@ -5535,7 +5535,7 @@ const ProgramProgress = ({ goal = "General Fitness", experience = "Intermediate"
     <div style={{ background: COLORS.card, borderRadius: 20, padding: "18px 20px", marginBottom: 20, border: `1px solid ${COLORS.border}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <p style={{ color: COLORS.white, fontWeight: 700, fontSize: 15, margin: 0 }}>30-Day Program</p>
-        <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>Day {day} of {total}</span>
+        <span style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700 }}>Session {day} of {total}</span>
       </div>
       <div style={{ height: 6, background: COLORS.border, borderRadius: 99, overflow: "hidden", marginBottom: 8 }}>
         <div style={{ height: "100%", borderRadius: 99, background: `linear-gradient(90deg, ${COLORS.primary}, ${COLORS.accent})`, width: `${pct}%`, transition: "width 0.4s ease" }} />
@@ -13183,7 +13183,7 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
                     only really matters once a swap makes "5th row down" and
                     "program day 6" mean two different things, so it stays small
                     and muted rather than a second headline. */}
-                <p style={{ color: COLORS.textSecondary, fontSize: 9, fontWeight: 600, margin: 0, opacity: 0.6 }}>Day {day.programDay}</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: 9, fontWeight: 600, margin: 0, opacity: 0.6 }}>Session {day.programDay}</p>
               </div>
               <div style={{ flex: 1 }}>
                 <p style={{ color: day.isRest ? COLORS.textSecondary : COLORS.white, fontSize: 14, fontWeight: day.isRest ? 400 : 600, margin: "0 0 1px" }}>
@@ -16801,7 +16801,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
               }} />
             </div>
             <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "8px 0 0" }}>
-              {totalSessions} of 30 sessions complete · Day {currentDay} of 30
+              {totalSessions} of 30 sessions complete · Session {currentDay} of 30
             </p>
           </div>
         </div>
@@ -16810,7 +16810,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
         <div style={{ background: COLORS.card, borderRadius: 20, padding: "20px", marginBottom: 16, border: `1px solid ${COLORS.border}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: 0 }}>Program Calendar</p>
-            <span style={{ color: COLORS.accent, fontSize: 12, fontWeight: 700 }}>Day {currentDay} of 30</span>
+            <span style={{ color: COLORS.accent, fontSize: 12, fontWeight: 700 }}>Session {currentDay} of 30</span>
           </div>
           <ThirtyDayCalendar completedDays={completedDays} restDays={restDayNumbers} totalDays={30} currentDay={currentDay} />
           <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
