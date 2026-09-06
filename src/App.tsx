@@ -27413,7 +27413,7 @@ const isInitialLoad = React.useRef(true);
     }
   }, [userProfile?.programDay]);
 
-  const handleWorkoutComplete = async (snapshot?: { groups: any[]; sessionLength: number; completedProgramDay?: number }, resolvedUid?: string) => {
+  const handleWorkoutComplete = async (snapshot?: { groups: any[]; sessionLength: number; completedProgramDay?: number }, resolvedUid?: string, skipProgramDayAdvance?: boolean) => {
     const completedGroups = snapshot?.groups || [];
     const completedSessionLength = snapshot?.sessionLength || userProfile.sessionLength || 45;
     let cycleFinished = false;
@@ -27449,7 +27449,20 @@ const isInitialLoad = React.useRef(true);
       cycleFinished = true;
     }
 
-    const newProgramDay = cycleFinished ? 30 : Math.min(currentProgramDay + 1, 31);
+    // Real fix for a genuine bug found via real-device testing: a rest
+    // day that only exists today because of a Flex Week adjustment or a
+    // manual day-swap (dayOverrides) used to always advance this counter
+    // by one regardless, exactly like completing a real workout - but the
+    // counter has no idea an override was even involved, so it just
+    // counts forward from wherever it already was. Six days later the
+    // counter reaches its own naturally-scheduled rest day again, on top
+    // of the borrowed one from the override - two rest days in one week
+    // for someone on a 6-day program that should only ever have one. This
+    // directly breaks the "your program stays exactly as it is" promise
+    // Flex Week and day-swapping both make. Skipping the advance here
+    // only when the override is real - normal completions (the vast
+    // majority) are completely unaffected.
+    const newProgramDay = skipProgramDayAdvance ? currentProgramDay : (cycleFinished ? 30 : Math.min(currentProgramDay + 1, 31));
     const dayOfWeek = now.getDay();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
@@ -27623,7 +27636,15 @@ const isInitialLoad = React.useRef(true);
   // today's date first, it will properly fill in and fix a stray bare doc from
   // earlier today rather than creating a duplicate.
   const handleCompleteRestDay = () => {
-    handleWorkoutComplete({ groups: [], sessionLength: 0 });
+    // Real fix - see the comment on handleWorkoutComplete's
+    // skipProgramDayAdvance parameter for the full explanation. A real
+    // dayOverrides entry for today means this rest day only exists
+    // because of a Flex Week adjustment or a manual day-swap, not the
+    // program's own natural schedule - completing it shouldn't advance
+    // the underlying counter at all.
+    const todayKey = new Date().toDateString();
+    const isOverriddenToday = !!userProfile?.dayOverrides?.[todayKey];
+    handleWorkoutComplete({ groups: [], sessionLength: 0 }, undefined, isOverriddenToday);
     const uid = auth.currentUser?.uid || userProfile?.uid || currentUid;
     if (uid) {
       // Same real durability fix as the full-workout completion path
