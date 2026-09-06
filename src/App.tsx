@@ -27826,6 +27826,14 @@ const isInitialLoad = React.useRef(true);
             read: false,
             createdAt: serverTimestamp(),
           }).catch(e => console.error("Failed to save badge notification:", e));
+          // Real fix for a genuine gap found tonight: earning a mastery
+          // badge only ever updated cycleNumber, with no record of WHEN
+          // it happened - meaning nothing else in the app (Calendar,
+          // History) could ever know which specific day a badge was
+          // actually earned on, unlike PRs, which now persist correctly.
+          setDoc(doc(db, "users", uid), {
+            [`badgeEarnedDates.${newBadge.label}`]: new Date().toDateString(),
+          }, { merge: true }).catch(e => console.error("Failed to save badge date:", e));
         }
       } else {
         setScreen("dashboard");
