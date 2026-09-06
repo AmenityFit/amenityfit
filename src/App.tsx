@@ -12244,6 +12244,13 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
   };
 
   const typeColor = (type: string) => type === "cardio" ? ROUTE_LINE_COLOR : COLORS.primary;
+  // Real icons per activity, reusing the exact same ACTIVITY_TYPES lookup
+  // every other cardio screen already uses - not a separate, invented
+  // icon set just for this calendar.
+  const activityIcon = (session: any): { icon?: any; iconImage?: string } => {
+    const meta = ACTIVITY_TYPES.find((a) => a.key === session?.type);
+    return meta ? { icon: meta.icon, iconImage: meta.iconImage } : { icon: Dumbbell };
+  };
 
   const saveNote = async () => {
     if (!selectedDateKey || !noteInput.trim() || !profile?.uid) return;
@@ -12271,13 +12278,18 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: COLORS.background, display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(16px + env(safe-area-inset-top, 0px)) 20px 16px" }}>
-        <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer" }}>←</button>
-        <p style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: 0 }}>{monthLabel}</p>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => changeMonth(-1)} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, color: COLORS.white, fontSize: 16, cursor: "pointer" }}>‹</button>
-          <button onClick={() => changeMonth(1)} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, color: COLORS.white, fontSize: 16, cursor: "pointer" }}>›</button>
+      <div style={{ background: `linear-gradient(180deg, ${COLORS.primary}20 0%, transparent 100%)`, padding: "calc(16px + env(safe-area-inset-top, 0px)) 20px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer" }}>←</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => changeMonth(-1)} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, color: COLORS.white, fontSize: 16, cursor: "pointer" }}>‹</button>
+            <button onClick={() => changeMonth(1)} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, color: COLORS.white, fontSize: 16, cursor: "pointer" }}>›</button>
+          </div>
         </div>
+        <h1 style={{ color: COLORS.white, fontSize: 26, fontWeight: 900, margin: "8px 0 0", letterSpacing: -0.6 }}>
+          {viewMonth.toLocaleDateString("en-US", { month: "long" })}
+          <span style={{ color: COLORS.textSecondary, fontWeight: 700 }}> {viewMonth.getFullYear()}</span>
+        </h1>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", padding: "0 12px", marginBottom: 4 }}>
@@ -12299,26 +12311,39 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
           const isSelected = selectedDateKey === key;
           const hasCompleted = items.completed.length > 0;
           const hasScheduledWorkout = items.scheduled && !items.scheduled.isRest;
-          const dotColor = hasCompleted ? typeColor(items.completed[0].type) : (hasScheduledWorkout ? typeColor(items.scheduled!.type) : null);
+          const primarySession = hasCompleted ? items.completed[0] : null;
+          const cellColor = hasCompleted ? typeColor(primarySession.type) : (hasScheduledWorkout ? typeColor(items.scheduled!.type) : null);
+          const iconInfo = hasCompleted ? activityIcon(primarySession) : (hasScheduledWorkout ? (items.scheduled!.type === "cardio" ? { icon: Activity } : { icon: Dumbbell }) : null);
+          const IconComp = iconInfo?.icon;
           return (
             <button
               key={i}
               onClick={() => setSelectedDateKey(isSelected ? null : key)}
               style={{
-                aspectRatio: "1", borderRadius: 12, border: items.isToday ? `1.5px solid ${COLORS.accent}` : isSelected ? `1.5px solid ${COLORS.white}` : "1.5px solid transparent",
-                background: isSelected ? `${COLORS.white}12` : "transparent",
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+                aspectRatio: "1", borderRadius: 14,
+                border: isSelected ? `1.5px solid ${COLORS.white}` : "1.5px solid transparent",
+                // Real color washes instead of a tiny dot - completed days
+                // get a bolder tint, scheduled-but-not-done days a lighter
+                // one, so the whole grid actually reads as color-coded at
+                // a glance rather than needing to squint at 5px dots.
+                background: items.isToday
+                  ? `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`
+                  : cellColor
+                    ? `${cellColor}${hasCompleted ? "26" : "14"}`
+                    : isSelected ? `${COLORS.white}12` : "transparent",
+                boxShadow: items.isToday ? `0 4px 14px ${COLORS.primary}50` : "none",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
                 cursor: "pointer", padding: 0,
                 transition: "background 0.16s ease, border-color 0.16s ease",
               }}
             >
-              <span style={{ color: items.isPast && !hasCompleted && items.notes.length === 0 ? COLORS.textSecondary : COLORS.white, fontSize: 13, fontWeight: items.isToday ? 800 : 600, opacity: items.isPast && !hasCompleted ? 0.5 : 1 }}>{date.getDate()}</span>
-              <div style={{ display: "flex", gap: 3, height: 5, alignItems: "center" }}>
-                {dotColor && (
-                  <div style={{ width: 5, height: 5, borderRadius: 3, background: dotColor, opacity: hasCompleted ? 1 : 0.4 }} />
+              <span style={{ color: items.isToday ? COLORS.white : (items.isPast && !hasCompleted && items.notes.length === 0 ? COLORS.textSecondary : COLORS.white), fontSize: 13, fontWeight: items.isToday ? 800 : 600, opacity: !items.isToday && items.isPast && !hasCompleted ? 0.5 : 1 }}>{date.getDate()}</span>
+              <div style={{ display: "flex", gap: 3, height: 12, alignItems: "center" }}>
+                {IconComp && (
+                  <IconComp size={11} color={items.isToday ? COLORS.white : cellColor} strokeWidth={2.5} style={{ opacity: hasCompleted || items.isToday ? 1 : 0.6 }} />
                 )}
                 {items.notes.length > 0 && (
-                  <div style={{ width: 5, height: 5, borderRadius: 3, background: CALENDAR_NOTE_COLOR }} />
+                  <div style={{ width: 5, height: 5, borderRadius: 3, background: items.isToday ? COLORS.white : CALENDAR_NOTE_COLOR }} />
                 )}
               </div>
             </button>
@@ -12333,25 +12358,38 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
               {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             </p>
 
-            {selectedItems.completed.map((s: any, i: number) => (
-              <div key={i} onClick={() => onSelectSession?.(s)} style={{ display: "flex", alignItems: "center", gap: 12, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
-                <div style={{ width: 8, height: 8, borderRadius: 4, background: typeColor(s.type), flexShrink: 0 }} />
-                <div style={{ flex: 1 }}>
-                  <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{s.customActivityName || s.type}</p>
-                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>Completed</p>
+            {selectedItems.completed.map((s: any, i: number) => {
+              const { icon: SIcon, iconImage: sImg } = activityIcon(s);
+              const sColor = typeColor(s.type);
+              return (
+                <div key={i} onClick={() => onSelectSession?.(s)} style={{ display: "flex", alignItems: "center", gap: 14, background: COLORS.card, borderLeft: `3px solid ${sColor}`, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 12, background: `${sColor}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {sImg ? <img src={sImg} alt="" style={{ width: 18, height: 18, objectFit: "contain" }} /> : SIcon && <SIcon size={18} color={sColor} strokeWidth={2} />}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{s.customActivityName || s.type}</p>
+                    <p style={{ color: sColor, fontSize: 12, fontWeight: 600, margin: 0 }}>Completed</p>
+                  </div>
+                  <ChevronRight size={16} color={COLORS.textSecondary} />
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
-            {selectedItems.scheduled && !selectedItems.completed.length && (
-              <div style={{ display: "flex", alignItems: "center", gap: 12, background: `${COLORS.white}08`, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
-                <div style={{ width: 8, height: 8, borderRadius: 4, background: selectedItems.scheduled.isRest ? COLORS.textSecondary : typeColor(selectedItems.scheduled.type), flexShrink: 0, opacity: 0.5 }} />
-                <div style={{ flex: 1 }}>
-                  <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{selectedItems.scheduled.focus}</p>
-                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{selectedItems.scheduled.isRest ? "Rest day" : "Scheduled"}</p>
+            {selectedItems.scheduled && !selectedItems.completed.length && (() => {
+              const sColor = selectedItems.scheduled.isRest ? COLORS.textSecondary : typeColor(selectedItems.scheduled.type);
+              const SIcon = selectedItems.scheduled.isRest ? Moon : (selectedItems.scheduled.type === "cardio" ? Activity : Dumbbell);
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: 14, background: `${COLORS.white}08`, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 12, background: `${sColor}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: 0.8 }}>
+                    <SIcon size={18} color={sColor} strokeWidth={2} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{selectedItems.scheduled.focus}</p>
+                    <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{selectedItems.scheduled.isRest ? "Rest day" : "Scheduled"}</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {selectedItems.notes.map((n: string, i: number) => (
               <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: `${CALENDAR_NOTE_COLOR}12`, border: `1px solid ${CALENDAR_NOTE_COLOR}40`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
