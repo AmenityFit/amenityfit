@@ -12041,25 +12041,62 @@ const computeFlexWeekOverrides = (profile: any, targetSessionCount: number): Rec
 
   const totalWorkoutDays = weekDays.filter((d: any) => !d.isRest);
   const alreadyCompleted = totalWorkoutDays.filter((d: any) => d.isCompleted).length;
-  // Only days that are genuinely still changeable - not already done,
+  // Only dates that are genuinely still changeable - not already done,
   // not already in the past. Today stays eligible as long as it hasn't
   // been completed yet, since adjusting the week ahead of a busy day is
   // exactly the real use case.
-  const eligible = totalWorkoutDays.filter((d: any) => !d.isCompleted && !d.isPast);
+  const eligibleDates = totalWorkoutDays.filter((d: any) => !d.isCompleted && !d.isPast);
 
   const remainingNeeded = Math.max(0, targetSessionCount - alreadyCompleted);
-  const numToConvert = eligible.length - remainingNeeded;
   // Nothing to do: either already at/below the target, or the target is
   // impossible to reach downward (e.g. more sessions already completed
   // this week than the requested target) - either way, no safe change
   // to make, so this deliberately no-ops rather than guessing.
-  if (numToConvert <= 0) return null;
+  if (remainingNeeded >= eligibleDates.length) return null;
 
-  // Find a real rest day already in this program's own cycle - reused as
-  // the override value for every converted date, rather than inventing a
-  // synthetic "rest" concept the rest of the app doesn't already know
-  // about. Searches a full month of program-days, which is comfortably
-  // more than any real cycle length in use.
+  // Real fix for a genuine gap found via real-device testing: the
+  // previous version only ever decided WHICH dates to convert to rest -
+  // whatever workout type happened to land on the dates that stayed was
+  // never touched, since that's just whatever the program's own day
+  // sequence naturally assigns to that position. That's why trimming to
+  // 3 days could still leave two leg-focused days - removing slots
+  // doesn't diversify what's left in them.
+  //
+  // The real fix has to actually RESCHEDULE the kept dates, not just
+  // decide which to cut. Build a genuine pool of workout day-numbers
+  // from across the person's own program cycle (not just this week's
+  // natural 7), each with its real focus, then pick from that pool
+  // preferring a focus not already picked - only repeating one once
+  // every distinct focus in the program has been used at least once.
+  // That's what actually prevents two leg days from both surviving.
+  const pool: { day: number; focus: string }[] = [];
+  for (let d = 1; d <= 30; d++) {
+    const w = getWorkoutTypeForProgramDay(d, profile?.frequency || 4, undefined, profile?.programKey, profile?.generatedDays);
+    if (!w.isRest) pool.push({ day: d, focus: w.focus || w.label || "Workout" });
+  }
+  if (pool.length === 0) return null;
+
+  const distinctFocusCount = new Set(pool.map((p) => p.focus)).size;
+  const usedFocuses = new Set<string>();
+  const picked: { day: number; focus: string }[] = [];
+  let cursor = 0;
+  while (picked.length < remainingNeeded && cursor < pool.length * 2) {
+    const candidate = pool[cursor % pool.length];
+    if (!usedFocuses.has(candidate.focus) || usedFocuses.size >= distinctFocusCount) {
+      picked.push(candidate);
+      usedFocuses.add(candidate.focus);
+    }
+    cursor++;
+  }
+  // Pathological fallback (e.g. every focus already used and the search
+  // cap hit) - fill any remainder in order rather than leaving the week
+  // short of the person's actual requested count.
+  while (picked.length < remainingNeeded) {
+    picked.push(pool[picked.length % pool.length]);
+  }
+
+  // Find a real rest day already in this program's own cycle - reused
+  // for every eligible date that isn't one of the diversified picks.
   let restDayProgramNumber: number | null = null;
   for (let d = 1; d <= 30; d++) {
     const w = getWorkoutTypeForProgramDay(d, profile?.frequency || 4, undefined, profile?.programKey, profile?.generatedDays);
@@ -12067,36 +12104,10 @@ const computeFlexWeekOverrides = (profile: any, targetSessionCount: number): Rec
   }
   if (restDayProgramNumber === null) return null;
 
-  // Group consecutive eligible days sharing the same focus - these are
-  // the real, concrete "back to back" cases worth breaking up first.
-  const runBreakCandidates: number[] = [];
-  for (let i = 1; i < eligible.length; i++) {
-    if (eligible[i].focus && eligible[i].focus === eligible[i - 1].focus) {
-      runBreakCandidates.push(i); // remove the later day of the matching pair
-    }
-  }
-
-  const toConvertIndices = new Set<number>();
-  for (const idx of runBreakCandidates) {
-    if (toConvertIndices.size >= numToConvert) break;
-    toConvertIndices.add(idx);
-  }
-  // Still need more removals beyond the same-focus runs - spread the
-  // remaining picks evenly across whatever's left rather than trimming
-  // from one end, so the days that stay are genuinely spaced through
-  // the week.
-  if (toConvertIndices.size < numToConvert) {
-    const remainingPool = eligible.map((_: any, i: number) => i).filter((i: number) => !toConvertIndices.has(i));
-    const stillNeeded = numToConvert - toConvertIndices.size;
-    const stride = remainingPool.length / stillNeeded;
-    for (let k = 0; k < stillNeeded; k++) {
-      toConvertIndices.add(remainingPool[Math.floor(k * stride)]);
-    }
-  }
-
   const patch: Record<string, number> = { ...(profile?.dayOverrides || {}) };
-  toConvertIndices.forEach((idx) => {
-    patch[eligible[idx].date.toDateString()] = restDayProgramNumber as number;
+  eligibleDates.forEach((d: any, i: number) => {
+    const dateKey = d.date.toDateString();
+    patch[dateKey] = i < picked.length ? picked[i].day : (restDayProgramNumber as number);
   });
   return patch;
 };
