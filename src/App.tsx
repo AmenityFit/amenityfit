@@ -12279,7 +12279,12 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
     // of crashing, with no separate migration step required.
     const rawNotes = profile?.calendarNotes?.[key];
     const notes: string[] = Array.isArray(rawNotes) ? rawNotes : (typeof rawNotes === "string" && rawNotes ? [rawNotes] : []);
-    return { completed, scheduled, notes, isPast, isToday: key === todayKey };
+    // Real addition: shows a mastery badge (Bronze/Silver/Gold/Platinum)
+    // on the real day it was actually earned, using the date now
+    // persisted alongside it - the same real-data-only principle as
+    // everything else on this calendar.
+    const badgeEarned = Object.entries(profile?.badgeEarnedDates || {}).find(([, d]) => d === key)?.[0] || null;
+    return { completed, scheduled, notes, isPast, isToday: key === todayKey, badgeEarned };
   };
 
   const typeColor = (type: string) => type === "cardio" ? ROUTE_LINE_COLOR : COLORS.primary;
@@ -12411,6 +12416,15 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
                   <Star size={8} color="#0A0A0A" fill="#0A0A0A" strokeWidth={0} />
                 </div>
               )}
+              {items.badgeEarned && (() => {
+                const b = getMasteryBadge({ Bronze: 3, Silver: 6, Gold: 10, Platinum: 15 }[items.badgeEarned] || 3);
+                const BIcon = { crown: Crown, trophy: Trophy, shield: Shield, flame: Flame }[b?.icon || "flame"];
+                return (
+                  <div style={{ position: "absolute", top: 3, left: 3, width: 14, height: 14, borderRadius: 7, background: b?.color, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {BIcon && <BIcon size={8} color="#0A0A0A" strokeWidth={3} />}
+                  </div>
+                );
+              })()}
               <span style={{ color: items.isToday ? COLORS.white : (items.isPast && !hasCompleted && items.notes.length === 0 ? COLORS.textSecondary : COLORS.white), fontSize: 13, fontWeight: items.isToday ? 800 : 600, opacity: !items.isToday && items.isPast && !hasCompleted ? 0.5 : 1 }}>{date.getDate()}</span>
               <div style={{ display: "flex", gap: 3, height: 12, alignItems: "center" }}>
                 {IconComp && (
