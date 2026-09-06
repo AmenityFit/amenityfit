@@ -12234,8 +12234,13 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
     const isPast = date < today && key !== todayKey;
     const completed = sessionsByDateKey[key] || [];
     const scheduled = !isPast ? getScheduledDayInfo(profile, date) : null;
-    const note = profile?.calendarNotes?.[key] || null;
-    return { completed, scheduled, note, isPast, isToday: key === todayKey };
+    // Real fix for a genuine bug found via real-device testing: this used
+    // to store a single string per date, silently overwriting any earlier
+    // note the moment a second one was added - someone can genuinely do
+    // more than one real thing in a day (a class AND a meditation session
+    // AND a pickup game), so this is a real list per day now, not one slot.
+    const notes: string[] = profile?.calendarNotes?.[key] || [];
+    return { completed, scheduled, notes, isPast, isToday: key === todayKey };
   };
 
   const typeColor = (type: string) => type === "cardio" ? ROUTE_LINE_COLOR : COLORS.primary;
@@ -12243,17 +12248,20 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
   const saveNote = async () => {
     if (!selectedDateKey || !noteInput.trim() || !profile?.uid) return;
     setSavingNote(true);
-    const updated = { ...(profile?.calendarNotes || {}), [selectedDateKey]: noteInput.trim() };
+    const existing: string[] = profile?.calendarNotes?.[selectedDateKey] || [];
+    const updated = { ...(profile?.calendarNotes || {}), [selectedDateKey]: [...existing, noteInput.trim()] };
     await setDoc(doc(db, "users", profile.uid), { calendarNotes: updated }, { merge: true });
     onProfileUpdate?.({ calendarNotes: updated });
     setNoteInput("");
     setSavingNote(false);
   };
 
-  const deleteNote = async (dateKey: string) => {
+  const deleteNote = async (dateKey: string, noteIndex: number) => {
     if (!profile?.uid) return;
+    const existing: string[] = profile?.calendarNotes?.[dateKey] || [];
+    const remaining = existing.filter((_, i) => i !== noteIndex);
     const updated = { ...(profile?.calendarNotes || {}) };
-    delete updated[dateKey];
+    if (remaining.length > 0) updated[dateKey] = remaining; else delete updated[dateKey];
     await setDoc(doc(db, "users", profile.uid), { calendarNotes: updated }, { merge: true });
     onProfileUpdate?.({ calendarNotes: updated });
   };
@@ -12304,12 +12312,12 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
                 transition: "background 0.16s ease, border-color 0.16s ease",
               }}
             >
-              <span style={{ color: items.isPast && !hasCompleted && !items.note ? COLORS.textSecondary : COLORS.white, fontSize: 13, fontWeight: items.isToday ? 800 : 600, opacity: items.isPast && !hasCompleted ? 0.5 : 1 }}>{date.getDate()}</span>
+              <span style={{ color: items.isPast && !hasCompleted && items.notes.length === 0 ? COLORS.textSecondary : COLORS.white, fontSize: 13, fontWeight: items.isToday ? 800 : 600, opacity: items.isPast && !hasCompleted ? 0.5 : 1 }}>{date.getDate()}</span>
               <div style={{ display: "flex", gap: 3, height: 5, alignItems: "center" }}>
                 {dotColor && (
                   <div style={{ width: 5, height: 5, borderRadius: 3, background: dotColor, opacity: hasCompleted ? 1 : 0.4 }} />
                 )}
-                {items.note && (
+                {items.notes.length > 0 && (
                   <div style={{ width: 5, height: 5, borderRadius: 3, background: CALENDAR_NOTE_COLOR }} />
                 )}
               </div>
@@ -12345,27 +12353,25 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
               </div>
             )}
 
-            {selectedItems.note && (
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: `${CALENDAR_NOTE_COLOR}12`, border: `1px solid ${CALENDAR_NOTE_COLOR}40`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
+            {selectedItems.notes.map((n: string, i: number) => (
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: `${CALENDAR_NOTE_COLOR}12`, border: `1px solid ${CALENDAR_NOTE_COLOR}40`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 4, background: CALENDAR_NOTE_COLOR, flexShrink: 0, marginTop: 4 }} />
-                <p style={{ color: COLORS.white, fontSize: 14, margin: 0, flex: 1, lineHeight: 1.4 }}>{selectedItems.note}</p>
-                <button onClick={() => deleteNote(selectedDateKey!)} style={{ background: "none", border: "none", color: COLORS.textSecondary, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>Remove</button>
+                <p style={{ color: COLORS.white, fontSize: 14, margin: 0, flex: 1, lineHeight: 1.4 }}>{n}</p>
+                <button onClick={() => deleteNote(selectedDateKey!, i)} style={{ background: "none", border: "none", color: COLORS.textSecondary, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>Remove</button>
               </div>
-            )}
+            ))}
 
-            {!selectedItems.note && (
-              <div style={{ marginTop: 8 }}>
-                <input
-                  value={noteInput}
-                  onChange={(e) => setNoteInput(e.target.value)}
-                  placeholder="Add a note — e.g. Pilates class, retreat..."
-                  style={{ width: "100%", background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "12px 14px", color: COLORS.white, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
-                />
-                <button onClick={saveNote} disabled={!noteInput.trim() || savingNote} style={{ width: "100%", padding: "12px", borderRadius: 12, border: "none", background: noteInput.trim() ? COLORS.accent : COLORS.card, color: noteInput.trim() ? "#0A0A0A" : COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: noteInput.trim() ? "pointer" : "default" }}>
-                  {savingNote ? "Saving..." : "Add Note"}
-                </button>
-              </div>
-            )}
+            <div style={{ marginTop: 8 }}>
+              <input
+                value={noteInput}
+                onChange={(e) => setNoteInput(e.target.value)}
+                placeholder="Add another activity — e.g. Pilates class, retreat..."
+                style={{ width: "100%", background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "12px 14px", color: COLORS.white, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+              />
+              <button onClick={saveNote} disabled={!noteInput.trim() || savingNote} style={{ width: "100%", padding: "12px", borderRadius: 12, border: "none", background: noteInput.trim() ? COLORS.accent : COLORS.card, color: noteInput.trim() ? "#0A0A0A" : COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: noteInput.trim() ? "pointer" : "default" }}>
+                {savingNote ? "Saving..." : "Add Activity"}
+              </button>
+            </div>
           </div>
         ) : (
           <p style={{ color: COLORS.textSecondary, fontSize: 13, textAlign: "center", marginTop: 40 }}>Tap a day to see what's scheduled, what you completed, or add a note.</p>
