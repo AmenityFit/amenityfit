@@ -13015,7 +13015,19 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
               </div>
             );
           })()}
-          {weekDays.map((day, i) => {
+          {weekDays.map((rawDay, i) => {
+            // Real fix for a genuine bug found via real-device testing:
+            // this list used to show today's row straight from the live,
+            // currently-resolved schedule - meaning a later schedule
+            // change (a Flex Week adjustment, a manual swap, a reset)
+            // could make an ALREADY-completed today's row display a
+            // different workout than what was actually done, even though
+            // the completion checkmark was accurate. todayEntry (built
+            // above from the real persisted lastWorkoutSnapshot) is what
+            // actually happened today, locked in regardless of anything
+            // that changes the schedule afterward - every other day in
+            // the list is unaffected and still reflects the live schedule.
+            const day = (i === 0 && rawDay.isToday) ? { ...rawDay, ...todayEntry } : rawDay;
             const isEligible = !day.isCompleted && !day.isPast;
             const isPickedUp = pickedUpDay && pickedUpDay.date.toDateString() === day.date.toDateString();
             const isDimmedTarget = !!pickedUpDay && !isPickedUp && !isEligible;
