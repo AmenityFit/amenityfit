@@ -20187,7 +20187,20 @@ const StickerShareScreenInner = ({
   // everything. Shared across both sticker-only and photo-overlay modes so
   // tapping either one behaves identically.
   const [overlayTier, setOverlayTier] = useState<0 | 1>(0);
-  const [useOutlineMap, setUseOutlineMap] = useState(false);
+  // Real fix for a genuine design mismatch found via real-device testing:
+  // this used to default to the regular satellite map thumbnail, same as
+  // the Share card - but that thumbnail is correctly, intentionally
+  // opaque (real satellite photography has no reason to be transparent),
+  // which meant Sticker mode's whole point (a transparent overlay placed
+  // on the person's OWN photo or video) got undermined by its own map -
+  // an opaque rectangle sitting on top of and washing out whatever they
+  // actually chose. Outline mode's route line has a genuinely fully
+  // transparent background (see buildRouteFallbackSvgUrl), so it's the
+  // only variant that actually belongs in this specific context. Only
+  // defaults to it when a real outline actually exists - a court sport
+  // etc. with no outlineMapUrl at all correctly falls through to the
+  // satellite thumbnail instead of showing nothing.
+  const [useOutlineMap, setUseOutlineMap] = useState(() => !!outlineMapUrl);
   const [showLocation, setShowLocation] = useState(false);
   // Same selectable layouts as ShareableStatCard - see its own comment
   // for the full explanation of why each option exists.
