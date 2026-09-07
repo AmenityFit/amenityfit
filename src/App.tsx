@@ -6148,7 +6148,7 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
                 </div>
                 <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "4px 0 0" }}>Includes weights + cardio</p>
                 {activityStats.cardioCalories > 0 && (
-                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "4px 0 0" }}>+ ~{activityStats.cardioCalories} cal from cardio (estimated)</p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "4px 0 0" }}>~{activityStats.cardioCalories} cal from cardio (estimated)</p>
                 )}
               </>
             ) : (
@@ -13409,7 +13409,7 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
             const options = Array.from({ length: currentTotal - 1 }, (_, i) => i + 1).filter((n) => n >= alreadyDone && n < currentTotal);
             return (
               <div style={{ background: `${COLORS.accent}10`, border: `1px solid ${COLORS.accent}30`, borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
-                <p style={{ color: COLORS.white, fontSize: 12, margin: "0 0 10px", lineHeight: 1.4 }}>Busy week? Pick how many sessions you actually want this week. Your program and streak stay exactly as they are.</p>
+                <p style={{ color: COLORS.white, fontSize: 12, margin: "0 0 10px", lineHeight: 1.4 }}>Busy week? Pick how many sessions you actually want this week. Your program and streak stay exactly as they are. This only affects this week, next week resets to your normal schedule.</p>
                 {options.length > 0 ? (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {options.map((n) => (
@@ -17154,6 +17154,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
               <span style={{ color: COLORS.textSecondary, fontSize: 11 }}>Upcoming</span>
             </div>
           </div>
+          <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "10px 0 0", lineHeight: 1.4 }}>Your program follows a weekly split that repeats each week for the full 30 sessions.</p>
         </div>
 
         {/* ── Body Measurements ── */}
