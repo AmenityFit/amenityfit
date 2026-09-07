@@ -28501,7 +28501,7 @@ const isInitialLoad = React.useRef(true);
         )}
         {visitedTabs.has("assistant") && (
           <div style={{ display: screen === "assistant" ? "block" : "none" }}>
-            <FitnessAssistantScreen key={"assistant" + JSON.stringify(userProfile?.dayOverrides || {})} profile={liveProfile} onBack={() => setScreen("dashboard")} onNavigate={navigate} />
+            <FitnessAssistantScreen key={"assistant" + JSON.stringify(userProfile?.dayOverrides || {}) + (userProfile?.lastSessionDate || "")} profile={liveProfile} onBack={() => setScreen("dashboard")} onNavigate={navigate} />
           </div>
         )}
       </>
