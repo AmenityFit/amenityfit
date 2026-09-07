@@ -12324,6 +12324,7 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [slideDir, setSlideDir] = useState<"left" | "right" | null>(null);
   const [noteInput, setNoteInput] = useState("");
+  const [noteTime, setNoteTime] = useState("");
   const [savingNote, setSavingNote] = useState(false);
 
   // Real, deliberate slide+fade on month change rather than an instant
@@ -12378,8 +12379,10 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
     // crashes the whole screen instantly. This normalizes either shape
     // into a real array on read, so old data displays correctly instead
     // of crashing, with no separate migration step required.
-    const rawNotes = profile?.calendarNotes?.[key];
-    const notes: string[] = Array.isArray(rawNotes) ? rawNotes : (typeof rawNotes === "string" && rawNotes ? [rawNotes] : []);
+    // Reuses the same real normalizeNotes/sortNotes used everywhere else
+    // on this screen, instead of a second, separately-maintained
+    // normalization that could drift out of sync with it.
+    const notes = sortNotes(normalizeNotes(profile?.calendarNotes?.[key]));
     // Real addition: shows a mastery badge (Bronze/Silver/Gold/Platinum)
     // on the real day it was actually earned, using the date now
     // persisted alongside it - the same real-data-only principle as
@@ -12425,16 +12428,54 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
   // required here too, since a save/delete on an old-format date needs to
   // read its real existing value correctly before writing, not just
   // display it.
-  const normalizeNotes = (raw: any): string[] => Array.isArray(raw) ? raw : (typeof raw === "string" && raw ? [raw] : []);
+  // Real fix/upgrade: notes now carry an optional real scheduled time,
+  // not just plain text - normalizes every format a note has ever been
+  // stored in (the original single string, last session's plain-string
+  // array, and this real object-with-time shape) into one consistent
+  // shape, so old data displays correctly with no separate migration
+  // step required, same principle as every other real-data normalization
+  // tonight.
+  const normalizeNotes = (raw: any): { text: string; time?: string }[] => {
+    if (!raw) return [];
+    if (typeof raw === "string") return [{ text: raw }];
+    if (Array.isArray(raw)) {
+      return raw.map((n: any) => typeof n === "string" ? { text: n } : { text: n?.text || "", time: n?.time || undefined }).filter((n) => n.text);
+    }
+    return [];
+  };
+  // Converts the raw 24-hour "HH:MM" an <input type="time"> stores into
+  // a real, readable "6:00 PM" for display.
+  const formatTimeLabel = (time: string): string => {
+    const [h, m] = time.split(":").map(Number);
+    if (isNaN(h) || isNaN(m)) return time;
+    const period = h >= 12 ? "PM" : "AM";
+    const hour12 = h % 12 === 0 ? 12 : h % 12;
+    return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+  };
+  // Real ordering: a scheduled time sorts chronologically first; a note
+  // with no time (a plain "did this" log) sorts after every timed one,
+  // in the order it was added - matches how a person naturally scans a
+  // real day's plan before its incidental notes.
+  const sortNotes = (notes: { text: string; time?: string }[]) => {
+    return [...notes].sort((a, b) => {
+      if (a.time && b.time) return a.time.localeCompare(b.time);
+      if (a.time && !b.time) return -1;
+      if (!a.time && b.time) return 1;
+      return 0;
+    });
+  };
 
   const saveNote = async () => {
     if (!selectedDateKey || !noteInput.trim() || !profile?.uid) return;
     setSavingNote(true);
     const existing = normalizeNotes(profile?.calendarNotes?.[selectedDateKey]);
-    const updated = { ...(profile?.calendarNotes || {}), [selectedDateKey]: [...existing, noteInput.trim()] };
+    const newEntry: { text: string; time?: string } = { text: noteInput.trim() };
+    if (noteTime) newEntry.time = noteTime;
+    const updated = { ...(profile?.calendarNotes || {}), [selectedDateKey]: [...existing, newEntry] };
     await setDoc(doc(db, "users", profile.uid), { calendarNotes: updated }, { merge: true });
     onProfileUpdate?.({ calendarNotes: updated });
     setNoteInput("");
+    setNoteTime("");
     setSavingNote(false);
   };
 
@@ -12601,12 +12642,15 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
               );
             })()}
 
-            {selectedItems.notes.map((n: string, i: number) => {
+            {selectedItems.notes.map((n: { text: string; time?: string }, i: number) => {
               const nColor = getNoteColor(i);
               return (
                 <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: `${nColor}12`, border: `1px solid ${nColor}40`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
                   <div style={{ width: 8, height: 8, borderRadius: 4, background: nColor, flexShrink: 0, marginTop: 4 }} />
-                  <p style={{ color: COLORS.white, fontSize: 14, margin: 0, flex: 1, lineHeight: 1.4 }}>{n}</p>
+                  <div style={{ flex: 1 }}>
+                    {n.time && <p style={{ color: nColor, fontSize: 12, fontWeight: 700, margin: "0 0 2px" }}>{formatTimeLabel(n.time)}</p>}
+                    <p style={{ color: COLORS.white, fontSize: 14, margin: 0, lineHeight: 1.4 }}>{n.text}</p>
+                  </div>
                   <button onClick={() => deleteNote(selectedDateKey!, i)} style={{ background: "none", border: "none", color: COLORS.textSecondary, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>Remove</button>
                 </div>
               );
@@ -12619,6 +12663,18 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
                 placeholder="Add another activity — e.g. Pilates class, retreat..."
                 style={{ width: "100%", background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "12px 14px", color: COLORS.white, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
               />
+              {/* Real, optional time - a note without one still saves fine
+                  (a plain log of something that already happened), same
+                  as before this was added. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <input
+                  type="time"
+                  value={noteTime}
+                  onChange={(e) => setNoteTime(e.target.value)}
+                  style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "10px 12px", color: noteTime ? COLORS.white : COLORS.textSecondary, fontSize: 13, boxSizing: "border-box", colorScheme: "dark" }}
+                />
+                <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>Optional — set a time to schedule it</span>
+              </div>
               <button onClick={saveNote} disabled={!noteInput.trim() || savingNote} style={{ width: "100%", padding: "12px", borderRadius: 12, border: "none", background: noteInput.trim() ? COLORS.accent : COLORS.card, color: noteInput.trim() ? "#0A0A0A" : COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: noteInput.trim() ? "pointer" : "default" }}>
                 {savingNote ? "Saving..." : "Add Activity"}
               </button>
