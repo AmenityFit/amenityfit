@@ -929,6 +929,56 @@ const recoverPendingWorkoutSave = async () => {
   await saveWorkoutSessionDurable(pending.uid, pending.session, pending.sessionId);
 };
 
+// Real fix for a genuine, confirmed gap found via real-device testing and
+// full audit tonight: body measurement logs (weight/waist/hips/arms/chest/
+// neck/thighs) previously only ever reached local React state via
+// setUserProfile - handleSaveLog called onUpdate but nothing in that
+// chain ever called setDoc, and no debounced/global profile-sync effect
+// existed to catch it either. A logged measurement could be silently lost
+// on reload, logout, or any full unmount, with zero error and zero
+// indication anything went wrong - genuinely worse than a stale-data bug,
+// since real data the person entered could vanish. Same
+// durable-write-plus-local-backup pattern as saveWorkoutSessionDurable and
+// saveCardioActivityDurable above: written to localStorage before any
+// network attempt, retried a few times with backoff, backup cleared only
+// on confirmed success, left in place for recovery on next app load
+// otherwise.
+const PENDING_STATS_LOG_KEY = "amenityfit_pending_stats_log";
+const saveStatsLogDurable = async (uid: string, statsLogs: any[]): Promise<boolean> => {
+  try {
+    localStorage.setItem(PENDING_STATS_LOG_KEY, JSON.stringify({ uid, statsLogs }));
+  } catch (e) {
+    // Storage can fail (quota, private mode) - the real save attempt below
+    // still runs regardless; this backup is a safety net, not the only
+    // path to success.
+  }
+
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await setDoc(doc(db, "users", uid), { statsLogs }, { merge: true });
+      try { localStorage.removeItem(PENDING_STATS_LOG_KEY); } catch {}
+      return true;
+    } catch (e) {
+      if (attempt < maxAttempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+      }
+    }
+  }
+  console.error("saveStatsLogDurable: all retry attempts failed, backup retained in localStorage for recovery on next app load");
+  return false;
+};
+
+const recoverPendingStatsLog = async () => {
+  let pending: { uid: string; statsLogs: any[] } | null = null;
+  try {
+    const raw = localStorage.getItem(PENDING_STATS_LOG_KEY);
+    if (raw) pending = JSON.parse(raw);
+  } catch {}
+  if (!pending) return;
+  await saveStatsLogDurable(pending.uid, pending.statsLogs);
+};
+
 // Saves a cardio/standalone activity (run, bike, hike, walk, row, swim,
 // etc.) into the SAME workoutSessions collection used for gym workouts,
 // so all history queries (Progress, Coach context, future Calendar) can
@@ -16776,6 +16826,8 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
   
     const updatedLogs = [...logs, filteredEntry];
     onUpdate({ ...profile, statsLogs: updatedLogs });
+    const uidForSave = profile?.uid;
+    if (uidForSave) saveStatsLogDurable(uidForSave, updatedLogs);
   };
   const metrics = wellnessMode
     ? [{ id: "weight", label: "Weight" }]
@@ -27703,6 +27755,9 @@ export default function App() {
             // session's route/distance/duration data - see
             // saveCardioActivityDurable above.
             recoverPendingCardioSave();
+            // Same recovery pattern, for body measurement logs - see
+            // saveStatsLogDurable above.
+            recoverPendingStatsLog();
             // A resident manually deactivated by their building manager
             // (moved out, etc.) still has a fully working Firebase Auth
             // login, since deleting someone else's login requires the
