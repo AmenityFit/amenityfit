@@ -16070,7 +16070,14 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
     : [];
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 700, background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
+    // Real fix for a genuine bug found via real-device testing: 700 was
+    // fine when Calendar always closed itself before opening this, but
+    // now that Calendar correctly stays open underneath (so back returns
+    // to it), Calendar's own z-index of 999999 completely covered this
+    // view at only 700 - the button worked, the view was just entirely
+    // hidden behind Calendar. This needs to always render on top of
+    // Calendar regardless of which screen opened it from.
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000000, background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflow: "auto" }}>
       <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", gap: 12 }}>
         <button onClick={onClose} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <ArrowLeft size={16} color={COLORS.white} />
