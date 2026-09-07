@@ -27446,6 +27446,28 @@ class ErrorBoundary extends React.Component {
 }
 export default function App() {
   const [screen, setScreen] = useState("splash");
+  // Real fix for a genuine, confirmed issue: every screen switch fully
+  // unmounted the previous screen and mounted a brand-new instance of
+  // the next one from scratch - refetching data, losing scroll position,
+  // re-running every effect. Scoped deliberately narrow: only the 4
+  // screens people actually bounce between constantly via the bottom
+  // nav (dashboard/weekly/progress/assistant) stay mounted once
+  // visited, hidden via CSS instead of unmounted, so switching between
+  // THEM specifically is instant with no remount cost. Navigating away
+  // to anything else (workout, settings, etc.) still unmounts all 4
+  // normally - Workout already has its own robust progress persistence
+  // (workoutProgress, saved directly to the profile) so it doesn't need
+  // or benefit from this the way these 4 do, and keeping it in this
+  // group would add real risk (timers, GPS) for no real gain. Lazy by
+  // design - a screen only ever mounts the first time it's actually
+  // visited, so initial app load cost is completely unaffected.
+  const KEEP_ALIVE_SCREENS = ["dashboard", "weekly", "progress", "assistant"];
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (KEEP_ALIVE_SCREENS.includes(screen)) {
+      setVisitedTabs((prev) => (prev.has(screen) ? prev : new Set(prev).add(screen)));
+    }
+  }, [screen]);
 
   // Reset scroll position to the very top on every screen change. Individual
   // screens each own their own internal scrollable wrapper (not window/body),
@@ -28446,7 +28468,42 @@ const isInitialLoad = React.useRef(true);
     }
     setScreen("dashboard");
   }} />;
-  if (screen === "weekly") return <WeeklyProgramView key={screen + new Date().toDateString()} profile={liveProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString())} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />;
+  // Real fix - see KEEP_ALIVE_SCREENS' own comment above for the full
+  // explanation. All 4 screens that have ever been visited render
+  // together here, simultaneously - only their CSS visibility toggles
+  // on navigation between them, never an unmount/remount. Each keeps its
+  // own existing key prop unchanged, so React's normal key-based
+  // reconciliation still correctly forces a genuine fresh remount
+  // whenever the underlying data those keys track actually changes
+  // (e.g. completing a workout) - this only removes the UNNECESSARY
+  // remounts that happened on every single navigation regardless of
+  // whether anything real had changed.
+  if (KEEP_ALIVE_SCREENS.includes(screen)) {
+    return (
+      <>
+        {visitedTabs.has("weekly") && (
+          <div style={{ display: screen === "weekly" ? "block" : "none" }}>
+            <WeeklyProgramView key={"weekly" + new Date().toDateString()} profile={liveProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onBack={() => { setWeeklySelectedDay(null); setScreen("dashboard"); }} onStartWorkout={() => { if (!workoutDoneToday) setScreen("workout"); }} onCompleteRestDay={handleCompleteRestDay} onReviewWorkout={() => setScreen("workout")} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString())} initialSelectedDay={weeklySelectedDay} onPreviewWorkout={(day) => { setWeeklySelectedDay(day); setPreviewDay(day); setScreen("preview"); }} />
+          </div>
+        )}
+        {visitedTabs.has("dashboard") && (
+          <div style={{ display: screen === "dashboard" ? "block" : "none" }}>
+            <Dashboard key={"dashboard" + workoutDoneToday + (userProfile?.programDay || 1)} profile={liveProfile} onStartWorkout={() => setScreen("workout")} onCompleteRestDay={handleCompleteRestDay} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString())} onNavigate={navigate} onViewWeekly={() => setScreen("weekly")} reEntryMode={userProfile?.reEntryMode} reEntrySessions={userProfile?.reEntrySessions || 0} reEntryTarget={Math.round((userProfile?.frequency || 3) * 2)} wearableModifier={getWorkoutModifier(userProfile)} onWearableOverride={() => setUserProfile((prev: any) => ({ ...prev, wearableOverride: true }))} />
+          </div>
+        )}
+        {visitedTabs.has("progress") && (
+          <div style={{ display: screen === "progress" ? "block" : "none" }}>
+            <ProgressScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("dashboard")} onNavigate={navigate} onUpdate={(updated) => setUserProfile(updated)} />
+          </div>
+        )}
+        {visitedTabs.has("assistant") && (
+          <div style={{ display: screen === "assistant" ? "block" : "none" }}>
+            <FitnessAssistantScreen key={"assistant" + JSON.stringify(userProfile?.dayOverrides || {})} profile={liveProfile} onBack={() => setScreen("dashboard")} onNavigate={navigate} />
+          </div>
+        )}
+      </>
+    );
+  }
   if (screen === "preview" && previewDay?.isRest) {
     return <RestDayScreen onBack={() => { setPreviewDay(null); setScreen("weekly"); }} />;
   }
@@ -28507,7 +28564,6 @@ const isInitialLoad = React.useRef(true);
       <button onClick={() => setScreen("dashboard")} style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 16, fontWeight: 800, cursor: "pointer", letterSpacing: 0.3, boxShadow: `0 8px 24px ${COLORS.primary}50` }}>Back to Dashboard</button>
     </div>
   );
-  if (screen === "dashboard") return <Dashboard key={"dashboard" + workoutDoneToday + (userProfile?.programDay || 1)} profile={liveProfile} onStartWorkout={() => setScreen("workout")} onCompleteRestDay={handleCompleteRestDay} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString())} onNavigate={navigate} onViewWeekly={() => setScreen("weekly")} reEntryMode={userProfile?.reEntryMode} reEntrySessions={userProfile?.reEntrySessions || 0} reEntryTarget={Math.round((userProfile?.frequency || 3) * 2)} wearableModifier={getWorkoutModifier(userProfile)} onWearableOverride={() => setUserProfile((prev: any) => ({ ...prev, wearableOverride: true }))} />;
   if (screen === "cycle-complete") return <CycleCompleteScreen profile={liveProfile} onStartNewCycle={handleNewCycle} />;
   if (screen === "workout") return <WorkoutFlow key={"workout" + (userProfile?.programDay || 1)} profile={liveProfile} onProfileUpdate={(updates: any) => { setUserProfile((prev: any) => ({ ...prev, ...updates })); }} onComplete={async (snapshot) => {
     const uid = auth.currentUser?.uid || userProfile?.uid || currentUid || authUid || (await new Promise<string>(resolve => {
@@ -28626,7 +28682,6 @@ const isInitialLoad = React.useRef(true);
     handleWorkoutComplete(snapshot, uid);
   }} onBack={() => setScreen(workoutDoneToday ? "weekly" : "dashboard")} onGoHomeSave={(updatedProfile: any) => { setUserProfile(updatedProfile); setScreen("dashboard"); }} isReview={workoutDoneToday} />;
   if (screen === "history") return <HistoryScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("progress")} onNavigate={navigate} />;
-  if (screen === "progress") return <ProgressScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("dashboard")} onNavigate={navigate} onUpdate={(updated) => setUserProfile(updated)} />;  if (screen === "assistant") return <FitnessAssistantScreen key={"assistant" + JSON.stringify(userProfile?.dayOverrides || {})} profile={liveProfile} onBack={() => setScreen("dashboard")} onNavigate={navigate} />;
   if (screen === "myNotes") return <MyNotesScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("profile")} />;
   if (screen === "cardioTracking") return <CardioTrackingScreen
     profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }}
