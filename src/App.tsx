@@ -6146,8 +6146,9 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
                     <button onClick={() => setShowActivityStickerMode(true)} style={{ background: `${COLORS.white}10`, border: "none", borderRadius: 10, padding: "8px 14px", color: COLORS.white, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Sticker</button>
                   </div>
                 </div>
+                <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "4px 0 0" }}>Includes weights + cardio</p>
                 {activityStats.cardioCalories > 0 && (
-                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "6px 0 0" }}>+ ~{activityStats.cardioCalories} cal from cardio (estimated)</p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "4px 0 0" }}>+ ~{activityStats.cardioCalories} cal from cardio (estimated)</p>
                 )}
               </>
             ) : (
