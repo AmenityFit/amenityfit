@@ -12393,6 +12393,12 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
   // every other cardio screen already uses - not a separate, invented
   // icon set just for this calendar.
   const activityIcon = (session: any): { icon?: any; iconImage?: string } => {
+    // Real fix for a genuine bug found via real-device testing: a
+    // completed rest day session has no `type` field at all (it's saved
+    // with dayTitle: "Rest Day" instead, same as any other real session
+    // completion) - falling through to the generic Dumbbell default made
+    // a completed rest day look like an unlabeled lifting session.
+    if (session?.dayTitle === "Rest Day") return { icon: Moon };
     const meta = ACTIVITY_TYPES.find((a) => a.key === session?.type);
     return meta ? { icon: meta.icon, iconImage: meta.iconImage } : { icon: Dumbbell };
   };
@@ -12549,7 +12555,7 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
 
             {selectedItems.completed.map((s: any, i: number) => {
               const { icon: SIcon, iconImage: sImg } = activityIcon(s);
-              const sColor = typeColor(s.type);
+              const sColor = s.dayTitle === "Rest Day" ? COLORS.textSecondary : typeColor(s.type);
               const sPRs = getSessionPRs(s);
               return (
                 <div key={i} onClick={() => onSelectSession?.(s)} style={{ background: COLORS.card, borderLeft: `3px solid ${sColor}`, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
@@ -12558,7 +12564,7 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
                       {sImg ? <img src={sImg} alt="" style={{ width: 18, height: 18, objectFit: "contain" }} /> : SIcon && <SIcon size={18} color={sColor} strokeWidth={2} />}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{s.customActivityName || s.type}</p>
+                      <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{s.customActivityName || (s.dayTitle === "Rest Day" ? "Rest Day" : s.type)}</p>
                       <p style={{ color: sColor, fontSize: 12, fontWeight: 600, margin: 0 }}>Completed</p>
                     </div>
                     <ChevronRight size={16} color={COLORS.textSecondary} />
