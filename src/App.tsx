@@ -23339,6 +23339,13 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const [batchInvoiceAmount, setBatchInvoiceAmount] = React.useState("");
   const [batchSendingInvoice, setBatchSendingInvoice] = React.useState(false);
   const [batchInvoiceSent, setBatchInvoiceSent] = React.useState(false);
+  // Real fix for a genuine gap: sendBatchAgreementForSigning (the real
+  // SignWell order-form-for-signature step) existed as a working backend
+  // function but was never called from anywhere in the UI - the flow
+  // jumped straight from submission to Stripe invoicing, skipping the
+  // agreement-signing step entirely.
+  const [batchSendingAgreement, setBatchSendingAgreement] = React.useState(false);
+  const [batchAgreementSent, setBatchAgreementSent] = React.useState(false);
   const [activationResult, setActivationResult] = useState<any>(null);
 
   const totalBuildings = allBuildings.length;
@@ -24619,9 +24626,43 @@ const SuperAdminDashboard = ({ onSignOut }) => {
               </>
             )}
 
-            {batchInvoiceMode && !batchComplete && (
+            {batchInvoiceMode && !batchComplete && !batchAgreementSent && (
               <div>
                 <p style={{ color: COLORS.white, fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>Batch Submitted</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px", lineHeight: 1.6 }}>{batchCompanyName} and its {batchParsed.filter(b => b.valid).length} buildings are saved. Send the Order Form for signature first - once it's signed, you can send the invoice.</p>
+                <button
+                  onClick={async () => {
+                    if (!batchSubmissionId) return;
+                    setBatchSendingAgreement(true);
+                    try {
+                      const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/sendBatchAgreementForSigning", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ batchId: batchSubmissionId, secret: "amenityfit-activation-2026" }),
+                      });
+                      const data = await res.json();
+                      if (data.success) {
+                        setBatchAgreementSent(true);
+                      } else {
+                        alert("SignWell error: " + (data.error ? JSON.stringify(data.error) : "Unknown error"));
+                      }
+                    } catch (e) {
+                      alert("Failed to send Order Form. Check console.");
+                    }
+                    setBatchSendingAgreement(false);
+                  }}
+                  disabled={batchSendingAgreement}
+                  style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}
+                >
+                  {batchSendingAgreement ? "Sending..." : "Send Order Form for Signature →"}
+                </button>
+                <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "8px 0 0" }}>Sent to {batchPmEmail} via SignWell for e-signature.</p>
+              </div>
+            )}
+
+            {batchInvoiceMode && !batchComplete && batchAgreementSent && (
+              <div>
+                <p style={{ color: COLORS.white, fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>Order Form Sent</p>
                 <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px", lineHeight: 1.6 }}>{batchCompanyName} and its {batchParsed.filter(b => b.valid).length} buildings are saved and waiting on an invoice. Once it is paid, every building activates automatically with its own manager login - each manager then generates their own resident invite codes on demand, exactly like a single building does. {batchPmEmail} gets one combined summary organized by building.</p>
 
                 <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: "0 0 8px" }}>Negotiated Monthly Amount</p>
@@ -24684,6 +24725,8 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     setBatchInvoiceAmount("");
                     setBatchSendingInvoice(false);
                     setBatchInvoiceSent(false);
+                    setBatchSendingAgreement(false);
+                    setBatchAgreementSent(false);
                     setBatchComplete(false);
                     setBatchFileName("");
                     setBatchFileRowCount(0);
