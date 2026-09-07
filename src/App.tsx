@@ -4284,7 +4284,19 @@ const generateAIProgram = async (profile: any): Promise<{ programKey: string; pr
       // user's chosen frequency exactly; otherwise fall back to a frequency-correct generic
       const clampedFreqForPool = Math.min(Math.max(profile.frequency || 3, 3), 6);
       const frequencyMatchedPool = availableFromPool.filter((k: string) => countActiveDays(k) === clampedFreqForPool);
-      const nextProgram = ensureFrequencyMatch(frequencyMatchedPool[0] || availableFromPool[0], profile.frequency || 3, levelKey);
+      // Real fix for a genuine gap: this always picked the first matching
+      // pool entry, every cycle, meaning two people with the same level
+      // and equipment would rotate through their pool in the exact same
+      // fixed order. Beginner intentionally keeps its existing, unchanged
+      // ordered behavior per direct confirmation - only intermediate and
+      // advanced (levelKey never contains "beginner" for those) get the
+      // seeded, per-person shuffle. availableFromPool is already fully
+      // filtered for gender/goal/injury/already-used safety above - this
+      // only changes WHICH of those already-valid options gets picked.
+      const shouldRandomize = !levelKey.includes("beginner");
+      const shuffledFreqPool = (shouldRandomize && profile.uid) ? shuffleInterchangeablePrograms(frequencyMatchedPool, profile.uid) : frequencyMatchedPool;
+      const shuffledAvailablePool = (shouldRandomize && profile.uid) ? shuffleInterchangeablePrograms(availableFromPool, profile.uid) : availableFromPool;
+      const nextProgram = ensureFrequencyMatch(shuffledFreqPool[0] || shuffledAvailablePool[0], profile.frequency || 3, levelKey);
       const nextProgramAdapted = adaptProgramToFrequency(nextProgram, profile.frequency || 3);
       return {
         programKey: nextProgramAdapted.programKey,
