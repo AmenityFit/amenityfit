@@ -17006,7 +17006,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
                     background: isActive ? MUSCLE_COLORS[m.id] : locked ? `${COLORS.border}80` : COLORS.border,
                     color: isActive ? COLORS.white : locked ? COLORS.textSecondary + "80" : COLORS.textSecondary,
                     fontSize: 13, fontWeight: 700, cursor: "pointer",
-                    flexShrink: 0, transition: "all 0.2s ease",
+                    flexShrink: 0, transition: "background 0.08s ease, color 0.08s ease, box-shadow 0.15s ease",
                     boxShadow: isActive ? `0 4px 12px ${MUSCLE_COLORS[m.id]}40` : "none",
                     opacity: locked && !isActive ? 0.6 : 1,
                   }}
