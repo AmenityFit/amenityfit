@@ -17738,16 +17738,6 @@ const estimateCardioCalories = (activityType: string, durationSeconds: number, w
   return Math.round(met * weightKg * hours);
 };
 
-// Free-tier public token - Mapbox's Static Images API only renders a
-// finished route (never live navigation), which comfortably fits their
-// free monthly allowance for an app this size. Only ever used to build a
-// read-only image URL, never for anything requiring a secret/private token.
-// Read from an env var (set in .env.local, gitignored) rather than
-// hardcoded - GitHub's push protection correctly flags any Mapbox token
-// literal in source, even this public-token type, so this avoids that
-// entirely and matches standard practice for any embedded API key.
-const MAPBOX_ACCESS_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
-
 // Downsamples a route to at most maxPoints, taking evenly-spaced points -
 // keeps the Static Images API's URL length well within safe limits (a
 // tracked run/hike can accumulate hundreds of GPS points, and a static
@@ -17859,45 +17849,6 @@ const splitRouteIntoSegments = (
   if (currentSegment.length >= 2) normalSegments.push(currentSegment);
 
   return { normalSegments, gapSegments };
-};
-
-// Builds a Mapbox Static Images API URL rendering the given route as a
-// glowing accent-colored path over Mapbox's own dark style, matching the
-// app's dark theme rather than a generic default map look. Uses "auto"
-// center/zoom so Mapbox itself fits the frame to the route's real bounding
-// box with padding, rather than us having to compute that ourselves.
-const buildRouteMapUrl = (route: { lat: number; lng: number }[], width: number, height: number): string | null => {
-  if (!route || route.length < 2) return null;
-  const simplified = simplifyRoute(route, 120);
-  const coordinates = simplified.map((p) => [p.lng, p.lat]);
-  const geojson = {
-    type: "Feature",
-    geometry: { type: "LineString", coordinates },
-    properties: {},
-  };
-  const encodedGeojson = encodeURIComponent(JSON.stringify(geojson));
-  const strokeColor = (COLORS.accent || "#22D3EE").replace("#", "");
-  const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
-  const retina = dpr > 1 ? "@2x" : "";
-  // satellite-v9, not dark-v11: dark-v11 is a full vector map with real
-  // street names, building outlines and place labels baked in - a genuine
-  // privacy problem for a route someone shares (their exact street/home
-  // area readable at a glance), on top of looking flat and grey. Satellite
-  // imagery has no text labels of any kind, is much harder to pinpoint an
-  // exact address from at a glance, and is inherently colorful (real
-  // terrain, trees, water) instead of a bland vector style.
-  //
-  // Two overlays chained in the same path segment (Mapbox Static API
-  // syntax: comma-separated path-WIDTH+COLOR-OPACITY(geojson) entries) -
-  // a wider dark outline drawn first, then the accent-colored route on
-  // top of it. A plain accent line alone can disappear against
-  // similarly-colored terrain in satellite imagery; the dark outline
-  // guarantees the route stays readable regardless of what's underneath.
-  const overlays = [
-    `path-7+000000-0.55(${encodedGeojson})`,
-    `path-4+${strokeColor}-0.95(${encodedGeojson})`,
-  ].join(",");
-  return `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/${overlays}/auto/${width}x${height}${retina}?padding=40&access_token=${MAPBOX_ACCESS_TOKEN}`;
 };
 
 // Synchronous, guaranteed-to-render fallback for a GPS route image -
