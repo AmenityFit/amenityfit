@@ -12726,6 +12726,39 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
 
 // ─── Weekly Program View Screen ───────────────────────────────────────────────
 
+// ─── Branded Confirm Modal ──────────────────────────────────────────────────
+// Real fix for a genuine issue: destructive/consequential actions across
+// the app (Reset Week, Super Admin billing actions) used the browser's
+// own native window.confirm() dialog - plain system chrome that can't be
+// styled or branded at all, since it isn't real DOM content the app
+// controls. This is a real, reusable replacement matching the app's own
+// visual system, used everywhere a confirm() used to be.
+const ConfirmModal = ({
+  message,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  destructive = false,
+  onConfirm,
+  onCancel,
+}: {
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) => (
+  <div style={{ position: "fixed", inset: 0, zIndex: 1000001, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: 24, maxWidth: 360, width: "100%" }}>
+      <p style={{ color: COLORS.white, fontSize: 15, lineHeight: 1.5, margin: "0 0 20px" }}>{message}</p>
+      <div style={{ display: "flex", gap: 10 }}>
+        <button onClick={onCancel} style={{ flex: 1, padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.white, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{cancelLabel}</button>
+        <button onClick={onConfirm} style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: destructive ? "#E74C3C" : COLORS.accent, color: destructive ? COLORS.white : "#0A0A0A", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{confirmLabel}</button>
+      </div>
+    </div>
+  </div>
+);
+
 const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay = () => {}, onReviewWorkout, workoutDoneToday, isInProgress = false, onPreviewWorkout = null as any, initialSelectedDay = null as any, onProfileUpdate = (updates: any) => {} }) => {
   // Swaps two days' worth of content for the current week - guarded twice
   // over: the UI never gives a completed or past day a drag handle in the
@@ -12768,9 +12801,19 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
   // the same way an individual swap does, so the assistant reflects the
   // reset immediately rather than continuing to reference the arrangement
   // that just got undone.
-  const resetWeek = async () => {
+  // Real fix: window.confirm() replaced with the real, branded
+  // ConfirmModal - see its own comment for the full explanation. The
+  // confirmation is now async/state-driven rather than a blocking
+  // browser dialog, so the actual reset logic moved into a separate
+  // function called from the modal's onConfirm.
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const resetWeek = () => {
     if (!profile?.uid) return;
-    if (!window.confirm("Reset this week back to your original schedule? Any days you've moved will go back to where they started.")) return;
+    setShowResetConfirm(true);
+  };
+  const doResetWeek = async () => {
+    setShowResetConfirm(false);
+    if (!profile?.uid) return;
     await setDoc(doc(db, "users", profile.uid), { dayOverrides: {} }, { merge: true });
     deleteDoc(doc(db, "users", profile.uid, "assistantChat", "today")).catch(() => {});
     onProfileUpdate?.({ dayOverrides: {} });
@@ -13068,6 +13111,14 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
           sessionHistory={weeklySessionHistory}
           profile={profile}
           onClose={() => setSelectedSessionForDetail(null)}
+        />
+      )}
+      {showResetConfirm && (
+        <ConfirmModal
+          message="Reset this week back to your original schedule? Any days you've moved will go back to where they started."
+          confirmLabel="Reset Week"
+          onConfirm={doResetWeek}
+          onCancel={() => setShowResetConfirm(false)}
         />
       )}
 
