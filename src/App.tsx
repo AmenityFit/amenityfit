@@ -23170,6 +23170,16 @@ const DevToolsPanel = () => {
 };
 
 const SuperAdminDashboard = ({ onSignOut }) => {
+  // Real fix: replaces every window.confirm()/native double-confirm
+  // sequence in this screen with the real, branded ConfirmModal - see
+  // its own comment for the full explanation. A single, reusable,
+  // chainable state: onConfirm can itself call askConfirm again to queue
+  // a second confirmation, exactly matching the old "are you absolutely
+  // sure" double-check flows without needing separate state per action.
+  const [pendingConfirm, setPendingConfirm] = useState<{ message: string; confirmLabel?: string; destructive?: boolean; onConfirm: () => void } | null>(null);
+  const askConfirm = (message: string, onConfirm: () => void, options?: { confirmLabel?: string; destructive?: boolean }) => {
+    setPendingConfirm({ message, onConfirm, ...options });
+  };
   const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "queue" | "revenue" | "trending" | "devtools">("overview");
   const [otherActivityTrends, setOtherActivityTrends] = useState<any[]>([]);
   const [trendsLoaded, setTrendsLoaded] = useState(false);
@@ -23842,13 +23852,14 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                   {selectedBuilding.subscription !== "churned" && (
                     <button
                       onClick={() => {
-                        if (!window.confirm(`Cancel contract for ${selectedBuilding.name}? This marks them as churned and cannot be undone without manual Firestore edit.`)) return;
-                        const secondCheck = window.confirm("Are you absolutely sure? This will remove them from active billing.");
-                        if (!secondCheck) return;
-                        const cancellationDate = new Date(); cancellationDate.setDate(cancellationDate.getDate() + 30); const cancellationDateStr = cancellationDate.toISOString().split("T")[0];
-                        setDoc(doc(db, "buildings", String(selectedBuilding.id)), { subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr }, { merge: true });
-                        setSelectedBuilding((prev: any) => ({ ...prev, subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr }));
-                        setAllBuildings(prev => prev.map(b => b.id === selectedBuilding.id ? { ...b, subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr } : b));
+                        askConfirm(`Cancel contract for ${selectedBuilding.name}? This marks them as churned and cannot be undone without manual Firestore edit.`, () => {
+                          askConfirm("Are you absolutely sure? This will remove them from active billing.", () => {
+                            const cancellationDate = new Date(); cancellationDate.setDate(cancellationDate.getDate() + 30); const cancellationDateStr = cancellationDate.toISOString().split("T")[0];
+                            setDoc(doc(db, "buildings", String(selectedBuilding.id)), { subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr }, { merge: true });
+                            setSelectedBuilding((prev: any) => ({ ...prev, subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr }));
+                            setAllBuildings(prev => prev.map(b => b.id === selectedBuilding.id ? { ...b, subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr } : b));
+                          }, { confirmLabel: "Yes, Cancel", destructive: true });
+                        }, { confirmLabel: "Continue", destructive: true });
                       }}
                       style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #FF4D4D40", background: "transparent", color: "#FF6B6B", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
                     >
@@ -23857,11 +23868,12 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                   )}
                   {selectedBuilding.subscription === "churned" && (
                     <button
-                      onClick={async () => {
-                        if (!window.confirm(`Reactivate ${selectedBuilding.name}?`)) return;
-                        await setDoc(doc(db, "buildings", String(selectedBuilding.id)), { subscription: "active" }, { merge: true });
-                        setSelectedBuilding((prev: any) => ({ ...prev, subscription: "active" }));
-                        setAllBuildings(prev => prev.map(b => b.id === selectedBuilding.id ? { ...b, subscription: "active" } : b));
+                      onClick={() => {
+                        askConfirm(`Reactivate ${selectedBuilding.name}?`, async () => {
+                          await setDoc(doc(db, "buildings", String(selectedBuilding.id)), { subscription: "active" }, { merge: true });
+                          setSelectedBuilding((prev: any) => ({ ...prev, subscription: "active" }));
+                          setAllBuildings(prev => prev.map(b => b.id === selectedBuilding.id ? { ...b, subscription: "active" } : b));
+                        }, { confirmLabel: "Reactivate" });
                       }}
                       style={{ width: "100%", padding: "12px", borderRadius: 10, border: `1px solid ${COLORS.success}40`, background: "transparent", color: COLORS.success, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
                     >
@@ -23873,12 +23885,18 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                       platform totals without deleting it, for buildings
                       created to try out a flow rather than real customers */}
                   <button
-                    onClick={async () => {
+                    onClick={() => {
                       const newValue = !selectedBuilding.isTest;
-                      if (newValue && !window.confirm(`Mark ${selectedBuilding.name} as a test building? This excludes it from revenue and platform totals.`)) return;
-                      await setDoc(doc(db, "buildings", String(selectedBuilding.id)), { isTest: newValue }, { merge: true });
-                      setSelectedBuilding((prev: any) => ({ ...prev, isTest: newValue }));
-                      setAllBuildings(prev => prev.map(b => b.id === selectedBuilding.id ? { ...b, isTest: newValue } : b));
+                      const doUpdate = async () => {
+                        await setDoc(doc(db, "buildings", String(selectedBuilding.id)), { isTest: newValue }, { merge: true });
+                        setSelectedBuilding((prev: any) => ({ ...prev, isTest: newValue }));
+                        setAllBuildings(prev => prev.map(b => b.id === selectedBuilding.id ? { ...b, isTest: newValue } : b));
+                      };
+                      if (newValue) {
+                        askConfirm(`Mark ${selectedBuilding.name} as a test building? This excludes it from revenue and platform totals.`, doUpdate, { confirmLabel: "Mark as Test" });
+                      } else {
+                        doUpdate();
+                      }
                     }}
                     style={{ width: "100%", padding: "12px", borderRadius: 10, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 10 }}
                   >
@@ -24281,38 +24299,39 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     {(isPending || isInvoiceSent) && (
                       <div style={{ display: "flex", gap: 10 }}>
                         <button
-                          onClick={async () => {
+                          onClick={() => {
                             if (!sub.managerEmail) { alert("No manager email on this submission."); return; }
-                            if (!window.confirm(`Activate ${sub.buildingName || "this building"}? This creates the manager account and sends the welcome email immediately - it cannot be undone from here.`)) return;
-                            const activating = activatingId === sub.id;
-                            if (activating) return;
-                            setActivatingId(sub.id);
-                            // Delegates entirely to the same activateBuilding Cloud Function the
-                            // Stripe-triggered automatic path already uses, rather than duplicating
-                            // account creation, building setup, and email assembly here in the
-                            // client. One authoritative activation implementation server-side
-                            // means the manual and automatic paths can never quietly drift apart -
-                            // whatever gets fixed or changed there is correct everywhere at once.
-                            try {
-                              const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/activateBuilding", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ submissionId: sub.id, secret: "amenityfit-activation-2026" }),
-                              });
-                              const data = await res.json();
-                              if (!data.success) {
-                                alert("Activation failed: " + (data.error || "Unknown error"));
-                                setActivatingId(null);
-                                return;
+                            askConfirm(`Activate ${sub.buildingName || "this building"}? This creates the manager account and sends the welcome email immediately - it cannot be undone from here.`, async () => {
+                              const activating = activatingId === sub.id;
+                              if (activating) return;
+                              setActivatingId(sub.id);
+                              // Delegates entirely to the same activateBuilding Cloud Function the
+                              // Stripe-triggered automatic path already uses, rather than duplicating
+                              // account creation, building setup, and email assembly here in the
+                              // client. One authoritative activation implementation server-side
+                              // means the manual and automatic paths can never quietly drift apart -
+                              // whatever gets fixed or changed there is correct everywhere at once.
+                              try {
+                                const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/activateBuilding", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ submissionId: sub.id, secret: "amenityfit-activation-2026" }),
+                                });
+                                const data = await res.json();
+                                if (!data.success) {
+                                  alert("Activation failed: " + (data.error || "Unknown error"));
+                                  setActivatingId(null);
+                                  return;
+                                }
+                                setActivationResult({ slug: data.slug, uid: data.uid, tempPassword: data.tempPassword, email: sub.managerEmail, units: sub.units || 0 });
+                                const updated = await fetchBuildingSubmissions();
+                                setQueueSubmissions(updated);
+                              } catch (e: any) {
+                                console.error("Activation error:", e);
+                                alert("Activation failed. " + (e?.message || "Check the browser console or Firebase Functions logs for details."));
                               }
-                              setActivationResult({ slug: data.slug, uid: data.uid, tempPassword: data.tempPassword, email: sub.managerEmail, units: sub.units || 0 });
-                              const updated = await fetchBuildingSubmissions();
-                              setQueueSubmissions(updated);
-                            } catch (e: any) {
-                              console.error("Activation error:", e);
-                              alert("Activation failed. " + (e?.message || "Check the browser console or Firebase Functions logs for details."));
-                            }
-                            setActivatingId(null);
+                              setActivatingId(null);
+                            }, { confirmLabel: "Activate", destructive: true });
                           }}
                           style={{ flex: 1, padding: "13px", borderRadius: 12, border: "none", background: activatingId === sub.id ? COLORS.border : `linear-gradient(135deg, ${COLORS.success}, #1a9e4a)`, color: activatingId === sub.id ? COLORS.textSecondary : COLORS.white, fontSize: 13, fontWeight: 700, cursor: activatingId === sub.id ? "not-allowed" : "pointer" }}
                         >
@@ -24817,14 +24836,15 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                               Confirmed Renewing
                             </button>
                             <button
-                              onClick={async () => {
-                                if (!window.confirm(`Mark ${b.name} as not renewing? This cancels their contract.`)) return;
-                                const secondCheck = window.confirm("Are you absolutely sure? This will remove them from active billing.");
-                                if (!secondCheck) return;
-                                const cancellationDate = new Date(); cancellationDate.setDate(cancellationDate.getDate() + 30);
-                                const cancellationDateStr = cancellationDate.toISOString().split("T")[0];
-                                await setDoc(doc(db, "buildings", String(b.id)), { subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr }, { merge: true });
-                                setAllBuildings(prev => prev.map(x => x.id === b.id ? { ...x, subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr } : x));
+                              onClick={() => {
+                                askConfirm(`Mark ${b.name} as not renewing? This cancels their contract.`, () => {
+                                  askConfirm("Are you absolutely sure? This will remove them from active billing.", async () => {
+                                    const cancellationDate = new Date(); cancellationDate.setDate(cancellationDate.getDate() + 30);
+                                    const cancellationDateStr = cancellationDate.toISOString().split("T")[0];
+                                    await setDoc(doc(db, "buildings", String(b.id)), { subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr }, { merge: true });
+                                    setAllBuildings(prev => prev.map(x => x.id === b.id ? { ...x, subscription: "churned", renewalDate: "", cancellationDate: cancellationDateStr } : x));
+                                  }, { confirmLabel: "Yes, Cancel", destructive: true });
+                                }, { confirmLabel: "Continue", destructive: true });
                               }}
                               style={{ flex: 1, background: "#FF4D4D15", border: "1px solid #FF4D4D40", borderRadius: 8, padding: "8px 10px", color: "#FF6B6B", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
                             >
@@ -24919,6 +24939,15 @@ const SuperAdminDashboard = ({ onSignOut }) => {
         )}
         {activeTab === "devtools" && <DevToolsPanel />}
       </div>
+      {pendingConfirm && (
+        <ConfirmModal
+          message={pendingConfirm.message}
+          confirmLabel={pendingConfirm.confirmLabel}
+          destructive={pendingConfirm.destructive}
+          onConfirm={() => { setPendingConfirm(null); pendingConfirm.onConfirm(); }}
+          onCancel={() => setPendingConfirm(null)}
+        />
+      )}
     </div>
   );
 };
