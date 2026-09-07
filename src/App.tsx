@@ -5762,6 +5762,46 @@ const getWorkoutImage = (type: string, programDay: number = 1): string => {
 // given its size and risk) - it only removes the visible loading flash.
 const workoutHistoryCache: { uid: string | null; sessions: any[] } = { uid: null, sessions: [] };
 
+// ─── Calendar Notes — shared helpers ────────────────────────────────────────
+// Moved to module scope so both Dashboard (surfacing today's scheduled
+// activities) and CalendarView (the actual editor) work from the exact
+// same real data shape, instead of two independently-maintained copies
+// that could drift apart.
+// Real fix/upgrade: notes carry an optional real scheduled time, not just
+// plain text - normalizes every format a note has ever been stored in
+// (the original single string, an earlier plain-string array, and this
+// real object-with-time shape) into one consistent shape, so old data
+// displays correctly with no separate migration step required.
+const normalizeNotes = (raw: any): { text: string; time?: string }[] => {
+  if (!raw) return [];
+  if (typeof raw === "string") return [{ text: raw }];
+  if (Array.isArray(raw)) {
+    return raw.map((n: any) => typeof n === "string" ? { text: n } : { text: n?.text || "", time: n?.time || undefined }).filter((n) => n.text);
+  }
+  return [];
+};
+// Converts the raw 24-hour "HH:MM" an <input type="time"> stores into
+// a real, readable "6:00 PM" for display.
+const formatTimeLabel = (time: string): string => {
+  const [h, m] = time.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return time;
+  const period = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+};
+// Real ordering: a scheduled time sorts chronologically first; a note
+// with no time (a plain "did this" log) sorts after every timed one,
+// in the order it was added - matches how a person naturally scans a
+// real day's plan before its incidental notes.
+const sortNotes = (notes: { text: string; time?: string }[]) => {
+  return [...notes].sort((a, b) => {
+    if (a.time && b.time) return a.time.localeCompare(b.time);
+    if (a.time && !b.time) return -1;
+    if (!a.time && b.time) return 1;
+    return 0;
+  });
+};
+
 const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, workoutDoneToday = false, isInProgress = false, onNavigate = (s) => {}, onViewWeekly = () => {}, reEntryMode = false, reEntrySessions = 0, reEntryTarget = 6, wearableModifier = null, onWearableOverride = () => {} }) => {
   // Raw session history, fetched once per Dashboard mount alongside
   // notifications below - workoutDoneToday changing (passed in the key
@@ -6010,6 +6050,28 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
 
         {/* Today's Workout */}
         <TodayWorkoutCard type={workoutType} sessionLength={sessionLength} experience={experience} programDay={programDay} programWeek={programWeek} workoutDoneToday={workoutDoneToday} isInProgress={isInProgress} onStartWorkout={onStartWorkout} onCompleteRestDay={onCompleteRestDay} profile={profile} dayFocus={(() => { const _re = profile?.reEntryMode ? filterGroupsForReEntry(currentDay?.groups || [], profile?.effectiveLevel || profile?.experience || "intermediate", profile?.programKey || "") : (currentDay?.groups || []); const _g = filterGroupsForSessionLength(_re, sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return deriveWorkoutSubtitle(_d) || currentDay?.focus; })()} groups={(() => { const _re = profile?.reEntryMode ? filterGroupsForReEntry(currentDay?.groups || [], profile?.effectiveLevel || profile?.experience || "intermediate", profile?.programKey || "") : (currentDay?.groups || []); const _g = filterGroupsForSessionLength(_re, sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); return dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); })()} exerciseCount={(() => { const _re = profile?.reEntryMode ? filterGroupsForReEntry(currentDay?.groups || [], profile?.effectiveLevel || profile?.experience || "intermediate", profile?.programKey || "") : (currentDay?.groups || []); const _g = filterGroupsForSessionLength(_re, sessionLength, profile?.effectiveLevel || profile?.experience || "intermediate"); const _e = filterExercisesByEquipment(_g, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); const _v = filterExercisesByVideo(_e); const _i = filterExercisesByInjury(_v, profile?.injuries || "none", profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || [], (parseInt(String(profile?.age)) || 30) >= 65); const _d = dedupeExercisesInDay(_i, profile?.equipmentPreference || "gym-and-bands", profile?.buildingEquipment || []); return _d.filter((g: any) => g.type !== "cardio").reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0); })()} />
+
+        {/* Real, new addition: surfaces today's own scheduled activities
+            (from Calendar's real note-with-time data) right on Dashboard,
+            instead of requiring someone to open Calendar to see if they
+            have anything planned today. Only shows timed ones - an
+            untimed note is a plain log of something already done, not
+            something to be reminded about later today. */}
+        {(() => {
+          const todayNotes = sortNotes(normalizeNotes(profile?.calendarNotes?.[new Date().toDateString()])).filter((n) => n.time);
+          if (todayNotes.length === 0) return null;
+          return (
+            <div style={{ marginBottom: 16 }}>
+              {todayNotes.map((n, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: `${COLORS.card}`, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "10px 14px", marginBottom: 6 }}>
+                  <Clock size={14} color={COLORS.accent} strokeWidth={2} />
+                  <p style={{ color: COLORS.white, fontSize: 13, fontWeight: 600, margin: 0, flex: 1 }}>{n.text}</p>
+                  <p style={{ color: COLORS.accent, fontSize: 12, fontWeight: 700, margin: 0 }}>{formatTimeLabel(n.time!)}</p>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* View Full Week link */}
         <button onClick={onViewWeekly} style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20, marginTop: -8 }}>
@@ -12432,39 +12494,6 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
   // not just plain text - normalizes every format a note has ever been
   // stored in (the original single string, last session's plain-string
   // array, and this real object-with-time shape) into one consistent
-  // shape, so old data displays correctly with no separate migration
-  // step required, same principle as every other real-data normalization
-  // tonight.
-  const normalizeNotes = (raw: any): { text: string; time?: string }[] => {
-    if (!raw) return [];
-    if (typeof raw === "string") return [{ text: raw }];
-    if (Array.isArray(raw)) {
-      return raw.map((n: any) => typeof n === "string" ? { text: n } : { text: n?.text || "", time: n?.time || undefined }).filter((n) => n.text);
-    }
-    return [];
-  };
-  // Converts the raw 24-hour "HH:MM" an <input type="time"> stores into
-  // a real, readable "6:00 PM" for display.
-  const formatTimeLabel = (time: string): string => {
-    const [h, m] = time.split(":").map(Number);
-    if (isNaN(h) || isNaN(m)) return time;
-    const period = h >= 12 ? "PM" : "AM";
-    const hour12 = h % 12 === 0 ? 12 : h % 12;
-    return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
-  };
-  // Real ordering: a scheduled time sorts chronologically first; a note
-  // with no time (a plain "did this" log) sorts after every timed one,
-  // in the order it was added - matches how a person naturally scans a
-  // real day's plan before its incidental notes.
-  const sortNotes = (notes: { text: string; time?: string }[]) => {
-    return [...notes].sort((a, b) => {
-      if (a.time && b.time) return a.time.localeCompare(b.time);
-      if (a.time && !b.time) return -1;
-      if (!a.time && b.time) return 1;
-      return 0;
-    });
-  };
-
   const saveNote = async () => {
     if (!selectedDateKey || !noteInput.trim() || !profile?.uid) return;
     setSavingNote(true);
