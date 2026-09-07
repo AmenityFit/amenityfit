@@ -14625,7 +14625,7 @@ NEVER:
 Invent exercises or protocols you're not certain about. Contradict someone's doctor. Make someone feel stupid for not knowing something. Pretend certainty you don't have. Give a long answer when a short one is the honest one.`;
 };
 
-const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => {
+const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {}, isActive = true }) => {
   // Fetched once per mount, same lightweight pattern as Dashboard's weekly
   // activity stats - a plain factual summary of recent cardio activity
   // (see summarizeRecentCardio), so the coach can genuinely reference real
@@ -14836,6 +14836,27 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {} }) => 
     }
     prevLoading.current = loading;
   }, [messages, loading]);
+
+  // Real fix for a genuine bug found via real-device testing: this screen
+  // is kept alive (see KEEP_ALIVE_SCREENS) - switching tabs never
+  // unmounts it, it's a pure CSS display toggle from the parent, which
+  // this component has no visibility into on its own. The only scroll-to-
+  // bottom trigger was a loading:true-to-false transition, right when a
+  // response finishes - if the person navigated away in that exact
+  // window, the smooth-scroll animation could be interrupted mid-flight
+  // by the display:none swap, and nothing ever re-checked scroll position
+  // when they came back, since becoming visible again isn't itself a
+  // messages/loading change. isActive gives this component real
+  // visibility awareness - snapping (not animating) to the true bottom
+  // every time it goes from hidden back to shown, so a cut-off response
+  // is never left stranded.
+  const prevIsActive = React.useRef(isActive);
+  useEffect(() => {
+    if (isActive && !prevIsActive.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+    }
+    prevIsActive.current = isActive;
+  }, [isActive]);
 
   useEffect(() => {
     if (!loading) return;
@@ -28603,7 +28624,7 @@ const isInitialLoad = React.useRef(true);
         )}
         {visitedTabs.has("assistant") && (
           <div style={{ display: screen === "assistant" ? "block" : "none" }}>
-            <FitnessAssistantScreen key={"assistant" + JSON.stringify(userProfile?.dayOverrides || {}) + (userProfile?.lastSessionDate || "")} profile={liveProfile} onBack={() => setScreen("dashboard")} onNavigate={navigate} />
+            <FitnessAssistantScreen key={"assistant" + JSON.stringify(userProfile?.dayOverrides || {}) + (userProfile?.lastSessionDate || "")} profile={liveProfile} onBack={() => setScreen("dashboard")} onNavigate={navigate} isActive={screen === "assistant"} />
           </div>
         )}
         {visitedTabs.has("profile") && (
