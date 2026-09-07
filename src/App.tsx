@@ -13179,7 +13179,26 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
           onProfileUpdate={onProfileUpdate}
         />
       )}
-      {selectedSessionForDetail && (
+      {/* Real fix for a genuine bug found via real-device testing: every
+          completed session tapped from Calendar unconditionally opened
+          ActivityDetailView - built for real tracked activities with a
+          genuine duration (pickleball, boxing, a run). A completed Rest
+          Day has no durationSeconds at all, so it rendered a nonsensical
+          "Time: 0:00" alongside Share/Sticker options that don't fit a
+          rest day. dayTitle: "Rest Day" is the exact, reliable field
+          saveWorkoutSessionDurable already writes for a rest-day
+          completion (see handleCompleteRestDay) - routes to the real
+          RestDayScreen instead, with no onComplete handler passed since
+          this is viewing an already-completed past day, not marking
+          today's - which correctly hides the "Mark Rest Day Complete"
+          button and shows just the clean info card. */}
+      {selectedSessionForDetail && selectedSessionForDetail.dayTitle === "Rest Day" && (
+        <RestDayScreen
+          onBack={() => setSelectedSessionForDetail(null)}
+          isCompleted={true}
+        />
+      )}
+      {selectedSessionForDetail && selectedSessionForDetail.dayTitle !== "Rest Day" && (
         <ActivityDetailView
           session={selectedSessionForDetail}
           sessionHistory={weeklySessionHistory}
