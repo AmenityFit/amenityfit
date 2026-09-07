@@ -16689,6 +16689,31 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
     return allRestDays;
   })();
   const totalSessions = profile?.cycleSessionsCompleted || 0;
+  // Real fix for a genuine confusion found via real-device testing: completedDays
+  // (from profile.completedProgramDays) stores WHICH CONTENT SLOT was shown each
+  // session - correct for content resolution, Weekly View, and dayOverrides
+  // reconciliation, all of which keep using the raw array untouched below. But a
+  // Flex-Week-swapped session can resolve to a slot number ahead of the person's
+  // real chronological completion count (e.g. their 2nd real session shows slot
+  // 7's content), which made the grid's checkmarks look like they'd skipped
+  // around or lost sessions when the person was actually completing things in
+  // perfect order. This calendar is a "2 of 30 complete" progress-fill, not a map
+  // of which specific day-templates were visited - so its checkmarks are
+  // recomputed here purely for display: walk slots 1-30 in order, skip natural/
+  // swapped rest slots (restDayNumbers, computed above, already reconciles any
+  // current-week rearranging), and mark exactly the first totalSessions non-rest
+  // slots complete. Matches the header's "X of 30 complete" number exactly, always.
+  const chronologicalCompletedDays: number[] = (() => {
+    const result: number[] = [];
+    let count = 0;
+    for (let day = 1; day <= 30 && count < totalSessions; day++) {
+      if (!restDayNumbers.includes(day)) {
+        result.push(day);
+        count++;
+      }
+    }
+    return result;
+  })();
   const frequency = profile?.frequency || 3;
   const weeklyTarget = frequency;
   const sessionsThisWeek = profile?.sessionsThisWeek || 0;
@@ -17110,7 +17135,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: 0 }}>Program Calendar</p>
             <span style={{ color: COLORS.accent, fontSize: 12, fontWeight: 700 }}>Session {currentDay} of 30</span>
           </div>
-          <ThirtyDayCalendar completedDays={completedDays} restDays={restDayNumbers} totalDays={30} currentDay={currentDay} />
+          <ThirtyDayCalendar completedDays={chronologicalCompletedDays} restDays={restDayNumbers} totalDays={30} currentDay={currentDay} />
           <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 12, height: 12, borderRadius: 3, background: `${COLORS.success}25`, border: `1px solid ${COLORS.success}` }} />
