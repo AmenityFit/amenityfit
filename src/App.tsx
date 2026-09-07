@@ -12967,7 +12967,13 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
         <CalendarView
           profile={profile}
           onBack={() => setShowCalendarView(false)}
-          onSelectSession={(s: any) => { setShowCalendarView(false); setSelectedSessionForDetail(s); }}
+          // Real fix for a genuine bug found via real-device testing: this
+          // used to close Calendar before opening the session detail, so
+          // pressing back from the detail landed on whatever screen was
+          // underneath instead of back in Calendar - exactly where the
+          // person actually came from. Leaving Calendar open underneath
+          // means back genuinely returns to it.
+          onSelectSession={(s: any) => { setSelectedSessionForDetail(s); }}
           onProfileUpdate={onProfileUpdate}
         />
       )}
@@ -16721,7 +16727,9 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
           <CalendarView
             profile={profile}
             onBack={() => setShowCalendarView(false)}
-            onSelectSession={(s: any) => { setShowCalendarView(false); setSelectedSession(s); }}
+            // Same real fix as the other onSelectSession call site above -
+            // see its comment for the full explanation.
+            onSelectSession={(s: any) => { setSelectedSession(s); }}
             onProfileUpdate={onUpdate}
           />
         )}
