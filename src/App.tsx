@@ -5760,7 +5760,29 @@ const getWorkoutImage = (type: string, programDay: number = 1): string => {
 // correct. This does not eliminate the remount itself (a bigger,
 // separate architectural change, deliberately not undertaken tonight
 // given its size and risk) - it only removes the visible loading flash.
-const workoutHistoryCache: { uid: string | null; sessions: any[] } = { uid: null, sessions: [] };
+const workoutHistoryCache: { uid: string | null; sessions: any[]; pendingOptimistic: any | null } = { uid: null, sessions: [], pendingOptimistic: null };
+
+// Real fix for a genuine race: saveWorkoutSessionDurable is deliberately
+// unawaited at the moment a workout completes (instant completion feel,
+// no spinner - see its own comment), but Dashboard's activity stats and
+// ProgressScreen's Active Weeks streak both do a real Firestore fetch
+// right after, on mount/effect - a fetch that can legitimately land
+// before that write has finished server-side, silently showing
+// pre-completion numbers. mergeOptimisticSession keeps a just-completed
+// session visible in both places until the real Firestore document is
+// confirmed present in a fetch result (matched by sessionId), then lets
+// it drop away naturally - no artificial delay, correct regardless of
+// which side of the race wins.
+const mergeOptimisticSession = (fetchedSessions: any[], uid: string): any[] => {
+  const pending = workoutHistoryCache.pendingOptimistic;
+  if (!pending || pending.uid !== uid) return fetchedSessions;
+  const realDocArrived = fetchedSessions.some((s: any) => s.sessionId === pending.sessionId);
+  if (realDocArrived) {
+    workoutHistoryCache.pendingOptimistic = null;
+    return fetchedSessions;
+  }
+  return [pending, ...fetchedSessions];
+};
 
 // ─── Calendar Notes — shared helpers ────────────────────────────────────────
 // Moved to module scope so both Dashboard (surfacing today's scheduled
@@ -5818,9 +5840,10 @@ const Dashboard = ({ profile, onStartWorkout, onCompleteRestDay = () => {}, work
   useEffect(() => {
     if (!profile?.uid) return;
     fetchWorkoutHistory(profile.uid).then((sessions) => {
-      setActivitySessions(sessions);
+      const merged = mergeOptimisticSession(sessions, profile.uid);
+      setActivitySessions(merged);
       workoutHistoryCache.uid = profile.uid;
-      workoutHistoryCache.sessions = sessions;
+      workoutHistoryCache.sessions = merged;
     });
   }, [profile?.uid]);
   const activityStats = activitySessions ? computeActivityStats(activitySessions, activityStatsRange === "today" ? 1 : 7) : null;
@@ -10148,7 +10171,7 @@ const RestTimer = ({ restLabel, onDone, showWater = false }) => {
         </svg>
         <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" }}>
           <p style={{ color: COLORS.white, fontSize: 48, fontWeight: 900, margin: 0, letterSpacing: -2 }}>{seconds}</p>
-          <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>seconds</p>
+          <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "4px 0 0" }}>seconds</p>
         </div>
       </div>
       <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 32px", textAlign: "center", lineHeight: 1.5 }}>
@@ -12689,7 +12712,7 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
               <input
                 value={noteInput}
                 onChange={(e) => setNoteInput(e.target.value)}
-                placeholder="Add another activity — e.g. Pilates class, retreat..."
+                placeholder="Add another activity, e.g. Pilates class, retreat..."
                 style={{ width: "100%", background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "12px 14px", color: COLORS.white, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
               />
               {/* Real, optional time - a note without one still saves fine
@@ -12702,7 +12725,7 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
                   onChange={(e) => setNoteTime(e.target.value)}
                   style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "10px 12px", color: noteTime ? COLORS.white : COLORS.textSecondary, fontSize: 13, boxSizing: "border-box", colorScheme: "dark" }}
                 />
-                <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>Optional — set a time to schedule it</span>
+                <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>Optional, set a time to schedule it</span>
               </div>
               <button onClick={saveNote} disabled={!noteInput.trim() || savingNote} style={{ width: "100%", padding: "12px", borderRadius: 12, border: "none", background: noteInput.trim() ? COLORS.accent : COLORS.card, color: noteInput.trim() ? "#0A0A0A" : COLORS.textSecondary, fontSize: 13, fontWeight: 700, cursor: noteInput.trim() ? "pointer" : "default" }}>
                 {savingNote ? "Saving..." : "Add Activity"}
@@ -16543,18 +16566,20 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [selectedSession, setSelectedSession] = useState<any>(null);
 
-  // Auto-load history when Progress tab opens — shows sessions immediately after completion
-  // Also reloads when sessionsCompleted changes (user just finished a workout)
+  // Auto-load history when Progress tab opens - shows sessions immediately after completion.
+  // Also reloads when sessionsCompleted changes (user just finished a workout). The real fix
+  // for the Firestore-write race is mergeOptimisticSession (see its own comment), not a
+  // delay - a delay can't guarantee winning a race against a network write anyway.
   const sessionsCompleted = profile?.sessionsCompleted || 0;
   useEffect(() => {
     if (profile?.uid) {
       setHistoryLoading(true);
       setHistoryLoaded(false);
-      // Small delay to ensure Firestore write from workout completion has propagated
-      fetchWorkoutHistory(profile.uid, (fastSessions) => setSessionHistory(fastSessions)).then(sessions => {
-        setSessionHistory(sessions);
+      fetchWorkoutHistory(profile.uid, (fastSessions) => setSessionHistory(mergeOptimisticSession(fastSessions, profile.uid))).then(sessions => {
+        const merged = mergeOptimisticSession(sessions, profile.uid);
+        setSessionHistory(merged);
         workoutHistoryCache.uid = profile.uid;
-        workoutHistoryCache.sessions = sessions;
+        workoutHistoryCache.sessions = merged;
         setHistoryLoaded(true);
         setHistoryLoading(false);
       });
@@ -28567,6 +28592,24 @@ const isInitialLoad = React.useRef(true);
         // document, merging completion metadata into the data that was
         // already there instead of creating a competing, mostly-empty one.
         const sessionId = snapshot.sessionId || `${uid}_${Date.now()}`;
+        // Real fix - see mergeOptimisticSession's own comment for the full
+        // explanation of the race this closes. A minimal optimistic copy is
+        // enough: only the fields computeActivityStats and
+        // computeActiveWeeksStreak actually read (date, sessionLength, no
+        // `type` field since this path is always a lifting session -
+        // cardio tracking saves through a different function entirely).
+        const optimisticSession = {
+          uid,
+          sessionId,
+          date: getLocalDateString(),
+          sessionLength: snapshot.sessionLength,
+          completedAt: new Date(),
+        };
+        workoutHistoryCache.pendingOptimistic = optimisticSession;
+        workoutHistoryCache.sessions = workoutHistoryCache.uid === uid
+          ? [optimisticSession, ...workoutHistoryCache.sessions.filter((s: any) => s.sessionId !== sessionId)]
+          : [optimisticSession];
+        workoutHistoryCache.uid = uid;
         const sessionPayload = {
           uid,
           programKey: userProfile.programKey,
