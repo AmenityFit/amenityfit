@@ -27464,7 +27464,7 @@ export default function App() {
   // group would add real risk (timers, GPS) for no real gain. Lazy by
   // design - a screen only ever mounts the first time it's actually
   // visited, so initial app load cost is completely unaffected.
-  const KEEP_ALIVE_SCREENS = ["dashboard", "weekly", "progress", "assistant"];
+  const KEEP_ALIVE_SCREENS = ["dashboard", "weekly", "progress", "assistant", "profile"];
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (KEEP_ALIVE_SCREENS.includes(screen)) {
@@ -28504,6 +28504,19 @@ const isInitialLoad = React.useRef(true);
             <FitnessAssistantScreen key={"assistant" + JSON.stringify(userProfile?.dayOverrides || {}) + (userProfile?.lastSessionDate || "")} profile={liveProfile} onBack={() => setScreen("dashboard")} onNavigate={navigate} />
           </div>
         )}
+        {visitedTabs.has("profile") && (
+          <div style={{ display: screen === "profile" ? "block" : "none" }}>
+            <ProfileScreen profile={liveProfile} onUpdate={(updated) => {
+              setUserProfile(updated);
+              const uid = updated?.uid || currentUid || auth.currentUser?.uid;
+              if (uid) {
+                const { uid: _uid, profilePhoto: _profilePhoto, ...dataToSave } = updated;
+                setDoc(doc(db, "users", uid), stripUndefinedDeep(dataToSave), { merge: true })
+                  .catch(e => console.error("Failed to save profile update:", e));
+              }
+            }} onSignOut={resetToWelcome} onNavigate={navigate} onManagerAccess={(email?: string, password?: string) => { setManagerLoggedIn(true); setManagerPeekCreds(email && password ? { email, password } : null); }} onPortfolioAccess={(companyId: string, companyName: string, email?: string, password?: string) => { if (email && password) setPortfolioPeek({ companyId, companyName, email, password }); }} />
+          </div>
+        )}
       </>
     );
   }
@@ -28712,26 +28725,6 @@ const isInitialLoad = React.useRef(true);
     presetActivityType={pendingCardioLink?.presetActivityType}
   />;
   if (screen === "nutrition") return <NutritionScreen onBack={() => setScreen("dashboard")} onNavigate={navigate} />;
-  if (screen === "profile") return <ProfileScreen profile={liveProfile} onUpdate={(updated) => {
-    setUserProfile(updated);
-    const uid = updated?.uid || currentUid || auth.currentUser?.uid;
-    if (uid) {
-      // profilePhoto is deliberately excluded from this shared, general-
-      // purpose save. This handler fires for every unrelated field edit
-      // in Profile, and the local profile object it receives is not
-      // guaranteed to have the real photo URL loaded yet (e.g. right
-      // after a forced re-login following an app update) - if it doesn't,
-      // this spread would silently write profilePhoto: null over top of
-      // a real, already-saved photo, even though nothing about that edit
-      // had anything to do with the photo. handlePhotoSelect and
-      // handlePhotoDelete now perform their own dedicated, narrow writes
-      // for just this one field, so it can never be touched as a side
-      // effect of saving something else.
-      const { uid: _uid, profilePhoto: _profilePhoto, ...dataToSave } = updated;
-      setDoc(doc(db, "users", uid), stripUndefinedDeep(dataToSave), { merge: true })
-        .catch(e => console.error("Failed to save profile update:", e));
-    }
-  }} onSignOut={resetToWelcome} onNavigate={navigate} onManagerAccess={(email?: string, password?: string) => { setManagerLoggedIn(true); setManagerPeekCreds(email && password ? { email, password } : null); }} onPortfolioAccess={(companyId: string, companyName: string, email?: string, password?: string) => { if (email && password) setPortfolioPeek({ companyId, companyName, email, password }); }} />;
   if (screen === "privacy") return <PrivacyPolicyScreen onBack={() => setScreen("profile")} />;
   if (screen === "terms") return <TermsOfServiceScreen onBack={() => setScreen("profile")} />;
 
