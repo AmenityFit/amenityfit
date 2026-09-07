@@ -15531,6 +15531,34 @@ const MiniGraph = ({ data, color, unit = "lbs", activeMetric = "weight" }) => {
           );
         })}
       </svg>
+      {/* Real enhancement: with several entries (especially on longer
+          ranges like "All"), the trend line's shape alone doesn't say
+          WHEN a bend happened without tapping every single point to find
+          it - the chart previously only ever labeled its very first and
+          last entries. A few lightweight intermediate date ticks, placed
+          at the exact same x-position as their real data point (not
+          evenly spaced by time, matching how the line itself is already
+          plotted by index), close that gap without cluttering a chart
+          that's fine as-is for a handful of points. */}
+      {data.length >= 5 && (() => {
+        const tickCount = Math.min(3, data.length - 2);
+        const step = (data.length - 1) / (tickCount + 1);
+        const tickIndices = Array.from({ length: tickCount }, (_, i) => Math.round(step * (i + 1)));
+        return (
+          <div style={{ position: "relative", height: 14, marginTop: 2 }}>
+            {tickIndices.map((idx) => {
+              const d = data[idx] as any;
+              if (!d?.date) return null;
+              const xPct = (pad + (idx / (data.length - 1)) * (w - pad * 2)) / w * 100;
+              return (
+                <span key={idx} style={{ position: "absolute", left: `${xPct}%`, transform: "translateX(-50%)", color: COLORS.textSecondary, fontSize: 9, whiteSpace: "nowrap" }}>
+                  {new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+              );
+            })}
+          </div>
+        );
+      })()}
       {selected && (
         <p style={{ color: COLORS.white, fontSize: 12, fontWeight: 700, margin: "6px 0 0", textAlign: "center" }}>
           {selected.value}{unit === "lbs" || unit === "kg" ? ` ${unit}` : unit}
