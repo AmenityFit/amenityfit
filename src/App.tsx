@@ -9946,7 +9946,12 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
     .map(([exerciseId, w]) => ({ label: (EXERCISES_DATA as any)[exerciseId]?.name || exerciseId, value: `${w} lbs` }));
   const historicalBandStats = Object.entries(historicalWeightsLogged)
     .filter(([exerciseId, w]) => typeof w === "string" && allExerciseIds.includes(exerciseId))
-    .map(([exerciseId, level]) => ({ label: (EXERCISES_DATA as any)[exerciseId]?.name || exerciseId, value: level as string }));
+    // Real fix per real-device testing: showing the specific exercise
+    // name next to a band level ("Band Crab Walk: Medium Band") added
+    // clutter without adding value - a band level isn't a number worth
+    // contextualizing against one exercise the way a weight/PR is.
+    // Generic "Resistance Band" label instead.
+    .map(([exerciseId, level]) => ({ label: "Resistance Band", value: level as string }));
   const historicalStats = [
     { label: "Sets Done", value: String(totalSets) },
     ...((historyMeta?.sessionLength || 0) > 0 ? [{ label: "Time", value: `${historyMeta.sessionLength} min` }] : []),
@@ -11914,6 +11919,8 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
   const bandLevelExercises = Object.entries(weightsLogged || {})
     .filter(([, w]) => typeof w === "string")
     .map(([exerciseId, level]) => ({ name: (EXERCISES_DATA as any)[exerciseId]?.name || exerciseId, level: level as string }));
+  // name is kept above for any other future use, but the card itself
+  // shows a generic "Resistance Band" label - see the mapping below.
 
   // Real completion of the linked-cardio read: a combined lift+cardio day
   // now presents as one earned, unified story instead of two disconnected
@@ -11965,7 +11972,7 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
     // "lbs" suffix, since a band level ("Medium Band") is never a weight
     // number, and never marked isPR since they were never evaluated for
     // PR status at all.
-    ...bandLevelExercises.map((b) => ({ label: b.name, value: b.level })),
+    ...bandLevelExercises.map((b) => ({ label: "Resistance Band", value: b.level })),
     ...(sessionRpe !== null ? [{ label: "RPE", value: `${sessionRpe}/10` }] : []),
   ];
   const cardioStatsForShare = linkedCardioSession ? [
