@@ -11845,6 +11845,21 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
     .filter(([, v]: any) => v?.isPR)
     .map(([exerciseId, v]: any) => ({ name: (EXERCISES_DATA as any)[exerciseId]?.name || exerciseId, weight: v.weight }));
 
+  // Real fix for a genuine gap found tonight: band-level values ("Medium
+  // Band") are deliberately excluded from checkAndUpdateLiftPRs' numeric
+  // PR comparison (typeof w === "number" check) - correct, since a string
+  // can never meaningfully out-PR another string that way, and this
+  // already protects the whole PR system from ever seeing one. But it
+  // also means a band exercise never appears in prExercises at all, so a
+  // pure resistance-band session's card showed zero information about
+  // which band level was actually used. Built entirely separately, direct
+  // from the raw weightsLogged prop - never touches liftPRs, prExercises,
+  // or checkAndUpdateLiftPRs' numeric logic in any way, so the existing,
+  // already-correct PR system carries zero risk from this addition.
+  const bandLevelExercises = Object.entries(weightsLogged || {})
+    .filter(([, w]) => typeof w === "string")
+    .map(([exerciseId, level]) => ({ name: (EXERCISES_DATA as any)[exerciseId]?.name || exerciseId, level: level as string }));
+
   // Real completion of the linked-cardio read: a combined lift+cardio day
   // now presents as one earned, unified story instead of two disconnected
   // moments. Derived only once linkedCardioSession has actually resolved
@@ -11890,6 +11905,12 @@ const SessionCompleteScreen = ({ totalSets, timeSeconds, userName, sessionCount 
     { label: "Sets Done", value: String(totalSets) },
     { label: "Time", value: `${mins}m ${secs}s` },
     ...prExercises.map((p) => ({ label: p.name, value: `${p.weight} lbs`, isPR: true })),
+    // Band-level exercises shown as their own entries, entirely separate
+    // from prExercises above (see bandLevelExercises' own comment) - no
+    // "lbs" suffix, since a band level ("Medium Band") is never a weight
+    // number, and never marked isPR since they were never evaluated for
+    // PR status at all.
+    ...bandLevelExercises.map((b) => ({ label: b.name, value: b.level })),
     ...(sessionRpe !== null ? [{ label: "RPE", value: `${sessionRpe}/10` }] : []),
   ];
   const cardioStatsForShare = linkedCardioSession ? [
