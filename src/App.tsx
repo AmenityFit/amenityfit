@@ -5676,7 +5676,7 @@ const BottomNav = ({ active, onNavigate = (s) => {} }) => {
   return (
     <div style={{
       background: COLORS.card, borderTop: `1px solid ${COLORS.border}`,
-      display: "flex", flexShrink: 0, padding: "4px 0 calc(4px + env(safe-area-inset-bottom, 0px))",
+      display: "flex", flexShrink: 0, padding: "10px 0 calc(4px + env(safe-area-inset-bottom, 0px))",
     }}>
       {tabs.map((t) => {
         const isActive = t.id === active;
@@ -12596,7 +12596,7 @@ const CalendarView = ({ profile, onBack, onSelectSession, onProfileUpdate }: any
   const selectedItems = selectedDate ? getDayItems(selectedDate) : null;
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: COLORS.background, display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: COLORS.background, display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" , overflow: "hidden" }}>
       <div style={{ background: `linear-gradient(180deg, ${COLORS.primary}20 0%, transparent 100%)`, padding: "calc(16px + env(safe-area-inset-top, 0px)) 20px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
           <button onClick={onBack} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer" }}>←</button>
