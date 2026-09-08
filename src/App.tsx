@@ -9926,6 +9926,34 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
     acc + (g.exercises || []).reduce((a, e) => a + (e.sets || 0), 0), 0);
   const [videoModal, setVideoModal] = useState<{ exId: string; vimeoId: string; sets: number; reps: string } | null>(null);
 
+  // Real fix for a genuine, confirmed gap found tonight: reviewing a past
+  // lifting session (via History or Progress) had no Share/Sticker at
+  // all - those only ever existed on the live, just-finished completion
+  // screen. Built from historyMeta.weightsLogged (the same raw per-
+  // exercise data the live flow reads, already persisted on the saved
+  // session) plus the same groups already passed to this screen - no new
+  // data source needed. Split the same way as the live flow: numeric
+  // weights vs. resistance-band level strings, so both render correctly
+  // with no "lbs" ever appended to a band level. No isPR badge here - PR
+  // status is a property of the moment it happened, not something to
+  // re-evaluate on every later review.
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [showStickerMode, setShowStickerMode] = useState(false);
+  const historicalWeightsLogged: Record<string, any> = historyMeta?.weightsLogged || {};
+  const allExerciseIds = groups.reduce((acc: string[], g: any) => acc.concat((g.exercises || []).map((e: any) => e.id)), []);
+  const historicalNumericStats = Object.entries(historicalWeightsLogged)
+    .filter(([exerciseId, w]) => typeof w === "number" && w > 0 && allExerciseIds.includes(exerciseId))
+    .map(([exerciseId, w]) => ({ label: (EXERCISES_DATA as any)[exerciseId]?.name || exerciseId, value: `${w} lbs` }));
+  const historicalBandStats = Object.entries(historicalWeightsLogged)
+    .filter(([exerciseId, w]) => typeof w === "string" && allExerciseIds.includes(exerciseId))
+    .map(([exerciseId, level]) => ({ label: (EXERCISES_DATA as any)[exerciseId]?.name || exerciseId, value: level as string }));
+  const historicalStats = [
+    { label: "Sets Done", value: String(totalSets) },
+    ...((historyMeta?.sessionLength || 0) > 0 ? [{ label: "Time", value: `${historyMeta.sessionLength} min` }] : []),
+    ...historicalNumericStats,
+    ...historicalBandStats,
+  ];
+
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", overflowY: "auto", WebkitOverflowScrolling: "touch" as any, position: "relative", paddingBottom: "20px" }}>
       {/* Header */}
@@ -10143,6 +10171,33 @@ const WorkoutListScreen = ({ day, filteredGroups, onStart, onBack, workoutImage 
             <p style={{ color: COLORS.textSecondary, fontSize: 15, fontWeight: 600, margin: 0 }}>Preview Only — Not Available Yet</p>
           </div>
         </div>
+      )}
+      {isReview && historyMeta && (
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "8px 16px 16px", background: `linear-gradient(0deg, ${COLORS.background} 70%, transparent)`, transform: "translateZ(0)", WebkitTransform: "translateZ(0)", willChange: "transform" }}>
+          <div style={{ display: "flex", gap: 12, width: "100%" }}>
+            <button onClick={() => setShowShareCard(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              Share
+            </button>
+            <button onClick={() => setShowStickerMode(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              Sticker
+            </button>
+          </div>
+        </div>
+      )}
+      {showShareCard && (
+        <ShareableStatCard
+          title={day.title || "Workout"}
+          subtitle={historyMeta?.completedDateStr || ""}
+          stats={historicalStats}
+          onClose={() => setShowShareCard(false)}
+        />
+      )}
+      {showStickerMode && (
+        <StickerShareScreen
+          title={day.title || "Workout"}
+          stats={historicalStats}
+          onClose={() => setShowStickerMode(false)}
+        />
       )}
       {videoModal && (
         <VideoModal exercise={videoModal.exId} exData={EXERCISES_DATA[videoModal.exId]} vimeoId={videoModal.vimeoId} sets={videoModal.sets} reps={videoModal.reps} onClose={() => setVideoModal(null)} />
@@ -17056,6 +17111,7 @@ const ProgressScreen = ({ profile, onBack, onNavigate = (s) => {}, onUpdate = (p
           cycleNumber: selectedSession.cycleNumber,
           weightsLogged: selectedSession.weightsLogged || null,
           weightNotes: selectedSession.weightNotes || null,
+          sessionLength: selectedSession.sessionLength || 0,
         }}
       />
     );
@@ -17598,6 +17654,7 @@ const HistoryScreen = ({ profile, onBack, onNavigate = (s: string) => {} }) => {
           cycleNumber: selectedSession.cycleNumber,
           weightsLogged: selectedSession.weightsLogged || null,
           weightNotes: selectedSession.weightNotes || null,
+          sessionLength: selectedSession.sessionLength || 0,
         }}
       />
     );
