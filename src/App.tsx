@@ -10303,6 +10303,16 @@ const getSwapCandidates = (
     else if (isEquipmentCompatible(ex.equipment, id)) score += 10; // compatible equipment
     if (ex.difficulty === targetDifficulty) score += 20;        // same difficulty
     else if (ex.difficulty === "beginner") score += 5;          // easier is safer than harder
+    // Real fix for a genuine bug found via real-device testing: the true
+    // original exercise passed every hard filter above but still competed
+    // on pure score like any other candidate - the "already used elsewhere
+    // in program" penalty alone was often enough to push it below other
+    // alternatives, and the caller's slice(0, 10) then silently cut it from
+    // the visible list. Swapping back to the original a person started
+    // with is a core, expected action, not one candidate among equals - a
+    // large guaranteed bonus keeps it pinned at the top of the list
+    // regardless of how many other exercises would otherwise outscore it.
+    if (id === originalExerciseId) score += 1000;
 
     candidates.push({ id, name: ex.name, score });
   });
