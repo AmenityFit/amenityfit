@@ -14853,7 +14853,17 @@ const FitnessAssistantScreen = ({ profile, onBack, onNavigate = (s) => {}, isAct
   const prevIsActive = React.useRef(isActive);
   useEffect(() => {
     if (isActive && !prevIsActive.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+      // Real fix for a genuine bug found via real-device testing: this
+      // component just went from display:none to display:block in this
+      // exact tick - the browser hasn't recalculated real layout for the
+      // now-visible content yet, so calling scrollIntoView synchronously
+      // here scrolls against stale, pre-visibility measurements and lands
+      // short (at wherever the container was scrolled to when it was last
+      // hidden, not the true current bottom). Same fix, same delay, as
+      // the existing mount-load effect above uses for the identical
+      // underlying reason - give the browser one tick to finish layout
+      // before measuring where "bottom" actually is.
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "auto" }), 50);
     }
     prevIsActive.current = isActive;
   }, [isActive]);
