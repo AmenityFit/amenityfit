@@ -13192,11 +13192,26 @@ const WeeklyProgramView = ({ profile, onBack, onStartWorkout, onCompleteRestDay 
           this is viewing an already-completed past day, not marking
           today's - which correctly hides the "Mark Rest Day Complete"
           button and shows just the clean info card. */}
+      {/* Real fix for a genuine bug found via real-device testing: RestDayScreen
+          is built as a genuine top-level page (minHeight: 100vh, normal document
+          flow) for its other legitimate uses elsewhere in the app (today's actual
+          rest day, the preview flow) - correct there, since it IS the only content
+          on that route. But rendered as a sibling here, inside whatever screen
+          currently hosts CalendarView, it just squeezed into that parent's normal
+          layout and pushed its real content down instead of overlaying, rather than
+          behaving as the full-screen modal ActivityDetailView correctly is right
+          below it. Wrapped in the exact same fixed overlay pattern ActivityDetailView
+          uses (position: fixed, inset: 0, one zIndex above Calendar's own 999999) so
+          it renders correctly as a modal regardless of which parent screen currently
+          hosts Calendar - without touching RestDayScreen's own internals, which stay
+          correct for its other real full-page uses. */}
       {selectedSessionForDetail && selectedSessionForDetail.dayTitle === "Rest Day" && (
-        <RestDayScreen
-          onBack={() => setSelectedSessionForDetail(null)}
-          isCompleted={true}
-        />
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000000, overflow: "auto" }}>
+          <RestDayScreen
+            onBack={() => setSelectedSessionForDetail(null)}
+            isCompleted={true}
+          />
+        </div>
       )}
       {selectedSessionForDetail && selectedSessionForDetail.dayTitle !== "Rest Day" && (
         <ActivityDetailView
