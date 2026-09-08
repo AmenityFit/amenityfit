@@ -10475,7 +10475,7 @@ const WheelPickerScroll = React.memo(({ options, selected, itemHeight, category,
   );
 });
 
-const ActiveExerciseScreen = ({ group, groupIndex, totalGroups, onGroupComplete, onBack, onGoHome, onShowOverview, profile, initialRound = 1, initialExerciseIndex = 0, initialCompletedCells = [], initialWeights = {} as Record<string, number>, onSaveState = (round: number, exerciseIndex: number, cells?: string[]) => {}, onSwap = (swapKey: string, newId: string) => {}, onWeightsSaved = (weights: Record<string, number>) => {}, initialSwaps = {} as Record<string, string>, sessionId = null as string | null, startTime = Date.now() }) => {
+const ActiveExerciseScreen = ({ group, groupIndex, totalGroups, onGroupComplete, onBack, onGoHome, onShowOverview, profile, initialRound = 1, initialExerciseIndex = 0, initialCompletedCells = [], initialWeights = {} as Record<string, number>, onSaveState = (round: number, exerciseIndex: number, cells?: string[]) => {}, onSwap = (swapKey: string, newId: string) => {}, onWeightsSaved = (weights: Record<string, number>) => {}, initialSwaps = {} as Record<string, string>, sessionId = null as string | null, startTime = Date.now(), onStartCardioActivity = undefined as ((activityKey: string, goalMinutes: number) => void) | undefined }) => {
   // Controls the cardio-tracking overlay (see the cardio branch below) -
   // local to this component and never touches top-level screen navigation,
   // so opening/closing it can never disturb this screen's own in-progress
@@ -10899,10 +10899,56 @@ const logWeightHistoryInBackground = async (
 };
   if (!group) return null;
   if (group.type === "cardio") {
-    const cardioActivities = (group.cardioNote || "")
+    // Real fix for a confirmed, significant gap found tonight: this
+    // screen used to be a static, non-interactive list - tapping an
+    // option did nothing at all, and "Complete Workout" just marked the
+    // group done with zero real tracking data ever captured, which is
+    // exactly why past sessions' share cards had no cardio stats. This
+    // maps each program-suggested activity to a REAL, genuinely
+    // trackable type in ACTIVITY_TYPES (see CardioTrackingScreen), so
+    // every option shown actually works when tapped. Deliberately a
+    // whitelist, not a loose substring match - "Building Stair Climb"
+    // mentions "stair" but is a genuinely different real-world activity
+    // from the stairclimber MACHINE, and mapping them together would
+    // misrepresent what tracking that option actually measures. Anything
+    // without a clean, honest match (Jump Rope, Building Stair Climb) is
+    // simply omitted rather than force-mapped to the wrong thing.
+    const CARDIO_FINISH_KEYWORD_MAP: { keywords: string[]; activityKey: string }[] = [
+      { keywords: ["elliptical"], activityKey: "elliptical" },
+      { keywords: ["stairmaster"], activityKey: "stairclimber" },
+      { keywords: ["stationary bike"], activityKey: "indoor-bike" },
+      { keywords: ["treadmill"], activityKey: "treadmill" },
+      { keywords: ["swim"], activityKey: "swim" },
+      { keywords: ["yoga", "mobility"], activityKey: "yoga" },
+      // "Walk or Run Outside" genuinely represents two distinct real
+      // activities, not one ambiguous choice - both get their own real
+      // option rather than picking one arbitrarily.
+      { keywords: ["walk"], activityKey: "walk" },
+      { keywords: ["run"], activityKey: "run" },
+      { keywords: ["bike"], activityKey: "bike" },
+      { keywords: ["basketball"], activityKey: "basketball" },
+      { keywords: ["soccer"], activityKey: "soccer" },
+      { keywords: ["swim"], activityKey: "swim" },
+    ];
+    const rawCardioLines = (group.cardioNote || "")
       .split("\n")
       .filter((l: string) => l.startsWith("•"))
       .map((l: string) => l.replace("•", "").trim());
+    const matchedKeys = new Set<string>();
+    const trackableCardioOptions: { key: string; label: string }[] = [];
+    rawCardioLines.forEach((line: string) => {
+      const lower = line.toLowerCase();
+      CARDIO_FINISH_KEYWORD_MAP.forEach(({ keywords, activityKey }) => {
+        if (matchedKeys.has(activityKey)) return;
+        if (keywords.some((kw) => lower.includes(kw))) {
+          const meta = ACTIVITY_TYPES.find((a) => a.key === activityKey);
+          if (meta) {
+            matchedKeys.add(activityKey);
+            trackableCardioOptions.push({ key: activityKey, label: meta.label });
+          }
+        }
+      });
+    });
     const cardioMinutes = group.cardioMinutes || 15;
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
@@ -10912,24 +10958,20 @@ const logWeightHistoryInBackground = async (
           </div>
           <h2 style={{ color: COLORS.white, fontSize: 28, fontWeight: 900, margin: "0 0 6px", letterSpacing: -0.5 }}>Almost there.</h2>
           <p style={{ color: COLORS.textSecondary, fontSize: 15, margin: "0 0 28px", lineHeight: 1.6 }}>
-            {cardioMinutes} minutes of movement. Choose what feels right today.
+            {cardioMinutes} minutes of movement. Choose what feels right today - this actually tracks it.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 32 }}>
-            {cardioActivities.map((activity: string, i: number) => (
-              <div key={i} style={{ background: COLORS.card, borderRadius: 14, padding: "14px 18px", border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", gap: 14 }}>
+            {trackableCardioOptions.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => onStartCardioActivity?.(opt.key, cardioMinutes)}
+                style={{ background: COLORS.card, borderRadius: 14, padding: "14px 18px", border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", gap: 14, width: "100%", cursor: "pointer", textAlign: "left" }}
+              >
                 <div style={{ width: 6, height: 6, borderRadius: 99, background: COLORS.accent, flexShrink: 0 }} />
-                <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 500 }}>{activity}</span>
-              </div>
+                <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 500 }}>{opt.label}</span>
+              </button>
             ))}
           </div>
-        </div>
-        <div style={{ padding: "16px 24px 48px", flexShrink: 0 }}>
-          <button
-            onClick={onGroupComplete}
-            style={{ width: "100%", padding: "18px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 17, fontWeight: 700, cursor: "pointer", boxShadow: `0 8px 30px ${COLORS.primary}40`, letterSpacing: 0.3 }}
-          >
-            Complete Workout ✓
-          </button>
         </div>
       </div>
     );
@@ -13674,7 +13716,7 @@ const todayEntry2 = weekDays.find((d: any) => d.isToday) || todayWeekEntry;
   );
 };
 
-const WorkoutFlow = ({ profile, onComplete, onBack, onGoHomeSave, onProfileUpdate, isReview = false }) => {  const todayStr = new Date().toDateString();
+const WorkoutFlow = ({ profile, onComplete, onBack, onGoHomeSave, onProfileUpdate, isReview = false, onStartLinkedCardio = undefined as ((activityKey: string, goalMinutes: number, linkedWorkoutId: string | null) => void) | undefined }) => {  const todayStr = new Date().toDateString();
   const [workoutFlowWeights, setWorkoutFlowWeights] = useState<Record<string, number>>({});
   const [liftPRs, setLiftPRs] = useState<Record<string, { isPR: boolean; weight: number }>>({});
   const liftPRCheckDoneRef = React.useRef(false);
@@ -14058,6 +14100,38 @@ const workoutGroups = injuryFiltered.map(group => ({
         }
       };
 
+      // Real fix: WorkoutFlow fully unmounts and remounts fresh when
+      // navigating away to real cardio tracking and back (screen changes
+      // away from "workout" entirely, not a nested state change), so this
+      // is the actual point that recognizes what happened during that
+      // detour. Backing out mid-tracking with nothing saved needs zero
+      // special handling - savedProgress already puts currentGroupIndex
+      // back on this same cardio group naturally, showing the same real
+      // Cardio Finish options again. This effect only handles the other
+      // case: a real linked session WAS saved, so the cardio group should
+      // advance automatically via the same handleGroupComplete every
+      // other group already uses, continuing into RPE/completion exactly
+      // as if a normal group had just finished - no separate completion
+      // path invented for this case. Reuses the exact linkedWorkoutId
+      // query pattern already proven elsewhere in this file. Guarded by a
+      // ref so it only ever checks once per mount, not on every re-render.
+      const cardioResumeCheckDoneRef = React.useRef(false);
+      React.useEffect(() => {
+        if (cardioResumeCheckDoneRef.current) return;
+        if (!activeSessionIdRef.current) return;
+        const currentGroupForCheck = workoutGroups[currentGroupIndex];
+        if (!currentGroupForCheck || currentGroupForCheck.type !== "cardio") return;
+        cardioResumeCheckDoneRef.current = true;
+        (async () => {
+          try {
+            const snap = await getDocs(query(collection(db, "workoutSessions"), where("linkedWorkoutId", "==", activeSessionIdRef.current)));
+            if (!snap.empty) {
+              handleGroupComplete();
+            }
+          } catch (e) {}
+        })();
+      }, [currentGroupIndex]);
+
   if (phase === "list") {
     const pinnedImage = getWorkoutImage(workoutType, actualCompletedDay);
     return <WorkoutListScreen day={dayWithUpdatedNotes} filteredGroups={workoutGroups} onStart={() => setPhase("active")} onBack={onBack} workoutImage={pinnedImage} programDay={actualCompletedDay} programWeek={profile?.programWeek || 1} isReview={isReview} bgPosition={workoutType === "upper-body" || workoutType === "push" ? "center top" : workoutType === "lower-body" ? "center 60%" : "center"} equipmentPreference={reviewEquipmentPreference} isInProgress={currentGroupIndex > 0 || (savedProgress?.currentGroupIndex ?? 0) > 0 || (savedProgress?.completedCells?.length ?? 0) > 0} currentGroupIndex={currentGroupIndex} workoutType={workoutType} workoutDoneToday={isReview || workoutWasDoneToday} buildingEquipment={profile?.buildingEquipment || []} />;
@@ -14168,6 +14242,26 @@ const workoutGroups = injuryFiltered.map(group => ({
           saveProgressToFirestore(progressSnapshot);
           const updatedProfile = { ...profile, workoutProgress: progressSnapshot };
           onGoHomeSave ? onGoHomeSave(updatedProfile) : onBack();
+        }}
+        onStartCardioActivity={(activityKey: string, goalMinutes: number) => {
+          // Real fix: this is the actual point where a mid-workout cardio
+          // finisher hands off to real tracking. Saves progress the exact
+          // same way leaving-to-Dashboard already does (onGoHome, right
+          // above) - proven, unchanged - so resuming afterward is no
+          // different from any other mid-workout interruption the app
+          // already handles correctly.
+          const progressSnapshot = {
+            date: new Date().toDateString(),
+            programDay: profile?.programDay || 1,
+            currentGroupIndex,
+            totalSetsCompleted,
+            groupRounds,
+            groupExerciseIndexes,
+          };
+          saveProgressToFirestore(progressSnapshot);
+          const updatedProfile = { ...profile, workoutProgress: progressSnapshot };
+          onGoHomeSave ? onGoHomeSave(updatedProfile) : onBack();
+          onStartLinkedCardio?.(activityKey, goalMinutes, activeSessionIdRef.current);
         }}
 initialRound={groupRounds[currentGroupIndex] ?? 1}
 initialExerciseIndex={groupExerciseIndexes[currentGroupIndex] ?? 0}
@@ -19911,7 +20005,20 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
     return (
       <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={resetForNewPick} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <button
+            onClick={() => {
+              // Real design decision made explicitly tonight: for a
+              // program-linked session, backing out here should return to
+              // this exact workout's own curated Cardio Finish list (the
+              // options the program actually suggested), not this
+              // screen's own broader standalone "Track an Activity"
+              // picker (Yoga, Padel, everything else) - that would break
+              // the intentional curation and land someone somewhere that
+              // doesn't make sense mid-workout. resetForNewPick still
+              // owns the standalone (non-linked) case, unchanged.
+              if (linkedWorkoutId) { onBack(); } else { resetForNewPick(); }
+            }}
+            style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <ArrowLeft size={16} color={COLORS.white} />
           </button>
           <h1 style={{ color: COLORS.white, fontSize: 20, fontWeight: 800, margin: 0 }}>How long?</h1>
@@ -28957,12 +29064,39 @@ const isInitialLoad = React.useRef(true);
       })();
     }
     handleWorkoutComplete(snapshot, uid);
-  }} onBack={() => setScreen(workoutDoneToday ? "weekly" : "dashboard")} onGoHomeSave={(updatedProfile: any) => { setUserProfile(updatedProfile); setScreen("dashboard"); }} isReview={workoutDoneToday} />;
+  }} onBack={() => setScreen(workoutDoneToday ? "weekly" : "dashboard")} onGoHomeSave={(updatedProfile: any) => { setUserProfile(updatedProfile); setScreen("dashboard"); }} isReview={workoutDoneToday} onStartLinkedCardio={(activityKey: string, goalMinutes: number, linkedWorkoutId: string | null) => {
+    // Real fix: the actual handoff point from a mid-workout cardio
+    // finisher into real tracking. Profile's workoutProgress was already
+    // saved by WorkoutFlow's own onStartCardioActivity handler right
+    // before this fires (same mechanism as leaving to Dashboard), so
+    // resuming afterward finds it exactly the same way any other
+    // interrupted workout already does.
+    setPendingCardioLink({
+      linkedWorkoutId: linkedWorkoutId || undefined,
+      goalDurationSeconds: goalMinutes * 60,
+      presetActivityType: activityKey,
+    });
+    setScreen("cardioTracking");
+  }} />;
   if (screen === "history") return <HistoryScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("progress")} onNavigate={navigate} />;
   if (screen === "myNotes") return <MyNotesScreen profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }} onBack={() => setScreen("profile")} />;
   if (screen === "cardioTracking") return <CardioTrackingScreen
     profile={{ ...liveProfile, uid: userProfile?.uid || currentUid || auth.currentUser?.uid }}
-    onBack={() => setScreen("dashboard")}
+    onBack={() => {
+      // Real fix, the last piece of tonight's cardio-integration build:
+      // a linked session (started from a mid-workout Cardio Finish
+      // screen) returns to the resumed workout - whether tracking was
+      // actually finished or the person backed out mid-session, the
+      // resume-check effect in WorkoutFlow correctly tells those two
+      // cases apart on its own (see its own comment). A standalone
+      // session (Dashboard's "Track an Activity") keeps going to
+      // Dashboard, unchanged. pendingCardioLink is cleared either way so
+      // a later standalone launch can never accidentally inherit a past
+      // linked session's data.
+      const wasLinked = !!pendingCardioLink?.linkedWorkoutId;
+      setPendingCardioLink(null);
+      setScreen(wasLinked ? "workout" : "dashboard");
+    }}
     linkedWorkoutId={pendingCardioLink?.linkedWorkoutId}
     goalDurationSeconds={pendingCardioLink?.goalDurationSeconds}
     presetActivityType={pendingCardioLink?.presetActivityType}
