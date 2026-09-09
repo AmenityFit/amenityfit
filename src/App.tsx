@@ -16661,7 +16661,7 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
       )}
 
       <div style={{ padding: "24px", marginTop: "auto", display: "flex", gap: 12 }}>
-        <button onClick={() => setShowShareCard(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+        <button onClick={() => { alert("Share tapped - handler running"); setShowShareCard(true); }} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
           Share
         </button>
         <button onClick={() => setShowStickerMode(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
