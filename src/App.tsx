@@ -21221,7 +21221,35 @@ const StickerShareScreenInner = ({
     setSharing(true);
     setShareError(null);
     try {
-      const canvas = await html2canvas(containerRef.current, { scale: 2, useCORS: true });
+      const canvas = await html2canvas(containerRef.current, {
+        scale: 2,
+        useCORS: true,
+        onclone: (clonedDoc) => {
+          const clonedImg = clonedDoc.querySelector('[data-capture-cover-photo="true"]') as HTMLImageElement | null;
+          const liveImg = photoImgRef.current;
+          if (!clonedImg || !liveImg || !liveImg.naturalWidth || !liveImg.naturalHeight) return;
+          const box = clonedImg.getBoundingClientRect();
+          const boxAspect = box.width / box.height;
+          const imgAspect = liveImg.naturalWidth / liveImg.naturalHeight;
+          // Same math object-fit: cover does natively - scale to fully
+          // cover the box on whichever axis would otherwise leave a gap,
+          // then center-crop the overflow on the other axis.
+          let renderWidth: number, renderHeight: number;
+          if (imgAspect > boxAspect) {
+            renderHeight = box.height;
+            renderWidth = box.height * imgAspect;
+          } else {
+            renderWidth = box.width;
+            renderHeight = box.width / imgAspect;
+          }
+          clonedImg.style.width = `${renderWidth}px`;
+          clonedImg.style.height = `${renderHeight}px`;
+          clonedImg.style.objectFit = "fill";
+          clonedImg.style.position = "absolute";
+          clonedImg.style.left = `${(box.width - renderWidth) / 2}px`;
+          clonedImg.style.top = `${(box.height - renderHeight) / 2}px`;
+        },
+      });
       const blob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"));
       if (!blob) throw new Error("Could not generate image");
       const file = new File([blob], "amenityfit-sticker.png", { type: "image/png" });
@@ -21402,7 +21430,7 @@ const StickerShareScreenInner = ({
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: "#000", display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
       <div ref={containerRef} style={{ position: "relative", flex: 1, overflow: "hidden", touchAction: "none" }}>
-        <img ref={photoImgRef} src={photoUrl} alt="" crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        <img ref={photoImgRef} data-capture-cover-photo="true" src={photoUrl} alt="" crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
 
         <div
           ref={stickerRef}
