@@ -20930,9 +20930,17 @@ const StickerShareScreenInner = ({
           )}
           {titleRow}
           {effectiveStats.length > 0 && (
-            <div style={{ display: "flex", gap: 16 }}>
+            // Real fix for a confirmed overflow bug found via real-device
+            // testing: this row had no wrap and no width limit at all, so
+            // long stats simply ran past the visible screen edge instead
+            // of staying "in frame" - exactly what was reported. 300px
+            // matches the route map image directly above, so the whole
+            // card reads as one consistent column width, and flexWrap
+            // means any combination of stats that's still too wide drops
+            // to a second line instead of overflowing again.
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, maxWidth: 300 }}>
               {effectiveStats.slice(0, 3).map((s, i) => (
-                <span key={i} style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: 20, fontWeight: 900, whiteSpace: "nowrap" }}>
+                <span key={i} style={{ color: s.isPR ? COLORS.accent : textColor, textShadow: textShadowStyle, fontSize: 20, fontWeight: 900 }}>
                   {s.value}<span style={{ fontSize: 10, fontWeight: 700, opacity: 0.85, textTransform: "uppercase", marginLeft: 4 }}>{s.isPR ? "PR" : s.label}</span>
                 </span>
               ))}
