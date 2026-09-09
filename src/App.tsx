@@ -16670,17 +16670,9 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
       </div>
 
       {showShareCard && (
-        <ShareableStatCard
-          title={`${session.customActivityName || meta?.label || session.type} on AmenityFit`}
-          subtitle={dateLabel}
-          icon={meta?.icon}
-          iconImage={meta?.iconImage}
-          mapUrl={mapUrl}
-          outlineMapUrl={outlineSnapshotUrl}
-          locationLabel={locationLabel}
-          stats={stats}
-          onClose={() => setShowShareCard(false)}
-        />
+        <div onClick={() => setShowShareCard(false)} style={{ position: "fixed", inset: 0, zIndex: 99999999, background: "red", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 24, fontWeight: 900 }}>
+          TEST - TAP TO CLOSE
+        </div>
       )}
       {showStickerMode && (
         <StickerShareScreen
