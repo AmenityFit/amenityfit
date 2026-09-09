@@ -16664,25 +16664,23 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
         <button onClick={() => setShowShareCard(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
           Share
         </button>
-        <button onClick={() => { alert("Sticker tapped - handler running"); setShowStickerMode(true); }} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+        <button onClick={() => setShowStickerMode(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
           Sticker
         </button>
       </div>
 
       {showShareCard && (
-        <LocalDebugErrorBoundary>
-          <ShareableStatCard
-            title={`${session.customActivityName || meta?.label || session.type} on AmenityFit`}
-            subtitle={dateLabel}
-            icon={meta?.icon}
-            iconImage={meta?.iconImage}
-            mapUrl={mapUrl}
-            outlineMapUrl={outlineSnapshotUrl}
-            locationLabel={locationLabel}
-            stats={stats}
-            onClose={() => setShowShareCard(false)}
-          />
-        </LocalDebugErrorBoundary>
+        <ShareableStatCard
+          title={`${session.customActivityName || meta?.label || session.type} on AmenityFit`}
+          subtitle={dateLabel}
+          icon={meta?.icon}
+          iconImage={meta?.iconImage}
+          mapUrl={mapUrl}
+          outlineMapUrl={outlineSnapshotUrl}
+          locationLabel={locationLabel}
+          stats={stats}
+          onClose={() => setShowShareCard(false)}
+        />
       )}
       {showStickerMode && (
         <StickerShareScreen
@@ -20576,7 +20574,7 @@ const ShareableStatCard = ({
     // flex-start anchors the card's top edge at a fixed position
     // regardless of its height, so any overflow is a normal, expected
     // scroll-down instead.
-    <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "72px 24px 24px", overflowY: "auto" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 99999999, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "72px 24px 24px", overflowY: "auto" }}>
       <button onClick={onClose} style={{ position: "absolute", top: "calc(56px + env(safe-area-inset-top, 0px))", right: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer", zIndex: 10 }}>×</button>
 
       {/* Real, selectable sticker layouts - matching Strava's own model
@@ -21325,7 +21323,7 @@ const StickerShareScreenInner = ({
 
   if (mode === "choose") {
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: COLORS.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 99999999, background: COLORS.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', sans-serif" }}>
         <button onClick={onClose} style={{ position: "absolute", top: "calc(56px + env(safe-area-inset-top, 0px))", right: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer", zIndex: 10 }}>×</button>
         <div style={{ width: 72, height: 72, borderRadius: 20, background: `${COLORS.white}10`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
           <Camera size={30} color={COLORS.white} strokeWidth={1.75} />
@@ -21350,7 +21348,7 @@ const StickerShareScreenInner = ({
     // the photo with a drop-shadow for legibility, matching Strava's own
     // minimal sticker convention rather than always wrapping stats in a box.
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: COLORS.background, display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 99999999, background: COLORS.background, display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
         <div style={{ padding: "52px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <button onClick={() => setMode("choose")} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <ArrowLeft size={16} color={COLORS.white} />
@@ -21427,7 +21425,7 @@ const StickerShareScreenInner = ({
 
   if (!photoUrl) {
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: COLORS.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 99999999, background: COLORS.background, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', sans-serif" }}>
         <button onClick={() => setMode("choose")} style={{ position: "absolute", top: 24, left: 24, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <ArrowLeft size={18} color={COLORS.white} />
         </button>
@@ -21446,7 +21444,7 @@ const StickerShareScreenInner = ({
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 999999, background: "#000", display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 99999999, background: "#000", display: "flex", flexDirection: "column", fontFamily: "'Inter', sans-serif" }}>
       <div ref={containerRef} style={{ position: "relative", flex: 1, overflow: "hidden", touchAction: "none" }}>
         <img ref={photoImgRef} data-capture-cover-photo="true" src={photoUrl} alt="" crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
 
@@ -21946,7 +21944,7 @@ const PhotoLightbox = ({ url, onClose }: { url: string | null; onClose: () => vo
     <div
       onClick={onClose}
       style={{
-        position: "fixed", inset: 0, zIndex: 9999,
+        position: "fixed", inset: 0, zIndex: 99999999,
         background: "rgba(0,0,0,0.92)",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: 24, cursor: "pointer",
@@ -27794,23 +27792,6 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
     </div>
   );
 };
-
-class LocalDebugErrorBoundary extends React.Component<{ children: any }, { hasError: boolean; message: string }> {
-  state = { hasError: false, message: "" };
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, message: String(error?.message || error) };
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ position: "fixed", inset: 0, zIndex: 99999999, background: "red", color: "white", padding: 24, fontSize: 16, fontWeight: 700, overflow: "auto" }}>
-          REAL ERROR CAUGHT:{"\n\n"}{this.state.message}
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 class ErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
