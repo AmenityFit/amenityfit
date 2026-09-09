@@ -16590,7 +16590,10 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
           MapLibre+Esri map - pan/zoom, no Mapbox billing/watermark.
           Court sports keep the existing hand-drawn SVG illustration
           exactly as before (not GPS-based, nothing to replace here). */}
-      {!courtType && session.route?.length > 1 && (
+      {/* TEMPORARY diagnostic - map render disabled to test whether it's
+          the cause of the Share/Sticker tap-through-bug on past sessions.
+          Revert once confirmed either way. */}
+      {false && !courtType && session.route?.length > 1 && (
         <div style={{ margin: "16px 24px 0", border: `1px solid ${COLORS.border}`, borderRadius: 20, overflow: "hidden" }}>
           <InteractiveRouteMap route={session.route} interactive={true} height={240} />
         </div>
