@@ -24883,6 +24883,31 @@ const SuperAdminDashboard = ({ onSignOut }) => {
             setAffiliateActionId(null);
           };
 
+          // Real approval - creates the affiliate's login, generates their
+          // referral code, and emails them, all server-side. Replaces the
+          // old status-only approve path for the "approved" action
+          // specifically (decline still just updates status, since there's
+          // nothing further to provision for a rejected applicant).
+          const approveAffiliate = async (id: string) => {
+            setAffiliateActionId(id);
+            try {
+              const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/approveAffiliateApplication", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ applicationId: id, secret: "amenityfit-affiliate-2026" }),
+              });
+              const data = await res.json();
+              if (data.success) {
+                setAffiliateApplications(prev => prev.map(a => a.id === id ? { ...a, status: "approved", referralCode: data.referralCode } : a));
+              } else {
+                alert("Failed to approve: " + (data.error || "Unknown error"));
+              }
+            } catch (approveErr: any) {
+              alert("Failed to approve: " + (approveErr?.message || "Unknown error"));
+            }
+            setAffiliateActionId(null);
+          };
+
           return (
             <>
               {/* Header */}
@@ -25012,7 +25037,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     {isPending && (
                       <div style={{ display: "flex", gap: 8 }}>
                         <button
-                          onClick={() => updateAffiliateStatus(app.id, "approved")}
+                          onClick={() => approveAffiliate(app.id)}
                           disabled={isActing}
                           style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none", background: isActing ? COLORS.border : `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.primary})`, color: isActing ? COLORS.textSecondary : COLORS.white, fontSize: 13, fontWeight: 700, cursor: isActing ? "not-allowed" : "pointer" }}
                         >
@@ -25029,7 +25054,8 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     )}
                     {isApproved && (
                       <div style={{ background: `${COLORS.success}10`, borderRadius: 10, padding: "10px 14px", border: `1px solid ${COLORS.success}30` }}>
-                        <p style={{ color: COLORS.success, fontSize: 12, fontWeight: 700, margin: 0 }}>Approved. Remember to manually send a referral code, contractor agreement, and W-9/W-8BEN request until that pipeline is automated.</p>
+                        <p style={{ color: COLORS.success, fontSize: 12, fontWeight: 700, margin: 0 }}>Approved. Login and referral code emailed automatically.{app.referralCode ? ` Code: ${app.referralCode}` : ""}</p>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: "6px 0 0" }}>Still manual: contractor agreement e-sign and W-9/W-8BEN collection.</p>
                       </div>
                     )}
                   </div>
