@@ -803,6 +803,40 @@ const updateSubmissionStatus = async (submissionId: string, status: "activated" 
     return false;
   }
 };
+
+// Fetch pending affiliate applications for super admin review - mirrors
+// fetchBuildingSubmissions above. Applications land here from the public
+// application form on amenityfit.app/affiliate.html.
+const fetchAffiliateApplications = async () => {
+  try {
+    const q = query(collection(db, "affiliateApplications"), orderBy("submittedAt", "desc"));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.error("fetchAffiliateApplications error:", e);
+    return [];
+  }
+};
+
+// Mark an affiliate application as approved / declined by super admin.
+// Approval here only updates the application record - it does not yet
+// generate a referral code, send a contractor agreement, or create a
+// Stripe Connect account. Those are separate, not-yet-built pieces of
+// the affiliate pipeline (agreement e-sign, W-9/W-8BEN collection,
+// dashboard access, Stripe Connect payouts) - approving here is the
+// first manual step, not full automated onboarding.
+const updateAffiliateApplicationStatus = async (applicationId: string, status: "approved" | "declined" | "pending") => {
+  try {
+    await updateDoc(doc(db, "affiliateApplications", applicationId), {
+      status,
+      reviewedAt: serverTimestamp(),
+    });
+    return true;
+  } catch (e) {
+    console.error("updateAffiliateApplicationStatus error:", e);
+    return false;
+  }
+};
 const sanitizeForFirestore = (obj: any): any => {
   if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
   if (obj && typeof obj === "object") {
@@ -23591,7 +23625,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const askConfirm = (message: string, onConfirm: () => void, options?: { confirmLabel?: string; destructive?: boolean }) => {
     setPendingConfirm({ message, onConfirm, ...options });
   };
-  const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "queue" | "revenue" | "trending" | "devtools">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "queue" | "affiliates" | "revenue" | "trending" | "devtools">("overview");
   const [otherActivityTrends, setOtherActivityTrends] = useState<any[]>([]);
   const [trendsLoaded, setTrendsLoaded] = useState(false);
   const [selectedBuilding, setSelectedBuilding] = useState<any>(null);
@@ -23676,6 +23710,11 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const totalLiveNow = liveUsers.length;
   // Queue filter must live at component top level — React hooks rules
   const [queueFilter, setQueueFilter] = useState<"all" | "pending" | "reviewed">("pending");
+  const [affiliateApplications, setAffiliateApplications] = useState<any[]>([]);
+  const [affiliatesLoading, setAffiliatesLoading] = useState(false);
+  const [affiliatesLoaded, setAffiliatesLoaded] = useState(false);
+  const [affiliateFilter, setAffiliateFilter] = useState<"all" | "pending" | "reviewed">("pending");
+  const [affiliateActionId, setAffiliateActionId] = useState<string | null>(null);
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [selectedBuildingCodes, setSelectedBuildingCodes] = React.useState<any[]>([]);
   const [showBuildingCodes, setShowBuildingCodes] = React.useState(false);
@@ -23794,6 +23833,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
     { id: "overview", label: "Platform Overview" },
     { id: "buildings", label: "Buildings" },
     { id: "queue", label: "Activation Queue" },
+    { id: "affiliates", label: "Affiliate Applications" },
     { id: "batch", label: "Batch Activate" },
     { id: "revenue", label: "Revenue" },
     { id: "trending", label: "Other Activities" },
@@ -24819,6 +24859,177 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                             </button>
                           </>
                         )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          );
+        })()}
+
+        {activeTab === "affiliates" && (() => {
+          const pendingCount = affiliateApplications.filter(a => a.status === "pending").length;
+          const filteredAffiliates = affiliateApplications.filter(a => {
+            if (affiliateFilter === "pending") return a.status === "pending";
+            if (affiliateFilter === "reviewed") return a.status === "approved" || a.status === "declined";
+            return true;
+          });
+
+          const updateAffiliateStatus = async (id: string, status: "approved" | "declined" | "pending") => {
+            setAffiliateActionId(id);
+            const ok = await updateAffiliateApplicationStatus(id, status);
+            if (ok) setAffiliateApplications(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+            setAffiliateActionId(null);
+          };
+
+          return (
+            <>
+              {/* Header */}
+              <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}30`, borderRadius: 14, padding: "14px 16px", marginBottom: 20 }}>
+                <p style={{ color: COLORS.accent, fontSize: 13, fontWeight: 600, margin: "0 0 4px" }}>Affiliate Applications</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+                  Applications from amenityfit.app/affiliate.html land here. Approving here only marks the application reviewed - sending a referral code, contractor agreement, and dashboard access is still a manual step until that pipeline is built.
+                </p>
+              </div>
+
+              {/* Load button - first visit */}
+              {!affiliatesLoaded && (
+                <button
+                  onClick={async () => {
+                    setAffiliatesLoading(true);
+                    const results = await fetchAffiliateApplications();
+                    setAffiliateApplications(results);
+                    setAffiliatesLoaded(true);
+                    setAffiliatesLoading(false);
+                  }}
+                  style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 20 }}
+                >
+                  {affiliatesLoading ? "Loading..." : "Load Applications"}
+                </button>
+              )}
+
+              {/* Filter tabs - shown after load */}
+              {affiliatesLoaded && (
+                <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                  {([
+                    { id: "pending", label: `Pending${pendingCount > 0 ? ` (${pendingCount})` : ""}` },
+                    { id: "reviewed", label: "Reviewed" },
+                    { id: "all", label: "All" },
+                  ] as const).map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => setAffiliateFilter(f.id)}
+                      style={{
+                        padding: "8px 16px", borderRadius: 99, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                        border: `1.5px solid ${affiliateFilter === f.id ? COLORS.accent : COLORS.border}`,
+                        background: affiliateFilter === f.id ? `${COLORS.accent}18` : "transparent",
+                        color: affiliateFilter === f.id ? COLORS.accent : COLORS.textSecondary,
+                      }}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                  <button
+                    onClick={async () => {
+                      setAffiliatesLoading(true);
+                      const results = await fetchAffiliateApplications();
+                      setAffiliateApplications(results);
+                      setAffiliatesLoading(false);
+                    }}
+                    style={{ marginLeft: "auto", padding: "8px 14px", borderRadius: 99, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary }}
+                  >
+                    {affiliatesLoading ? "..." : "↻"}
+                  </button>
+                </div>
+              )}
+
+              {/* Empty state */}
+              {affiliatesLoaded && filteredAffiliates.length === 0 && (
+                <div style={{ background: COLORS.card, borderRadius: 16, padding: "32px 24px", border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
+                  <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 6px" }}>
+                    {affiliateFilter === "pending" ? "No pending applications" : affiliateFilter === "reviewed" ? "Nothing reviewed yet" : "No applications yet"}
+                  </p>
+                  <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>
+                    {affiliateFilter === "pending" ? "New affiliate applications will appear here." : "Approved and declined applications will show here."}
+                  </p>
+                </div>
+              )}
+
+              {/* Application cards */}
+              {affiliatesLoaded && filteredAffiliates.map((app: any, i: number) => {
+                const submittedDate = app.submittedAt?.toDate ? app.submittedAt.toDate().toLocaleDateString() : "—";
+                const reviewedDate = app.reviewedAt?.toDate ? app.reviewedAt.toDate().toLocaleDateString() : null;
+                const isPending = app.status === "pending";
+                const isApproved = app.status === "approved";
+                const isDeclined = app.status === "declined";
+                const statusColor = isApproved ? COLORS.success : isDeclined ? "#FF4D4D" : "#F59E0B";
+                const cardOpacity = isDeclined ? 0.65 : 1;
+                const isActing = affiliateActionId === app.id;
+
+                return (
+                  <div key={app.id || i} style={{ background: COLORS.card, borderRadius: 16, padding: "18px", border: `1px solid ${isDeclined ? "#FF4D4D30" : COLORS.border}`, marginBottom: 12, opacity: cardOpacity }}>
+
+                    {/* Applicant header */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                      <div style={{ flex: 1, marginRight: 12 }}>
+                        <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{app.contactName || "Unnamed Applicant"}</p>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{app.country || "No country listed"}</p>
+                      </div>
+                      <div style={{ background: `${statusColor}20`, borderRadius: 99, padding: "3px 10px", flexShrink: 0 }}>
+                        <span style={{ color: statusColor, fontSize: 11, fontWeight: 700, textTransform: "uppercase" as const }}>{app.status}</span>
+                      </div>
+                    </div>
+
+                    {/* Details */}
+                    <div style={{ marginBottom: 14 }}>
+                      <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 3px" }}>
+                        Email: <span style={{ color: COLORS.white }}>{app.email || "—"}</span>
+                      </p>
+                      <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 3px" }}>
+                        Phone: <span style={{ color: COLORS.white }}>{app.phone || "Not provided"}</span>
+                      </p>
+                      <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 3px" }}>
+                        How they heard about us: <span style={{ color: COLORS.white }}>{app.heard || "—"}</span>
+                      </p>
+                      <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 3px" }}>
+                        Confirmed 18+: <span style={{ color: app.age18 ? COLORS.success : "#FF4D4D" }}>{app.age18 ? "Yes" : "No"}</span>
+                        {"  ·  "}
+                        Payment-eligible country: <span style={{ color: app.eligible ? COLORS.success : "#FF4D4D" }}>{app.eligible ? "Yes" : "No"}</span>
+                      </p>
+                      <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 3px" }}>
+                        Submitted: <span style={{ color: COLORS.white }}>{submittedDate}</span>
+                        {reviewedDate && <span style={{ color: COLORS.textSecondary }}> · Reviewed: {reviewedDate}</span>}
+                      </p>
+                      {app.notes && (
+                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "6px 0 0", lineHeight: 1.6 }}>
+                          Notes: <span style={{ color: COLORS.white }}>{app.notes}</span>
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    {isPending && (
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={() => updateAffiliateStatus(app.id, "approved")}
+                          disabled={isActing}
+                          style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none", background: isActing ? COLORS.border : `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.primary})`, color: isActing ? COLORS.textSecondary : COLORS.white, fontSize: 13, fontWeight: 700, cursor: isActing ? "not-allowed" : "pointer" }}
+                        >
+                          {isActing ? "..." : "Approve"}
+                        </button>
+                        <button
+                          onClick={() => updateAffiliateStatus(app.id, "declined")}
+                          disabled={isActing}
+                          style={{ flex: 1, padding: "11px", borderRadius: 10, border: `1px solid #FF4D4D40`, background: "transparent", color: "#FF4D4D", fontSize: 13, fontWeight: 700, cursor: isActing ? "not-allowed" : "pointer" }}
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    )}
+                    {isApproved && (
+                      <div style={{ background: `${COLORS.success}10`, borderRadius: 10, padding: "10px 14px", border: `1px solid ${COLORS.success}30` }}>
+                        <p style={{ color: COLORS.success, fontSize: 12, fontWeight: 700, margin: 0 }}>Approved. Remember to manually send a referral code, contractor agreement, and W-9/W-8BEN request until that pipeline is automated.</p>
                       </div>
                     )}
                   </div>
