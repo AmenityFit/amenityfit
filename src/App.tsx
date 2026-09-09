@@ -16670,9 +16670,19 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
       </div>
 
       {showShareCard && (
-        <div onClick={() => setShowShareCard(false)} style={{ position: "fixed", inset: 0, zIndex: 99999999, background: "red", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 24, fontWeight: 900 }}>
-          TEST - TAP TO CLOSE
-        </div>
+        <LocalDebugErrorBoundary>
+          <ShareableStatCard
+            title={`${session.customActivityName || meta?.label || session.type} on AmenityFit`}
+            subtitle={dateLabel}
+            icon={meta?.icon}
+            iconImage={meta?.iconImage}
+            mapUrl={mapUrl}
+            outlineMapUrl={outlineSnapshotUrl}
+            locationLabel={locationLabel}
+            stats={stats}
+            onClose={() => setShowShareCard(false)}
+          />
+        </LocalDebugErrorBoundary>
       )}
       {showStickerMode && (
         <StickerShareScreen
@@ -27784,6 +27794,23 @@ const BuildingManagerDashboard = ({ onSignOut, onBackToWorkout = null, buildingI
     </div>
   );
 };
+
+class LocalDebugErrorBoundary extends React.Component<{ children: any }, { hasError: boolean; message: string }> {
+  state = { hasError: false, message: "" };
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, message: String(error?.message || error) };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ position: "fixed", inset: 0, zIndex: 99999999, background: "red", color: "white", padding: 24, fontSize: 16, fontWeight: 700, overflow: "auto" }}>
+          REAL ERROR CAUGHT:{"\n\n"}{this.state.message}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 class ErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
