@@ -16590,10 +16590,7 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
           MapLibre+Esri map - pan/zoom, no Mapbox billing/watermark.
           Court sports keep the existing hand-drawn SVG illustration
           exactly as before (not GPS-based, nothing to replace here). */}
-      {/* TEMPORARY diagnostic - map render disabled to test whether it's
-          the cause of the Share/Sticker tap-through-bug on past sessions.
-          Revert once confirmed either way. */}
-      {false && !courtType && session.route?.length > 1 && (
+      {!courtType && session.route?.length > 1 && (
         <div style={{ margin: "16px 24px 0", border: `1px solid ${COLORS.border}`, borderRadius: 20, overflow: "hidden" }}>
           <InteractiveRouteMap route={session.route} interactive={true} height={240} />
         </div>
@@ -20265,7 +20262,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   return (
     <div style={{ height: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
       {showDiscardConfirm && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999999, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: 24, maxWidth: 340, width: "100%" }}>
             <p style={{ color: COLORS.white, fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>Discard this activity?</p>
             <p style={{ color: COLORS.textSecondary, fontSize: 14, margin: "0 0 20px" }}>Your progress so far won't be saved.</p>
@@ -21611,7 +21608,7 @@ const MilestoneUnlockedScreen = ({
 
   return (
     <div style={{
-      position: "fixed", inset: 0, zIndex: 900, background: COLORS.background,
+      position: "fixed", inset: 0, zIndex: 9999999, background: COLORS.background,
       fontFamily: "'Inter', sans-serif", display: "flex",
       flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
       padding: "48px 28px 40px", textAlign: "center", overflowY: "auto",
@@ -21797,7 +21794,7 @@ const ActiveWeeksMilestoneScreen = ({
 
   return (
     <div style={{
-      position: "fixed", inset: 0, zIndex: 900, background: COLORS.background,
+      position: "fixed", inset: 0, zIndex: 9999999, background: COLORS.background,
       fontFamily: "'Inter', sans-serif", display: "flex",
       flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
       padding: "48px 28px 40px", textAlign: "center", overflowY: "auto",
