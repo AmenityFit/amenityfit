@@ -30,3 +30,4 @@ dist-ssr
 
 # Local dev/testing scratch scripts - not part of the deployed app
 *.mjs
+src/App.tsx.bak
