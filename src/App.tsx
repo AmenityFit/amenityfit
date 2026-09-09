@@ -20574,7 +20574,16 @@ const ShareableStatCard = ({
     // flex-start anchors the card's top edge at a fixed position
     // regardless of its height, so any overflow is a normal, expected
     // scroll-down instead.
-    <div style={{ position: "fixed", inset: 0, zIndex: 99999999, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "72px 24px 24px", overflowY: "auto" }}>
+    // Real fix per direct feedback: with 6 real stats (Distance, Time,
+    // Pace, Calories, Elevation Gain, Max Elevation) plus the map and
+    // Share button, this modal's content is genuinely taller than most
+    // screens. overflowY:auto already made it scrollable, but only 24px
+    // of bottom padding gave no real breathing room below the last
+    // stat/button, making it look cut off rather than obviously
+    // scrollable - especially relevant now, since heart rate is coming
+    // and will add even more height. Bottom padding increased so there's
+    // always comfortable space below the last visible content.
+    <div style={{ position: "fixed", inset: 0, zIndex: 99999999, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "72px 24px 100px", overflowY: "auto" }}>
       <button onClick={onClose} style={{ position: "absolute", top: "calc(56px + env(safe-area-inset-top, 0px))", right: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, width: 40, height: 40, color: COLORS.white, fontSize: 18, cursor: "pointer", zIndex: 10 }}>×</button>
 
       {/* Real, selectable sticker layouts - matching Strava's own model
