@@ -19851,10 +19851,26 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
               value={sessionNotes}
               onChange={(e) => { setSessionNotes(e.target.value); setNotesSaveStatus("idle"); }}
               placeholder={activityMeta?.isMindBody
-                ? "Frustrated, couldn't focus... or felt clear and present. Whatever comes to mind."
+                // Real fix per direct feedback: one generic prompt was
+                // used for every mind-body activity (Pilates, Meditation,
+                // Stretching, Yoga alike), and always led with the
+                // negative framing first. Each now gets its own genuinely
+                // relevant example, positive framing first, harder framing
+                // second - per the explicit instruction this was built to.
+                ? ({
+                    meditation: "Felt clear and present... or frustrated, couldn't focus. Whatever comes to mind.",
+                    stretching: "Felt loose and open... or tight in my hips today. Whatever comes to mind.",
+                    pilates: "Felt strong and controlled... or shaky holding form. Whatever comes to mind.",
+                    yoga: "Felt balanced and grounded... or restless, hard to settle in. Whatever comes to mind.",
+                  } as Record<string, string>)[activityType || ""] || "Felt clear and present... or frustrated, couldn't focus. Whatever comes to mind."
                 : "Any details worth remembering - what you caught, how it went, whatever comes to mind."}
               rows={3}
-              style={{ width: "100%", padding: 14, borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, fontFamily: "'Inter', sans-serif", resize: "none" }}
+              // Real fix for a genuine, confirmed bug from live device
+              // testing: iOS Safari auto-zooms the viewport on focus for
+              // any input/textarea with a font-size under 16px, which is
+              // exactly what "zoomed in, right side cut off" describes.
+              // 16px is the standard, well-known threshold that prevents it.
+              style={{ width: "100%", padding: 14, borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 16, fontFamily: "'Inter', sans-serif", resize: "none" }}
             />
             <button
               onClick={saveSessionNotes}
