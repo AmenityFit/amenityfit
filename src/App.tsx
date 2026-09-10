@@ -25029,6 +25029,11 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                       <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 3px" }}>
                         Phone: <span style={{ color: COLORS.white }}>{app.phone || "Not provided"}</span>
                       </p>
+                      {app.phone && affiliateApplications.some(other => other.id !== app.id && other.phone === app.phone) && (
+                        <p style={{ color: "#F5A623", fontSize: 11, fontWeight: 700, margin: "0 0 3px" }}>
+                          ⚠ Phone number matches another application - possible duplicate applicant
+                        </p>
+                      )}
                       <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 3px" }}>
                         How they heard about us: <span style={{ color: COLORS.white }}>{app.heard || "—"}</span>
                       </p>
