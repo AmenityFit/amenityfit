@@ -25107,6 +25107,26 @@ const SuperAdminDashboard = ({ onSignOut }) => {
             setInformalAdding(false);
           };
 
+          const removeAffiliate = async (uid: string, name: string) => {
+            if (!window.confirm(`Remove ${name || "this affiliate"}? This revokes their login immediately. Their referral history is kept, but their account is gone.`)) return;
+            try {
+              const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/deleteAffiliate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ uid, secret: "amenityfit-affiliate-2026" }),
+              });
+              const data = await res.json();
+              if (data.success) {
+                setLeaderboardOfficial((prev) => prev.filter((a) => a.uid !== uid));
+                setLeaderboardInformal((prev) => prev.filter((a) => a.uid !== uid));
+              } else {
+                alert("Failed to remove: " + (data.error || "Unknown error"));
+              }
+            } catch (delErr: any) {
+              alert("Failed to remove: " + (delErr?.message || "Unknown error"));
+            }
+          };
+
           const loadLeaderboard = async () => {
             setLeaderboardLoading(true);
             try {
@@ -25211,10 +25231,16 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                         <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>#{i + 1} &nbsp;{a.name || "Unnamed"}</p>
                         <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>{a.email} &middot; {a.referralCode}</p>
                       </div>
-                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center" }}>
                         <div style={{ textAlign: "center" }}><p style={{ color: COLORS.success, fontSize: 16, fontWeight: 800, margin: 0 }}>${a.totalMRR.toFixed(2)}</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>MRR</p></div>
                         <div style={{ textAlign: "center" }}><p style={{ color: COLORS.white, fontSize: 16, fontWeight: 800, margin: 0 }}>{a.closingPct}%</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>Closing</p></div>
                         <div style={{ textAlign: "center" }}><p style={{ color: COLORS.white, fontSize: 16, fontWeight: 800, margin: 0 }}>{a.closedCount}/{a.totalReferrals}</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>Closed</p></div>
+                        <button
+                          onClick={() => removeAffiliate(a.uid, a.name)}
+                          style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid #FF4D4D50`, background: "transparent", color: "#FF4D4D", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Remove
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -25232,9 +25258,15 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                         <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>#{i + 1} &nbsp;{a.name || "Unnamed"}</p>
                         <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>{a.email}</p>
                       </div>
-                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center" }}>
                         <div style={{ textAlign: "center" }}><p style={{ color: COLORS.white, fontSize: 16, fontWeight: 800, margin: 0 }}>{a.closingPct}%</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>Closing</p></div>
                         <div style={{ textAlign: "center" }}><p style={{ color: COLORS.white, fontSize: 16, fontWeight: 800, margin: 0 }}>{a.closedCount}/{a.totalReferrals}</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>Closed</p></div>
+                        <button
+                          onClick={() => removeAffiliate(a.uid, a.name)}
+                          style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid #FF4D4D50`, background: "transparent", color: "#FF4D4D", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Remove
+                        </button>
                       </div>
                     </div>
                   ))}
