@@ -24680,15 +24680,23 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                 const isActivated = sub.status === "activated";
                 const statusColor = isActivated ? COLORS.success : isRejected ? "#FF4D4D" : "#F59E0B";
                 const cardOpacity = isRejected ? 0.65 : 1;
+                const isHotelSub = sub.propertyType === "hotel";
 
                 return (
-                  <div key={sub.id || i} style={{ background: COLORS.card, borderRadius: 16, padding: "18px", border: `1px solid ${isRejected ? "#FF4D4D30" : COLORS.border}`, marginBottom: 12, opacity: cardOpacity }}>
+                  <div key={sub.id || i} style={{ background: COLORS.card, borderRadius: 16, padding: "18px", border: `1.5px solid ${isRejected ? "#FF4D4D30" : isHotelSub ? "#98A2B360" : COLORS.border}`, marginBottom: 12, opacity: cardOpacity }}>
 
                     {/* Building header */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                       <div style={{ flex: 1, marginRight: 12 }}>
-                        <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>{sub.buildingName || "Unnamed Building"}</p>
-                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{sub.location || "No address"} · {sub.units || "?"} units</p>
+                        <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "0 0 2px" }}>
+                          {sub.buildingName || "Unnamed Building"}
+                          {isHotelSub && (
+                            <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, textTransform: "uppercase" as const, padding: "2px 7px", borderRadius: 99, background: "#98A2B325", color: "#98A2B3" }}>
+                              &#127976; Hotel
+                            </span>
+                          )}
+                        </p>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{sub.location || "No address"} &middot; {sub.units || "?"} {isHotelSub ? "rooms" : "units"}</p>
                       </div>
                       <div style={{ background: `${statusColor}20`, borderRadius: 99, padding: "3px 10px", flexShrink: 0 }}>
                         <span style={{ color: statusColor, fontSize: 11, fontWeight: 700, textTransform: "uppercase" as const }}>{sub.status}</span>
