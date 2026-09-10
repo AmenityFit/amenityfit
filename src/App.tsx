@@ -23912,6 +23912,23 @@ const SuperAdminDashboard = ({ onSignOut }) => {
               </div>
             </div>
 
+            {/* Affiliate vs organic source breakdown - subtle, single line */}
+            {queueSubmissions.length > 0 ? (
+              <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 16px" }}>
+                Of {queueSubmissions.length} building application{queueSubmissions.length === 1 ? "" : "s"} received,{" "}
+                <span style={{ color: COLORS.accent, fontWeight: 700 }}>{queueSubmissions.filter((s: any) => s.referralCode).length} from affiliates</span>
+                {" "}&middot;{" "}
+                {queueSubmissions.filter((s: any) => !s.referralCode).length} organic
+              </p>
+            ) : (
+              <p
+                onClick={async () => { const results = await fetchBuildingSubmissions(); setQueueSubmissions(results); }}
+                style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 16px", cursor: "pointer", textDecoration: "underline" }}
+              >
+                Load affiliate vs. organic breakdown
+              </p>
+            )}
+
             {/* Platform totals */}
             <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 12px" }}>Platform Totals — {month}</p>
             <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
