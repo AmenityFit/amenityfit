@@ -23625,7 +23625,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const askConfirm = (message: string, onConfirm: () => void, options?: { confirmLabel?: string; destructive?: boolean }) => {
     setPendingConfirm({ message, onConfirm, ...options });
   };
-  const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "queue" | "affiliates" | "revenue" | "trending" | "devtools">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "buildings" | "queue" | "affiliates" | "leaderboard" | "revenue" | "trending" | "devtools">("overview");
   const [otherActivityTrends, setOtherActivityTrends] = useState<any[]>([]);
   const [trendsLoaded, setTrendsLoaded] = useState(false);
   const [selectedBuilding, setSelectedBuilding] = useState<any>(null);
@@ -23715,6 +23715,15 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const [affiliatesLoaded, setAffiliatesLoaded] = useState(false);
   const [affiliateFilter, setAffiliateFilter] = useState<"all" | "pending" | "reviewed">("pending");
   const [affiliateActionId, setAffiliateActionId] = useState<string | null>(null);
+  const [leaderboardOfficial, setLeaderboardOfficial] = useState<any[]>([]);
+  const [leaderboardInformal, setLeaderboardInformal] = useState<any[]>([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardLoaded, setLeaderboardLoaded] = useState(false);
+  const [leaderboardSort, setLeaderboardSort] = useState<"mrr" | "closingPct">("mrr");
+  const [informalName, setInformalName] = useState("");
+  const [informalEmail, setInformalEmail] = useState("");
+  const [informalAdding, setInformalAdding] = useState(false);
+  const [informalMsg, setInformalMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [selectedBuildingCodes, setSelectedBuildingCodes] = React.useState<any[]>([]);
   const [showBuildingCodes, setShowBuildingCodes] = React.useState(false);
@@ -23834,6 +23843,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
     { id: "buildings", label: "Buildings" },
     { id: "queue", label: "Activation Queue" },
     { id: "affiliates", label: "Affiliate Applications" },
+    { id: "leaderboard", label: "Affiliate Leaderboard" },
     { id: "batch", label: "Batch Activate" },
     { id: "revenue", label: "Revenue" },
     { id: "trending", label: "Other Activities" },
@@ -25061,6 +25071,175 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                   </div>
                 );
               })}
+            </>
+          );
+        })()}
+
+        {activeTab === "leaderboard" && (() => {
+          const addInformalReferrer = async () => {
+            if (!informalName.trim() || !informalEmail.trim()) {
+              setInformalMsg({ text: "Name and email are both required.", ok: false });
+              return;
+            }
+            setInformalAdding(true);
+            setInformalMsg(null);
+            try {
+              const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/addInformalReferrer", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: informalName.trim(), email: informalEmail.trim(), secret: "amenityfit-affiliate-2026" }),
+              });
+              const data = await res.json();
+              if (data.success) {
+                setInformalMsg({ text: `Added. Referral code: ${data.referralCode}. Login link emailed to ${informalEmail.trim()}.`, ok: true });
+                setInformalName(""); setInformalEmail("");
+                if (leaderboardLoaded) {
+                  const lbRes = await fetch(`https://us-central1-amenityfit-31276.cloudfunctions.net/fetchAffiliateLeaderboard?secret=amenityfit-affiliate-2026`);
+                  const lbData = await lbRes.json();
+                  if (lbData.success) { setLeaderboardOfficial(lbData.official); setLeaderboardInformal(lbData.informal); }
+                }
+              } else {
+                setInformalMsg({ text: "Failed: " + (data.error || "Unknown error"), ok: false });
+              }
+            } catch (addErr: any) {
+              setInformalMsg({ text: "Failed: " + (addErr?.message || "Unknown error"), ok: false });
+            }
+            setInformalAdding(false);
+          };
+
+          const loadLeaderboard = async () => {
+            setLeaderboardLoading(true);
+            try {
+              const res = await fetch(`https://us-central1-amenityfit-31276.cloudfunctions.net/fetchAffiliateLeaderboard?secret=amenityfit-affiliate-2026`);
+              const data = await res.json();
+              if (data.success) { setLeaderboardOfficial(data.official); setLeaderboardInformal(data.informal); }
+            } catch (e) { console.error("fetchAffiliateLeaderboard error:", e); }
+            setLeaderboardLoaded(true);
+            setLeaderboardLoading(false);
+          };
+
+          const sortedOfficial = [...leaderboardOfficial].sort((a, b) =>
+            leaderboardSort === "mrr" ? b.totalMRR - a.totalMRR : b.closingPct - a.closingPct
+          );
+          const sortedInformal = [...leaderboardInformal].sort((a, b) => b.closingPct - a.closingPct || b.totalReferrals - a.totalReferrals);
+
+          return (
+            <>
+              {/* Header */}
+              <div style={{ background: `${COLORS.primary}15`, border: `1px solid ${COLORS.primary}30`, borderRadius: 14, padding: "14px 16px", marginBottom: 20 }}>
+                <p style={{ color: COLORS.accent, fontSize: 13, fontWeight: 600, margin: "0 0 4px" }}>Affiliate Leaderboard</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+                  Official affiliates ranked by MRR or closing rate. Informal referrers tracked separately by activity only - no dollar figures, since that tier is unpaid and voluntary.
+                </p>
+              </div>
+
+              {/* Add Informal Referrer */}
+              <div style={{ background: COLORS.card, borderRadius: 16, padding: 18, border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
+                <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>Add Informal Referrer</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 12px" }}>Manually grant tracking access, no application, no contract. Keep this to a small handful of people.</p>
+                <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                  <input
+                    type="text" placeholder="Full name" value={informalName}
+                    onChange={(e) => setInformalName(e.target.value)}
+                    style={{ flex: 1, minWidth: 140, padding: "10px 12px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.background, color: COLORS.white, fontSize: 13 }}
+                  />
+                  <input
+                    type="email" placeholder="Email address" value={informalEmail}
+                    onChange={(e) => setInformalEmail(e.target.value)}
+                    style={{ flex: 1, minWidth: 180, padding: "10px 12px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: COLORS.background, color: COLORS.white, fontSize: 13 }}
+                  />
+                  <button
+                    onClick={addInformalReferrer}
+                    disabled={informalAdding}
+                    style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: informalAdding ? COLORS.border : `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.primary})`, color: "#fff", fontSize: 13, fontWeight: 700, cursor: informalAdding ? "not-allowed" : "pointer" }}
+                  >
+                    {informalAdding ? "Adding..." : "Add"}
+                  </button>
+                </div>
+                {informalMsg && (
+                  <p style={{ color: informalMsg.ok ? COLORS.success : "#FF4D4D", fontSize: 12, margin: 0 }}>{informalMsg.text}</p>
+                )}
+              </div>
+
+              {/* Load button */}
+              {!leaderboardLoaded && (
+                <button
+                  onClick={loadLeaderboard}
+                  style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 20 }}
+                >
+                  {leaderboardLoading ? "Loading..." : "Load Leaderboard"}
+                </button>
+              )}
+
+              {leaderboardLoaded && (
+                <>
+                  {/* Official affiliates */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: 0 }}>Official Affiliates</p>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {([{ id: "mrr", label: "Sort by MRR" }, { id: "closingPct", label: "Sort by Closing %" }] as const).map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => setLeaderboardSort(s.id)}
+                          style={{
+                            padding: "6px 12px", borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                            border: `1.5px solid ${leaderboardSort === s.id ? COLORS.accent : COLORS.border}`,
+                            background: leaderboardSort === s.id ? `${COLORS.accent}18` : "transparent",
+                            color: leaderboardSort === s.id ? COLORS.accent : COLORS.textSecondary,
+                          }}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                      <button
+                        onClick={loadLeaderboard}
+                        style={{ padding: "6px 12px", borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary }}
+                      >
+                        {leaderboardLoading ? "..." : "↻"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {sortedOfficial.length === 0 && (
+                    <div style={{ background: COLORS.card, borderRadius: 16, padding: "24px", border: `1px solid ${COLORS.border}`, textAlign: "center", marginBottom: 24 }}>
+                      <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>No official affiliates yet.</p>
+                    </div>
+                  )}
+                  {sortedOfficial.map((a, i) => (
+                    <div key={a.uid} style={{ background: COLORS.card, borderRadius: 14, padding: "14px 16px", border: `1px solid ${COLORS.border}`, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 160 }}>
+                        <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>#{i + 1} &nbsp;{a.name || "Unnamed"}</p>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>{a.email} &middot; {a.referralCode}</p>
+                      </div>
+                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                        <div style={{ textAlign: "center" }}><p style={{ color: COLORS.success, fontSize: 16, fontWeight: 800, margin: 0 }}>${a.totalMRR.toFixed(2)}</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>MRR</p></div>
+                        <div style={{ textAlign: "center" }}><p style={{ color: COLORS.white, fontSize: 16, fontWeight: 800, margin: 0 }}>{a.closingPct}%</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>Closing</p></div>
+                        <div style={{ textAlign: "center" }}><p style={{ color: COLORS.white, fontSize: 16, fontWeight: 800, margin: 0 }}>{a.closedCount}/{a.totalReferrals}</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>Closed</p></div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Informal referrers - activity only, no dollar figures anywhere */}
+                  <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 700, margin: "28px 0 12px" }}>Informal Referrers</p>
+                  {sortedInformal.length === 0 && (
+                    <div style={{ background: COLORS.card, borderRadius: 16, padding: "24px", border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
+                      <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: 0 }}>No informal referrers yet.</p>
+                    </div>
+                  )}
+                  {sortedInformal.map((a, i) => (
+                    <div key={a.uid} style={{ background: COLORS.card, borderRadius: 14, padding: "14px 16px", border: `1px solid ${COLORS.border}`, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 160 }}>
+                        <p style={{ color: COLORS.white, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>#{i + 1} &nbsp;{a.name || "Unnamed"}</p>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>{a.email}</p>
+                      </div>
+                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                        <div style={{ textAlign: "center" }}><p style={{ color: COLORS.white, fontSize: 16, fontWeight: 800, margin: 0 }}>{a.closingPct}%</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>Closing</p></div>
+                        <div style={{ textAlign: "center" }}><p style={{ color: COLORS.white, fontSize: 16, fontWeight: 800, margin: 0 }}>{a.closedCount}/{a.totalReferrals}</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>Closed</p></div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </>
           );
         })()}
