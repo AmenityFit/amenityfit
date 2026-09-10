@@ -24852,6 +24852,11 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                         <p style={{ color: COLORS.success, fontSize: 12, fontWeight: 700, margin: "0 0 8px" }}>
                           ✓ Building activated — send these credentials to the manager:
                         </p>
+                        {sub.activationEmailSent === false && (
+                          <p style={{ color: "#FF4D4D", fontSize: 12, fontWeight: 700, margin: "0 0 8px" }}>
+                            ⚠ The automatic welcome email failed to send{sub.activationEmailError ? ` (${sub.activationEmailError})` : ""}. Use "Copy Welcome Message" below and send it manually.
+                          </p>
+                        )}
                         {sub.activatedBuildingId && (
                           <>
                             <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 4px" }}>
