@@ -23842,10 +23842,10 @@ const SuperAdminDashboard = ({ onSignOut }) => {
     { id: "overview", label: "Platform Overview" },
     { id: "buildings", label: "Buildings" },
     { id: "queue", label: "Activation Queue" },
-    { id: "affiliates", label: "Affiliate Applications" },
-    { id: "leaderboard", label: "Affiliate Leaderboard" },
     { id: "batch", label: "Batch Activate" },
     { id: "revenue", label: "Revenue" },
+    { id: "affiliates", label: "Affiliate Applications" },
+    { id: "leaderboard", label: "Affiliate Leaderboard" },
     { id: "trending", label: "Other Activities" },
     { id: "devtools", label: "Dev Tools" },
   ];
