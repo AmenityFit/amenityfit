@@ -24683,7 +24683,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                 const isHotelSub = sub.propertyType === "hotel";
 
                 return (
-                  <div key={sub.id || i} style={{ background: COLORS.card, borderRadius: 16, padding: "18px", border: `1.5px solid ${isRejected ? "#FF4D4D30" : isHotelSub ? "#98A2B360" : COLORS.border}`, marginBottom: 12, opacity: cardOpacity }}>
+                  <div key={sub.id || i} style={{ background: COLORS.card, borderRadius: 16, padding: "18px", border: `1px solid ${isRejected ? "#FF4D4D30" : COLORS.border}`, borderLeft: isHotelSub ? "3px solid #6B6F76" : isRejected ? "1px solid #FF4D4D30" : `1px solid ${COLORS.border}`, marginBottom: 12, opacity: cardOpacity }}>
 
                     {/* Building header */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
@@ -25371,7 +25371,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                           <div>
                             <p style={{ color: COLORS.white, fontSize: 13, fontWeight: 700, margin: "0 0 2px" }}>
                               {app.companyName}
-                              <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, textTransform: "uppercase" as const, padding: "2px 7px", borderRadius: 99, background: isHotel ? "#5B647020" : `${COLORS.accent}20`, color: isHotel ? "#98A2B3" : COLORS.accent }}>
+                              <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: 0.5, padding: "2px 8px", borderRadius: 4, border: isHotel ? "1px solid #4A4D55" : `1px solid ${COLORS.accent}50`, color: isHotel ? "#B8BAC0" : COLORS.accent }}>
                                 {isHotel ? "Hotel" : "Building"}
                               </span>
                             </p>
