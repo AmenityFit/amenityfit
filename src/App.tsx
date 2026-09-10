@@ -25264,6 +25264,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                         <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>{a.email}</p>
                       </div>
                       <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center" }}>
+                        <div style={{ textAlign: "center" }}><p style={{ color: COLORS.success, fontSize: 16, fontWeight: 800, margin: 0 }}>${a.totalMRR.toFixed(2)}</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>MRR</p></div>
                         <div style={{ textAlign: "center" }}><p style={{ color: COLORS.white, fontSize: 16, fontWeight: 800, margin: 0 }}>{a.closingPct}%</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>Closing</p></div>
                         <div style={{ textAlign: "center" }}><p style={{ color: COLORS.white, fontSize: 16, fontWeight: 800, margin: 0 }}>{a.closedCount}/{a.totalReferrals}</p><p style={{ color: COLORS.textSecondary, fontSize: 10, margin: 0, textTransform: "uppercase" as const }}>Closed</p></div>
                         <button
