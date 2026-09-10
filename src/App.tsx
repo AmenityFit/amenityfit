@@ -24675,6 +24675,11 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                       <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 3px" }}>
                         Phone: <span style={{ color: COLORS.white }}>{sub.phone || "—"}</span>
                       </p>
+                      {sub.referralCode && (
+                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 3px" }}>
+                          Referral code: <span style={{ color: COLORS.accent, fontWeight: 700 }}>{sub.referralCode}</span>
+                        </p>
+                      )}
                       <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 3px" }}>
                         Submitted: <span style={{ color: COLORS.white }}>{submittedDate}</span>
                         {reviewedDate && <span style={{ color: COLORS.textSecondary }}> · Reviewed: {reviewedDate}</span>}
