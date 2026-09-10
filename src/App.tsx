@@ -807,6 +807,17 @@ const updateSubmissionStatus = async (submissionId: string, status: "activated" 
 // Fetch pending affiliate applications for super admin review - mirrors
 // fetchBuildingSubmissions above. Applications land here from the public
 // application form on amenityfit.app/affiliate.html.
+const fetchPortfolioApplications = async () => {
+  try {
+    const q = query(collection(db, "portfolioApplications"), orderBy("submittedAt", "desc"));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.error("fetchPortfolioApplications error:", e);
+    return [];
+  }
+};
+
 const fetchAffiliateApplications = async () => {
   try {
     const q = query(collection(db, "affiliateApplications"), orderBy("submittedAt", "desc"));
@@ -23737,6 +23748,9 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const [saReassignError, setSaReassignError] = React.useState("");
   const [batchInput, setBatchInput] = React.useState("");
   const [batchPmEmail, setBatchPmEmail] = React.useState("");
+  const [portfolioApps, setPortfolioApps] = React.useState<any[]>([]);
+  const [portfolioAppsLoaded, setPortfolioAppsLoaded] = React.useState(false);
+  const [portfolioAppsLoading, setPortfolioAppsLoading] = React.useState(false);
   const [batchCompanyName, setBatchCompanyName] = React.useState("");
   const [batchParsed, setBatchParsed] = React.useState<any[]>([]);
   const [batchTemplateEmail, setBatchTemplateEmail] = React.useState("");
@@ -25315,6 +25329,67 @@ const SuperAdminDashboard = ({ onSignOut }) => {
             {!batchReviewMode && !batchComplete && (
               <>
                 <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 16px" }}>Batch Building Activation</p>
+
+                {/* Pending portfolio applications from the marketing site -
+                    company/exec email/CSV already collected, load straight
+                    into the form below instead of re-entering by hand. */}
+                <div style={{ background: COLORS.card, borderRadius: 16, padding: "16px", border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <p style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", margin: 0 }}>Pending Portfolio Applications</p>
+                    <button
+                      onClick={async () => {
+                        setPortfolioAppsLoading(true);
+                        const results = await fetchPortfolioApplications();
+                        setPortfolioApps(results);
+                        setPortfolioAppsLoaded(true);
+                        setPortfolioAppsLoading(false);
+                      }}
+                      style={{ background: "none", border: "none", color: COLORS.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                    >
+                      {portfolioAppsLoading ? "Loading..." : portfolioAppsLoaded ? "↻ Refresh" : "Load"}
+                    </button>
+                  </div>
+                  {!portfolioAppsLoaded && (
+                    <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>Click Load to check for portfolio applications submitted on the site.</p>
+                  )}
+                  {portfolioAppsLoaded && portfolioApps.length === 0 && (
+                    <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>No pending portfolio applications right now.</p>
+                  )}
+                  {portfolioApps.map((app) => {
+                    const isHotel = app.propertyType === "hotel";
+                    return (
+                      <div key={app.id} style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 10, marginTop: 10 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                          <div>
+                            <p style={{ color: COLORS.white, fontSize: 13, fontWeight: 700, margin: "0 0 2px" }}>
+                              {app.companyName}
+                              <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, textTransform: "uppercase" as const, padding: "2px 7px", borderRadius: 99, background: isHotel ? "#5B647020" : `${COLORS.accent}20`, color: isHotel ? "#98A2B3" : COLORS.accent }}>
+                                {isHotel ? "Hotel" : "Building"}
+                              </span>
+                            </p>
+                            <p style={{ color: COLORS.textSecondary, fontSize: 11, margin: 0 }}>
+                              {app.contactName} &middot; {app.execEmail} &middot; ~{app.propertyCount} properties
+                              {app.csvText && app.csvText.trim() ? " · CSV attached" : " · No CSV - will need a follow-up"}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setBatchCompanyName(app.companyName || "");
+                              setBatchPmEmail(app.execEmail || "");
+                              if (app.csvText) {
+                                setBatchInput(app.csvText);
+                                setBatchFileName("");
+                              }
+                            }}
+                            style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}
+                          >
+                            Load into form ↓
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
                 {/* Step 1: Send the portfolio company a CSV template to fill out */}
                 <div style={{ background: COLORS.card, borderRadius: 16, padding: "16px", border: `1px solid ${COLORS.border}`, marginBottom: 20 }}>
