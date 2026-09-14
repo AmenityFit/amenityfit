@@ -23868,6 +23868,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const [portfolioApps, setPortfolioApps] = React.useState<any[]>([]);
   const [portfolioAppsLoaded, setPortfolioAppsLoaded] = React.useState(false);
   const [portfolioAppsLoading, setPortfolioAppsLoading] = React.useState(false);
+  const [portfolioAppLoadedId, setPortfolioAppLoadedId] = React.useState<string | null>(null);
   const [batchCompanyName, setBatchCompanyName] = React.useState("");
   const [batchParsed, setBatchParsed] = React.useState<any[]>([]);
   const [batchTemplateEmail, setBatchTemplateEmail] = React.useState("");
@@ -25506,10 +25507,11 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                                 setBatchInput(app.csvText);
                                 setBatchFileName("");
                               }
+                              setPortfolioAppLoadedId(app.id);
                             }}
-                            style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}
+                            style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: portfolioAppLoadedId === app.id ? COLORS.success : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}
                           >
-                            Load into form ↓
+                            {portfolioAppLoadedId === app.id ? "✓ Loaded" : "Load into form ↓"}
                           </button>
                         </div>
                       </div>
