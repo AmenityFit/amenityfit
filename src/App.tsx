@@ -23869,6 +23869,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const [portfolioAppsLoaded, setPortfolioAppsLoaded] = React.useState(false);
   const [portfolioAppsLoading, setPortfolioAppsLoading] = React.useState(false);
   const [portfolioAppLoadedId, setPortfolioAppLoadedId] = React.useState<string | null>(null);
+  const [batchPropertyType, setBatchPropertyType] = React.useState<"building" | "hotel">("building");
   const [batchCompanyName, setBatchCompanyName] = React.useState("");
   const [batchParsed, setBatchParsed] = React.useState<any[]>([]);
   const [batchTemplateEmail, setBatchTemplateEmail] = React.useState("");
@@ -25508,6 +25509,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                                 setBatchFileName("");
                               }
                               setPortfolioAppLoadedId(app.id);
+                              setBatchPropertyType(app.propertyType === "hotel" ? "hotel" : "building");
                             }}
                             style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: portfolioAppLoadedId === app.id ? COLORS.success : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}
                           >
@@ -25668,7 +25670,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                       <div>
                         <p style={{ color: b.valid ? COLORS.white : "#FF6B6B", fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{b.buildingName}</p>
                         <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: "0 0 2px" }}>{b.location || "No address"}</p>
-                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{b.units} units · {b.managerEmail || <span style={{ color: "#FF6B6B" }}>No email</span>}</p>
+                        <p style={{ color: COLORS.textSecondary, fontSize: 12, margin: 0 }}>{b.units} {batchPropertyType === "hotel" ? "rooms" : "units"} · {b.managerEmail || <span style={{ color: "#FF6B6B" }}>No email</span>}</p>
                       </div>
                       <span style={{ fontSize: 11, fontWeight: 700, color: b.valid ? COLORS.success : "#FF6B6B", background: b.valid ? `${COLORS.success}20` : "#FF4D4D20", borderRadius: 99, padding: "3px 10px" }}>{b.valid ? "Ready" : "Invalid"}</span>
                     </div>
