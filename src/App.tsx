@@ -25699,6 +25699,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                       await setDoc(batchDocRef, {
                         companyName: batchCompanyName.trim(),
                         pmEmail: batchPmEmail.trim(),
+                        propertyType: batchPropertyType,
                         buildings: valid.map(b => ({
                           buildingName: b.buildingName,
                           location: b.location,
