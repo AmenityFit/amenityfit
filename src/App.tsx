@@ -23871,6 +23871,8 @@ const SuperAdminDashboard = ({ onSignOut }) => {
   const [portfolioAppLoadedId, setPortfolioAppLoadedId] = React.useState<string | null>(null);
   const [batchPropertyType, setBatchPropertyType] = React.useState<"building" | "hotel">("building");
   const [batchCompanyName, setBatchCompanyName] = React.useState("");
+  const [batchBillingFrequency, setBatchBillingFrequency] = React.useState("");
+  const [batchMultiYearTerm, setBatchMultiYearTerm] = React.useState("");
   const [batchParsed, setBatchParsed] = React.useState<any[]>([]);
   const [batchTemplateEmail, setBatchTemplateEmail] = React.useState("");
   const [batchTemplateSending, setBatchTemplateSending] = React.useState(false);
@@ -25498,6 +25500,8 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                               {app.contactName} &middot; {app.execEmail} &middot; ~{app.propertyCount} properties
                               {app.csvText && app.csvText.trim() ? " · CSV attached" : " · No CSV - will need a follow-up"}
                               {app.referralCode ? ` · Ref: ${app.referralCode}` : ""}
+                              {app.billingFrequency ? ` · Billing: ${app.billingFrequency === "monthly" ? "Monthly" : "Annual"}` : " · Billing: NOT SET"}
+                              {app.multiYearTerm ? ` · ${app.multiYearTerm}-year term elected` : ""}
                             </p>
                           </div>
                           <button
@@ -25510,6 +25514,8 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                               }
                               setPortfolioAppLoadedId(app.id);
                               setBatchPropertyType(app.propertyType === "hotel" ? "hotel" : "building");
+                              setBatchBillingFrequency(app.billingFrequency || "");
+                              setBatchMultiYearTerm(app.multiYearTerm || "");
                             }}
                             style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: portfolioAppLoadedId === app.id ? COLORS.success : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, color: COLORS.white, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}
                           >
@@ -25683,6 +25689,37 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                   </div>
                 )}
 
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>Payment Frequency (required)</label>
+                  <select
+                    value={batchBillingFrequency}
+                    onChange={e => setBatchBillingFrequency(e.target.value)}
+                    style={{ width: "100%", padding: 12, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 13 }}
+                  >
+                    <option value="">Select one</option>
+                    <option value="annual">Annual (paid upfront)</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+                {batchPropertyType === "hotel" && (
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>Portfolio Commitment Term</label>
+                    <select
+                      value={batchMultiYearTerm}
+                      onChange={e => setBatchMultiYearTerm(e.target.value)}
+                      style={{ width: "100%", padding: 12, borderRadius: 10, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 13 }}
+                    >
+                      <option value="">Standard 1-year term</option>
+                      <option value="2">2-year term</option>
+                      <option value="3">3-year term</option>
+                    </select>
+                  </div>
+                )}
+                {!batchBillingFrequency && (
+                  <div style={{ background: "#FF4D4D15", border: "1px solid #FF4D4D40", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+                    <p style={{ color: "#FF6B6B", fontSize: 13, margin: 0 }}>⚠️ Payment Frequency must be selected before submitting a batch.</p>
+                  </div>
+                )}
                 {!batchPmEmail.trim() && (
                   <div style={{ background: "#FF4D4D15", border: "1px solid #FF4D4D40", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
                     <p style={{ color: "#FF6B6B", fontSize: 13, margin: 0 }}>⚠️ A PM Executive Email is required before submitting a batch.</p>
@@ -25692,7 +25729,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                 <button
                   onClick={async () => {
                     const valid = batchParsed.filter(b => b.valid);
-                    if (valid.length === 0 || !batchPmEmail.trim() || !batchCompanyName.trim()) return;
+                    if (valid.length === 0 || !batchPmEmail.trim() || !batchCompanyName.trim() || !batchBillingFrequency) return;
                     setBatchSubmitting(true);
                     try {
                       const batchDocRef = doc(collection(db, "batchSubmissions"));
@@ -25700,6 +25737,8 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                         companyName: batchCompanyName.trim(),
                         pmEmail: batchPmEmail.trim(),
                         propertyType: batchPropertyType,
+                        billingFrequency: batchBillingFrequency,
+                        multiYearTerm: batchPropertyType === "hotel" ? batchMultiYearTerm : "",
                         buildings: valid.map(b => ({
                           buildingName: b.buildingName,
                           location: b.location,
@@ -25716,7 +25755,7 @@ const SuperAdminDashboard = ({ onSignOut }) => {
                     }
                     setBatchSubmitting(false);
                   }}
-                  disabled={batchParsed.every(b => !b.valid) || !batchPmEmail.trim() || !batchCompanyName.trim() || batchSubmitting}
+                  disabled={batchParsed.every(b => !b.valid) || !batchPmEmail.trim() || !batchCompanyName.trim() || !batchBillingFrequency || batchSubmitting}
                   style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: `linear-gradient(135deg, ${COLORS.success}, #1a9e4a)`, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer", marginTop: 8 }}
                 >
                   {batchSubmitting ? "Submitting..." : `Submit ${batchParsed.filter(b => b.valid).length} Buildings for Invoicing →`}
