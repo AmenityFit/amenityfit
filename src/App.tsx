@@ -16787,6 +16787,10 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
       </div>
       {showLogScore && (
         <div style={{ position: "fixed", inset: 0, background: COLORS.background, zIndex: 900 }}>
+          {/* TEMPORARY - remove once buildingId issue is confirmed */}
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, background: "#FF3B30", color: "#FFFFFF", padding: 12, fontSize: 12, fontFamily: "monospace", zIndex: 9999, wordBreak: "break-all" }}>
+            DEBUG - buildingId: {JSON.stringify(profile?.buildingId)} | uid: {JSON.stringify(profile?.uid)}
+          </div>
           <LogMatchScreen
             buildingId={profile?.buildingId}
             currentUid={profile?.uid}
