@@ -16564,6 +16564,7 @@ const InteractiveRouteMap = ({
 const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { session: any; sessionHistory: any[]; profile: any; onClose: () => void }) => {
   const [showShareCard, setShowShareCard] = useState(false);
   const [showStickerMode, setShowStickerMode] = useState(false);
+  const [showLogScore, setShowLogScore] = useState(false);
   const meta = ACTIVITY_TYPES.find((a) => a.key === session.type);
   const isMindBody = !!meta?.isMindBody;
   // Same 0.05km floor as the trusted live/save-time guard - a few
@@ -16765,7 +16766,18 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
         </div>
       )}
 
-      <div style={{ padding: "24px", marginTop: "auto", display: "flex", gap: 12 }}>
+      {/* Log Score - the real entry point for match sports. Only shown for
+          basketball/soccer/padel (not pickleball - not in scope), and
+          only when this session hasn't already had a match logged
+          against it, so the same session can't be submitted twice. */}
+      {(courtType === "basketball" || courtType === "soccer" || courtType === "padel") && !session.matchGameId && (
+        <div style={{ padding: "0 24px", marginTop: "auto" }}>
+          <button onClick={() => setShowLogScore(true)} style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: COLORS.accent, color: "#0A0A0A", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
+            Log Score
+          </button>
+        </div>
+      )}
+      <div style={{ padding: "24px", marginTop: (courtType === "basketball" || courtType === "soccer" || courtType === "padel") && !session.matchGameId ? "12px" : "auto", display: "flex", gap: 12 }}>
         <button onClick={() => setShowShareCard(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
           Share
         </button>
@@ -16773,6 +16785,18 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
           Sticker
         </button>
       </div>
+      {showLogScore && (
+        <div style={{ position: "fixed", inset: 0, background: COLORS.background, zIndex: 900 }}>
+          <LogMatchScreen
+            buildingId={profile?.buildingId}
+            currentUid={profile?.uid}
+            presetSport={courtType as "basketball" | "soccer" | "padel"}
+            presetCalories={session.calories || null}
+            onBack={() => setShowLogScore(false)}
+            onLogged={() => setShowLogScore(false)}
+          />
+        </div>
+      )}
 
       {showShareCard && (
         <ShareableStatCard
@@ -29629,6 +29653,19 @@ const isInitialLoad = React.useRef(true);
         {visitedTabs.has("dashboard") && (
           <div style={{ display: screen === "dashboard" ? "block" : "none" }}>
             <Dashboard key={"dashboard" + workoutDoneToday + (userProfile?.programDay || 1)} profile={liveProfile} onStartWorkout={() => setScreen("workout")} onCompleteRestDay={handleCompleteRestDay} workoutDoneToday={workoutDoneToday} isInProgress={!!(userProfile?.workoutProgress?.date === new Date().toDateString())} onNavigate={navigate} onViewWeekly={() => setScreen("weekly")} reEntryMode={userProfile?.reEntryMode} reEntrySessions={userProfile?.reEntrySessions || 0} reEntryTarget={Math.round((userProfile?.frequency || 3) * 2)} wearableModifier={getWorkoutModifier(userProfile)} onWearableOverride={() => setUserProfile((prev: any) => ({ ...prev, wearableOverride: true }))} />
+            {/* Checks for any match logged against the current user that
+                still needs their confirmation - this is what makes the
+                head-to-head record trustworthy, so it runs automatically
+                every time the dashboard is visited rather than needing to
+                be found manually. The real entry point for LOGGING a
+                match lives in ActivityDetailView instead (a "Log Score"
+                button alongside Share/Sticker, shown only for
+                basketball/soccer/padel sessions) - not a separate
+                floating button, since basketball/soccer/padel already
+                flow through the real Track an Activity system. */}
+            {screen === "dashboard" && userProfile?.uid && (
+              <PendingMatchConfirm currentUid={userProfile.uid} onDismiss={() => {}} />
+            )}
           </div>
         )}
         {visitedTabs.has("progress") && (
@@ -29657,6 +29694,8 @@ const isInitialLoad = React.useRef(true);
       </>
     );
   }
+  if (screen === "log-match") return <LogMatchScreen buildingId={userProfile?.buildingId} currentUid={userProfile?.uid} onBack={() => setScreen("dashboard")} onLogged={(matchId) => { setScreen("dashboard"); }} />;
+
   if (screen === "preview" && previewDay?.isRest) {
     return <RestDayScreen onBack={() => { setPreviewDay(null); setScreen("weekly"); }} />;
   }
@@ -29907,3 +29946,457 @@ const isInitialLoad = React.useRef(true);
     </ErrorBoundary>
   );
 }
+// ── MatchGameCard - pickup-game result card (basketball / padel / soccer) ─
+// Built as its own component rather than reusing ShareableStatCard,
+// because that component's generic label/value stat grid treats every
+// stat equally - it can't give the score the real visual dominance a
+// match result needs. Reuses ShareableStatCard's real, proven
+// conventions (COLORS tokens, Inter font, card container styling, the
+// hero-stat glow treatment, the secondary-stat grid, the footer
+// branding, and the exact same html2canvas capture + Web Share API
+// fallback pattern - a visible download button, never a silent
+// auto-triggered download) rather than inventing new ones.
+const MatchGameCard = ({
+  sport,
+  myName,
+  opponentName,
+  myAvatar,
+  opponentAvatar,
+  myScore,
+  opponentScore,
+  caloriesBurned,
+  confirmed,
+  onClose,
+}: {
+  sport: "basketball" | "padel" | "soccer";
+  myName: string;
+  opponentName: string;
+  myAvatar?: string | null;
+  opponentAvatar?: string | null;
+  myScore: number;
+  opponentScore: number;
+  caloriesBurned?: number | null;
+  confirmed: boolean;
+  onClose: () => void;
+}) => {
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [fallbackDownloadUrl, setFallbackDownloadUrl] = useState<string | null>(null);
+
+  const isWin = myScore > opponentScore;
+  const isDraw = myScore === opponentScore;
+  const resultLabel = isDraw ? "DRAW" : isWin ? "W" : "L";
+  // Win gets the same bold accent glow the app already uses for a new
+  // PR - confident, bright, unmistakable. Loss (and a draw) stay quiet
+  // and muted on purpose, so the win state is the one that visually pops.
+  const resultColor = isWin ? COLORS.accent : COLORS.textSecondary;
+  const resultGlow = isWin ? `0 0 50px ${COLORS.accent}90` : "none";
+
+  const captureCard = async (): Promise<Blob | null> => {
+    if (!cardRef.current) return null;
+    const canvas = await html2canvas(cardRef.current, { scale: 2, backgroundColor: null });
+    return new Promise((resolve) => canvas.toBlob((blob: Blob | null) => resolve(blob), "image/png"));
+  };
+
+  const handleShare = async () => {
+    setSharing(true);
+    setShareError(null);
+    try {
+      const blob = await captureCard();
+      if (!blob) throw new Error("Could not generate image");
+      const file = new File([blob], "amenityfit-match.png", { type: "image/png" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "AmenityFit Match Result" });
+      } else {
+        const url = URL.createObjectURL(blob);
+        setFallbackDownloadUrl(url);
+      }
+    } catch (err) {
+      setShareError("Could not share right now. Try again.");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div
+        ref={cardRef}
+        style={{
+          width: 340, borderRadius: 28, overflow: "hidden", position: "relative",
+          background: `linear-gradient(160deg, ${COLORS.background} 0%, ${COLORS.card} 100%)`,
+          border: `1px solid ${COLORS.border}`,
+          boxShadow: `0 20px 60px rgba(0,0,0,0.5)`,
+          fontFamily: "'Inter', sans-serif",
+        }}
+      >
+        <div style={{
+          position: "absolute", top: -80, left: "50%", transform: "translateX(-50%)",
+          width: 280, height: 280, borderRadius: "50%",
+          background: `radial-gradient(circle, ${isWin ? COLORS.accent : COLORS.primary}35 0%, transparent 70%)`,
+          pointerEvents: "none",
+        }} />
+
+        <div style={{ position: "relative", padding: "28px 24px 4px", textAlign: "center" }}>
+          <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", margin: "0 0 4px" }}>{sport}</p>
+        </div>
+
+        {/* Hero: the score itself, the biggest thing on the card - this
+            is the whole reason the card exists. */}
+        <div style={{ position: "relative", textAlign: "center", padding: "4px 24px 4px" }}>
+          <span style={{
+            display: "inline-block", background: isWin ? COLORS.accent : "transparent",
+            border: isWin ? "none" : `1px solid ${COLORS.border}`,
+            color: isWin ? "#0A0A0A" : COLORS.textSecondary,
+            fontSize: 11, fontWeight: 900, letterSpacing: 1, padding: "4px 12px", borderRadius: 20, marginBottom: 10,
+          }}>{resultLabel}</span>
+          <h1 style={{
+            color: COLORS.white, fontSize: 56, fontWeight: 900, margin: 0, lineHeight: 1,
+            letterSpacing: -1.5, textShadow: resultGlow,
+          }}>{myScore}-{opponentScore}</h1>
+        </div>
+
+        {/* Both players, side by side - a duel layout, not a stacked list. */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, padding: "18px 24px 8px" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flex: 1 }}>
+            {myAvatar
+              ? <img src={myAvatar} alt="" style={{ width: 44, height: 44, borderRadius: 22, objectFit: "cover", border: `2px solid ${resultColor}` }} />
+              : <div style={{ width: 44, height: 44, borderRadius: 22, background: `${COLORS.white}10`, border: `2px solid ${resultColor}`, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.white, fontSize: 15, fontWeight: 800 }}>{myName.charAt(0).toUpperCase()}</div>}
+            <p style={{ color: COLORS.white, fontSize: 13, fontWeight: 700, margin: 0, maxWidth: 90, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{myName}</p>
+          </div>
+          <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, margin: 0 }}>VS</p>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flex: 1 }}>
+            {opponentAvatar
+              ? <img src={opponentAvatar} alt="" style={{ width: 44, height: 44, borderRadius: 22, objectFit: "cover", border: `1px solid ${COLORS.border}` }} />
+              : <div style={{ width: 44, height: 44, borderRadius: 22, background: `${COLORS.white}10`, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.white, fontSize: 15, fontWeight: 800 }}>{opponentName.charAt(0).toUpperCase()}</div>}
+            <p style={{ color: COLORS.white, fontSize: 13, fontWeight: 700, margin: 0, maxWidth: 90, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{opponentName}</p>
+          </div>
+        </div>
+
+        {/* Secondary stats - deliberately smaller and quieter than the
+            score, same rounded-box grid convention as every other card. */}
+        {caloriesBurned && (
+          <div style={{ padding: "16px 24px 8px", display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
+            {caloriesBurned && (
+              <div style={{ background: `${COLORS.white}08`, borderRadius: 14, padding: "12px 8px", textAlign: "center" }}>
+                <p style={{ color: COLORS.textSecondary, fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", margin: "0 0 4px" }}>Calories</p>
+                <p style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: 0 }}>{caloriesBurned}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Understated on purpose - it builds trust without competing
+            visually with the result itself. */}
+        {confirmed && (
+          <p style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: 600, textAlign: "center", margin: "8px 24px 0" }}>Confirmed by both players</p>
+        )}
+
+        <div style={{ position: "relative", padding: "16px 24px", marginTop: 12, borderTop: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <img src={amenityfitLogo} alt="" style={{ width: 20, height: 20, borderRadius: 6, objectFit: "contain" }} />
+          <span style={{ color: COLORS.white, fontSize: 13, fontWeight: 900, letterSpacing: 0.8 }}>AMENITYFIT</span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+        <button onClick={handleShare} disabled={sharing} style={{ background: COLORS.accent, color: "#0A0A0A", border: "none", borderRadius: 20, padding: "10px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+          {sharing ? "Preparing..." : "Share"}
+        </button>
+        <button onClick={onClose} style={{ background: "transparent", color: COLORS.textSecondary, border: `1px solid ${COLORS.border}`, borderRadius: 20, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          Close
+        </button>
+      </div>
+      {shareError && <p style={{ color: "#FF6B6B", fontSize: 12, marginTop: 8 }}>{shareError}</p>}
+      {fallbackDownloadUrl && (
+        <a href={fallbackDownloadUrl} download="amenityfit-match.png" style={{ color: COLORS.accent, fontSize: 13, fontWeight: 700, marginTop: 10, textDecoration: "underline" }}>
+          Download image
+        </a>
+      )}
+    </div>
+  );
+};
+// ── LogMatchScreen - pick sport, pick opponent, enter score ───────────────
+// Opponent selection is a real-user picker, not free text - confirmMatchGame
+// needs a real opponentUid to send the confirmation to, so this queries
+// other users in the same building (matching the buildingId field already
+// used everywhere else in the backend, e.g. residentsSnap queries).
+const MATCH_SPORTS_LIST: { id: "basketball" | "padel" | "soccer"; label: string }[] = [
+  { id: "basketball", label: "Basketball" },
+  { id: "padel", label: "Padel" },
+  { id: "soccer", label: "Soccer" },
+];
+
+const LogMatchScreen = ({
+  buildingId,
+  currentUid,
+  onBack,
+  onLogged,
+  presetSport,
+  presetCalories,
+}: {
+  buildingId: string;
+  currentUid: string;
+  onBack: () => void;
+  onLogged: (matchId: string) => void;
+  // Set when opened from a real tracked activity session - the sport is
+  // already known (from the session's own courtType), so the picker step
+  // is skipped entirely rather than asking again for something already
+  // captured.
+  presetSport?: "basketball" | "padel" | "soccer";
+  // Real tracked calories from the session, submitted as-is - never
+  // re-asked for here.
+  presetCalories?: number | null;
+}) => {
+  const [sport, setSport] = useState<"basketball" | "padel" | "soccer" | null>(presetSport || null);
+  const [residents, setResidents] = useState<{ id: string; name: string; avatar?: string | null }[]>([]);
+  const [loadingResidents, setLoadingResidents] = useState(true);
+  const [search, setSearch] = useState("");
+  const [opponentId, setOpponentId] = useState<string | null>(null);
+  const [myScore, setMyScore] = useState("");
+  const [opponentScore, setOpponentScore] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocs(query(collection(db, "users"), where("buildingId", "==", buildingId)));
+        if (cancelled) return;
+        const list = snap.docs
+          .filter((d) => d.id !== currentUid)
+          .map((d) => {
+            const data = d.data() as any;
+            return { id: d.id, name: data.name || data.displayName || "Resident", avatar: data.photoURL || null };
+          });
+        setResidents(list);
+      } catch (err) {
+        setSubmitError("Could not load residents. Try again.");
+      } finally {
+        if (!cancelled) setLoadingResidents(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [buildingId, currentUid]);
+
+  const filteredResidents = search.trim()
+    ? residents.filter((r) => r.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : residents;
+
+  const canSubmit = sport && opponentId && myScore !== "" && opponentScore !== "" && !submitting;
+
+  const handleSubmit = async () => {
+    if (!canSubmit || !sport || !opponentId) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const idToken = await getAuth().currentUser?.getIdToken();
+      if (!idToken) throw new Error("Not signed in.");
+      const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/logMatchGame", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idToken, sport, opponentUid: opponentId,
+          myScore: Number(myScore), opponentScore: Number(opponentScore),
+          caloriesBurned: typeof presetCalories === "number" ? presetCalories : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not log this match.");
+      onLogged(data.matchId);
+    } catch (err: any) {
+      setSubmitError(err.message || "Could not log this match. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", padding: "24px 20px 40px" }}>
+      <button onClick={onBack} style={{ background: "transparent", border: "none", color: COLORS.textSecondary, fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 20 }}>
+        ← Back
+      </button>
+      <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "0 0 24px" }}>Log a Match</h1>
+
+      {!presetSport && (
+        <>
+          <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", margin: "0 0 10px" }}>Sport</p>
+          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+            {MATCH_SPORTS_LIST.map((s) => (
+              <button key={s.id} onClick={() => setSport(s.id)} style={{
+                flex: 1, padding: "12px 8px", borderRadius: 14, border: `1px solid ${sport === s.id ? COLORS.accent : COLORS.border}`,
+                background: sport === s.id ? `${COLORS.accent}18` : COLORS.card,
+                color: sport === s.id ? COLORS.accent : COLORS.white, fontSize: 13, fontWeight: 700, cursor: "pointer",
+              }}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", margin: "0 0 10px" }}>Opponent</p>
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search residents..."
+        style={{ width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 14, marginBottom: 10, fontFamily: "'Inter', sans-serif" }}
+      />
+      <div style={{ maxHeight: 220, overflowY: "auto", marginBottom: 24 }}>
+        {loadingResidents ? (
+          <p style={{ color: COLORS.textSecondary, fontSize: 13 }}>Loading residents...</p>
+        ) : filteredResidents.length === 0 ? (
+          <p style={{ color: COLORS.textSecondary, fontSize: 13 }}>No residents found.</p>
+        ) : (
+          filteredResidents.map((r) => (
+            <button key={r.id} onClick={() => setOpponentId(r.id)} style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6,
+              borderRadius: 12, border: `1px solid ${opponentId === r.id ? COLORS.accent : COLORS.border}`,
+              background: opponentId === r.id ? `${COLORS.accent}18` : COLORS.card, cursor: "pointer", textAlign: "left",
+            }}>
+              {r.avatar
+                ? <img src={r.avatar} alt="" style={{ width: 32, height: 32, borderRadius: 16, objectFit: "cover" }} />
+                : <div style={{ width: 32, height: 32, borderRadius: 16, background: `${COLORS.white}10`, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.white, fontSize: 13, fontWeight: 800 }}>{r.name.charAt(0).toUpperCase()}</div>}
+              <span style={{ color: COLORS.white, fontSize: 14, fontWeight: 600 }}>{r.name}</span>
+            </button>
+          ))
+        )}
+      </div>
+
+      <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", margin: "0 0 10px" }}>Score</p>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
+        <input
+          type="number" inputMode="numeric" value={myScore} onChange={(e) => setMyScore(e.target.value)}
+          placeholder="You" style={{ flex: 1, boxSizing: "border-box", padding: "12px 14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 16, fontWeight: 800, textAlign: "center", fontFamily: "'Inter', sans-serif" }}
+        />
+        <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 700 }}>-</span>
+        <input
+          type="number" inputMode="numeric" value={opponentScore} onChange={(e) => setOpponentScore(e.target.value)}
+          placeholder="Them" style={{ flex: 1, boxSizing: "border-box", padding: "12px 14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 16, fontWeight: 800, textAlign: "center", fontFamily: "'Inter', sans-serif" }}
+        />
+      </div>
+
+      {submitError && <p style={{ color: "#FF6B6B", fontSize: 13, marginBottom: 14 }}>{submitError}</p>}
+
+      <button onClick={handleSubmit} disabled={!canSubmit} style={{
+        width: "100%", padding: "16px", borderRadius: 20, border: "none",
+        background: canSubmit ? COLORS.accent : COLORS.card, color: canSubmit ? "#0A0A0A" : COLORS.textSecondary,
+        fontSize: 15, fontWeight: 800, cursor: canSubmit ? "pointer" : "not-allowed",
+      }}>
+        {submitting ? "Logging..." : "Log Match"}
+      </button>
+    </div>
+  );
+};
+// ── PendingMatchConfirm - the actual trust mechanic ────────────────────────
+// Checks for any match logged against the current user that's still
+// pending their confirmation. Shows a real prompt with the claimed
+// result; only once they tap Confirm does confirmMatchGame get called
+// and the match becomes real (counts toward the head-to-head record,
+// becomes shareable). If they never confirm, it just stays pending
+// forever - no dispute system needed, exactly as designed.
+const PendingMatchConfirm = ({
+  currentUid,
+  onDismiss,
+}: {
+  currentUid: string;
+  onDismiss: () => void;
+}) => {
+  const [pendingMatch, setPendingMatch] = useState<any | null>(null);
+  const [loggerName, setLoggerName] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [confirmedResult, setConfirmedResult] = useState<any | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocs(query(
+          collection(db, "matchGames"),
+          where("player2Id", "==", currentUid),
+          where("status", "==", "pending"),
+        ));
+        if (cancelled) return;
+        if (snap.docs.length === 0) { setLoading(false); return; }
+        const matchDoc = snap.docs[0];
+        const match = { id: matchDoc.id, ...matchDoc.data() } as any;
+        setPendingMatch(match);
+        const loggerDoc = await getDocFromServer(doc(db, "users", match.loggedBy));
+        if (!cancelled && loggerDoc.exists()) {
+          const data = loggerDoc.data() as any;
+          setLoggerName(data.name || data.displayName || "A player");
+        }
+      } catch (err) {
+        // Silent - a pending-match prompt failing to load isn't worth
+        // surfacing an error screen over, it'll just show again next visit.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentUid]);
+
+  const handleConfirm = async () => {
+    if (!pendingMatch) return;
+    setConfirming(true);
+    setConfirmError(null);
+    try {
+      const idToken = await getAuth().currentUser?.getIdToken();
+      if (!idToken) throw new Error("Not signed in.");
+      const res = await fetch("https://us-central1-amenityfit-31276.cloudfunctions.net/confirmMatchGame", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken, matchId: pendingMatch.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not confirm this match.");
+      setConfirmedResult(pendingMatch);
+    } catch (err: any) {
+      setConfirmError(err.message || "Could not confirm this match. Try again.");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  if (loading || !pendingMatch) return null;
+
+  if (confirmedResult) {
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+        <MatchGameCard
+          sport={confirmedResult.sport}
+          myName="You"
+          opponentName={loggerName}
+          myScore={confirmedResult.score2}
+          opponentScore={confirmedResult.score1}
+          caloriesBurned={confirmedResult.caloriesBurned}
+          confirmed={true}
+          onClose={onDismiss}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+      <div style={{ width: 320, background: COLORS.card, borderRadius: 24, border: `1px solid ${COLORS.border}`, padding: "28px 24px", fontFamily: "'Inter', sans-serif", textAlign: "center" }}>
+        <p style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", margin: "0 0 12px" }}>{pendingMatch.sport}</p>
+        <h2 style={{ color: COLORS.white, fontSize: 18, fontWeight: 800, margin: "0 0 8px" }}>{loggerName} logged a game against you</h2>
+        <p style={{ color: COLORS.white, fontSize: 32, fontWeight: 900, margin: "12px 0" }}>{pendingMatch.score1}-{pendingMatch.score2}</p>
+        <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 24px" }}>Confirm this result to make it count.</p>
+        {confirmError && <p style={{ color: "#FF6B6B", fontSize: 12, marginBottom: 14 }}>{confirmError}</p>}
+        <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+          <button onClick={handleConfirm} disabled={confirming} style={{ flex: 1, padding: "12px", borderRadius: 20, border: "none", background: COLORS.accent, color: "#0A0A0A", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+            {confirming ? "Confirming..." : "Confirm"}
+          </button>
+          <button onClick={onDismiss} style={{ flex: 1, padding: "12px", borderRadius: 20, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textSecondary, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            Later
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
