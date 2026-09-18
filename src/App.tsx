@@ -30189,8 +30189,10 @@ const LogMatchScreen = ({
             return { id: d.id, name: data.name || data.displayName || "Resident", avatar: data.photoURL || null };
           });
         setResidents(list);
-      } catch (err) {
-        setSubmitError("Could not load residents. Try again.");
+      } catch (err: any) {
+        // TEMPORARY - showing the real error to diagnose, revert to a
+        // plain message once the actual cause is confirmed.
+        setSubmitError(`Could not load residents. Real error: ${err?.code || "no code"} - ${err?.message || String(err)}`);
       } finally {
         if (!cancelled) setLoadingResidents(false);
       }
