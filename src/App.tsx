@@ -19306,6 +19306,7 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
   };
   const [showShareCard, setShowShareCard] = useState(false);
   const [showStickerMode, setShowStickerMode] = useState(false);
+  const [showLogScore, setShowLogScore] = useState(false);
   // Progressive stats reveal on the live tracking screen: starts minimal
   // (just Time, the single most important number mid-activity), tapping
   // expands to show Distance/Pace too. Defaults to expanded for indoor
@@ -20074,6 +20075,14 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         )}
 
         <div style={{ padding: "0 24px 40px", marginTop: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* Log Score - the real entry point, right at the actual moment
+              an activity finishes, not buried later in history. Only for
+              basketball/soccer/padel (not pickleball - not in scope). */}
+          {(activityMeta?.courtType === "basketball" || activityMeta?.courtType === "soccer" || activityMeta?.courtType === "padel") && (
+            <button onClick={() => setShowLogScore(true)} style={{ width: "100%", padding: "16px", borderRadius: 16, border: "none", background: COLORS.accent, color: "#0A0A0A", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
+              Log Score
+            </button>
+          )}
           <div style={{ display: "flex", gap: 12 }}>
             <button onClick={() => setShowShareCard(true)} style={{ flex: 1, padding: "16px", borderRadius: 16, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
               Share
@@ -20114,6 +20123,19 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
             ]}
             onClose={() => setShowShareCard(false)}
           />
+        )}
+
+        {showLogScore && (
+          <div style={{ position: "fixed", inset: 0, background: COLORS.background, zIndex: 900 }}>
+            <LogMatchScreen
+              buildingId={profile?.buildingId}
+              currentUid={profile?.uid}
+              presetSport={activityMeta?.courtType as "basketball" | "soccer" | "padel"}
+              presetCalories={finalCalories || null}
+              onBack={() => setShowLogScore(false)}
+              onLogged={() => setShowLogScore(false)}
+            />
+          </div>
         )}
 
         {showStickerMode && (
