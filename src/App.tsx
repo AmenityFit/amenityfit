@@ -16702,8 +16702,8 @@ const ActivityDetailView = ({ session, sessionHistory, profile, onClose }: { ses
         </div>
       )}
       {courtType && mapUrl && (
-        <div style={{ margin: "16px 24px 0", borderRadius: 20, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
-          <img src={mapUrl} alt="" style={{ width: "100%", display: "block" }} />
+        <div style={{ margin: "16px 24px 0", borderRadius: 20, overflow: "hidden", border: `1px solid ${COLORS.border}`, aspectRatio: "16/9" }}>
+          <img src={mapUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} crossOrigin="anonymous" />
         </div>
       )}
 
@@ -19958,8 +19958,8 @@ const CardioTrackingScreen = ({ profile, onBack, linkedWorkoutId, goalDurationSe
         </div>
 
         {mapUrl && (
-          <div style={{ margin: "16px 24px 0", borderRadius: 20, overflow: "hidden", border: `1px solid ${COLORS.border}`, boxShadow: "0 8px 30px rgba(0,0,0,0.3)" }}>
-            <img src={mapUrl} alt="Route map" decoding="sync" loading="eager" style={{ width: "100%", display: "block" }} />
+          <div style={{ margin: "16px 24px 0", borderRadius: 20, overflow: "hidden", border: `1px solid ${COLORS.border}`, boxShadow: "0 8px 30px rgba(0,0,0,0.3)", aspectRatio: "16/9" }}>
+            <img src={mapUrl} alt="Route map" decoding="sync" loading="eager" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} crossOrigin="anonymous" />
           </div>
         )}
 
@@ -20866,8 +20866,8 @@ const ShareableStatCard = ({
         <h2 style={{ color: COLORS.white, fontSize: 17, fontWeight: 800, margin: "0 24px 20px", textAlign: "center", textTransform: "capitalize" }}>{title}</h2>
 
         {displayMapUrl && (
-          <div style={{ margin: "0 20px 8px", borderRadius: 16, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
-            <img src={displayMapUrl} alt="" style={{ width: "100%", display: "block" }} crossOrigin="anonymous" />
+          <div style={{ margin: "0 20px 8px", borderRadius: 16, overflow: "hidden", border: `1px solid ${COLORS.border}`, aspectRatio: "16/9" }}>
+            <img src={displayMapUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} crossOrigin="anonymous" />
           </div>
         )}
         {(outlineMapUrl || (locationLabel && !showLocation)) && (
@@ -20931,7 +20931,7 @@ const ShareableStatCard = ({
         <div ref={cardRef} style={{ width: 340, borderRadius: 28, overflow: "hidden", position: "relative", background: `linear-gradient(160deg, ${COLORS.background} 0%, ${COLORS.card} 100%)`, border: `1px solid ${COLORS.border}`, boxShadow: `0 20px 60px rgba(0,0,0,0.5)`, fontFamily: "'Inter', sans-serif" }}>
           {displayMapUrl ? (
             <div style={{ position: "relative", height: 220, background: COLORS.card, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              <img src={displayMapUrl} alt="" style={{ maxWidth: "100%", maxHeight: "100%", width: "auto", height: "auto", display: "block" }} crossOrigin="anonymous" />
+              <img src={displayMapUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} crossOrigin="anonymous" />
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.75) 100%)" }} />
               <div style={{ position: "absolute", bottom: 16, left: 20, right: 20 }}>
                 <p style={{ color: COLORS.white, fontSize: 15, fontWeight: 800, margin: "0 0 2px", textTransform: "capitalize", textShadow: "0 2px 8px rgba(0,0,0,0.6)" }}>{title}</p>
@@ -20983,8 +20983,8 @@ const ShareableStatCard = ({
             </div>
           </div>
           {displayMapUrl && (
-            <div style={{ margin: "16px 0 0", borderRadius: 14, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
-              <img src={displayMapUrl} alt="" style={{ width: "100%", display: "block" }} crossOrigin="anonymous" />
+            <div style={{ margin: "16px 0 0", borderRadius: 14, overflow: "hidden", border: `1px solid ${COLORS.border}`, aspectRatio: "16/9" }}>
+              <img src={displayMapUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} crossOrigin="anonymous" />
             </div>
           )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 18, paddingTop: 16, borderTop: `1px solid ${COLORS.border}` }}>
