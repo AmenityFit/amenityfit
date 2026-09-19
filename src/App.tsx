@@ -30256,7 +30256,7 @@ const LogMatchScreen = ({
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", padding: "24px 20px 40px" }}>
+    <div style={{ minHeight: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", padding: "calc(24px + env(safe-area-inset-top)) 20px 40px" }}>
       <button onClick={onBack} style={{ background: "transparent", border: "none", color: COLORS.textSecondary, fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 20 }}>
         ← Back
       </button>
