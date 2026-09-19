@@ -21225,14 +21225,16 @@ const StickerShareScreenInner = ({
             </div>
           </div>
           {routeMapUrl && (
-            <img
-              src={routeMapUrl}
-              alt=""
-              decoding="sync"
-              loading="eager"
-              crossOrigin="anonymous"
-              style={{ maxWidth: 200, maxHeight: 130, width: "auto", height: "auto", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
-            />
+            <div style={{ width: 200, height: 130, display: "flex", alignItems: "flex-start", justifyContent: "flex-start" }}>
+              <img
+                src={routeMapUrl}
+                alt=""
+                decoding="sync"
+                loading="eager"
+                crossOrigin="anonymous"
+                style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "left top", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
+              />
+            </div>
           )}
           {logoRow}
         </div>
@@ -21241,17 +21243,24 @@ const StickerShareScreenInner = ({
 
     // "Classic" - the original, unchanged design. Also the fallback if
     // "Full Combined" was somehow selected without real combined data.
+    // Real fix: this was the one location neither earlier pass ever
+    // reached - it still had the exact width:auto/height:auto+max
+    // pattern already confirmed broken elsewhere, and Classic is the
+    // default/most commonly selected tab, so this was very likely the
+    // actual real cause of the export cropping the whole time.
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
         {routeMapUrl && (
-          <img
-            src={routeMapUrl}
-            alt=""
-            decoding="sync"
-            loading="eager"
-            crossOrigin="anonymous"
-            style={{ maxWidth: 240, maxHeight: 160, width: "auto", height: "auto", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
-          />
+          <div style={{ width: 240, height: 160, display: "flex", alignItems: "flex-start", justifyContent: "flex-start" }}>
+            <img
+              src={routeMapUrl}
+              alt=""
+              decoding="sync"
+              loading="eager"
+              crossOrigin="anonymous"
+              style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "left top", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
+            />
+          </div>
         )}
         {titleRow}
         {visibleStats.map((s, i) => (
