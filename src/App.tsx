@@ -21152,14 +21152,26 @@ const StickerShareScreenInner = ({
       return (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
           {routeMapUrl && (
-            <img
-              src={routeMapUrl}
-              alt=""
-              decoding="sync"
-              loading="eager"
-              crossOrigin="anonymous"
-              style={{ maxWidth: 300, maxHeight: 220, width: "auto", height: "auto", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
-            />
+            // Real fix for a confirmed export bug found via real-device
+            // testing: width:auto/height:auto with maxWidth/maxHeight
+            // asks the browser to scale the whole image down to fit -
+            // html2canvas is known to mishandle exactly this combination,
+            // capturing the image at its native size and clipping to the
+            // smaller box instead of actually scaling it, which showed up
+            // as the court cropped to its top-left corner on the actual
+            // exported sticker despite looking correct live. A fixed-size
+            // container with object-fit:contain removes that ambiguity -
+            // it's a well-established reliable pattern with this tool.
+            <div style={{ width: 300, height: 220, display: "flex", alignItems: "flex-start", justifyContent: "flex-start" }}>
+              <img
+                src={routeMapUrl}
+                alt=""
+                decoding="sync"
+                loading="eager"
+                crossOrigin="anonymous"
+                style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "left top", borderRadius: 12, filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
+              />
+            </div>
           )}
           {titleRow}
           {effectiveStats.length > 0 && (
