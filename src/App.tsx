@@ -20740,6 +20740,7 @@ const ShareableStatCard = ({
       // sharing at all, so this never dead-ends with no result.
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: "My AmenityFit Stats" });
+        showShareConfirmation();
       } else {
         // Real fix for a genuine bug found via real-device testing: an
         // auto-triggered download here can fail completely silently in
@@ -21500,6 +21501,7 @@ const StickerShareScreenInner = ({
       const file = new File([blob], "amenityfit-sticker.png", { type: "image/png" });
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: "My AmenityFit Stats" });
+        showShareConfirmation();
       } else {
         // Same visible-fallback fix as ShareableStatCard - see its own
         // comment for the full explanation.
@@ -21539,6 +21541,7 @@ const StickerShareScreenInner = ({
       const file = new File([blob], "amenityfit-sticker.png", { type: "image/png" });
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: "My AmenityFit Stats" });
+        showShareConfirmation();
       } else {
         // Same visible-fallback fix as ShareableStatCard - see its own
         // comment for the full explanation.
@@ -30043,6 +30046,7 @@ const MatchGameCard = ({
       const file = new File([blob], "amenityfit-match.png", { type: "image/png" });
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: "AmenityFit Match Result" });
+        showShareConfirmation();
       } else {
         const url = URL.createObjectURL(blob);
         setFallbackDownloadUrl(url);
@@ -30518,6 +30522,7 @@ const MatchGameStickerInner = ({
       const file = new File([blob], "amenityfit-match-sticker.png", { type: "image/png" });
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: "AmenityFit Match Result" });
+        showShareConfirmation();
       } else {
         const url = URL.createObjectURL(blob);
         setFallbackDownloadUrl(url);
@@ -30570,3 +30575,23 @@ const MatchGameStickerInner = ({
 
 const MatchGameSticker = (props: React.ComponentProps<typeof MatchGameStickerInner>) =>
   createPortal(<MatchGameStickerInner {...props} />, document.body);
+// ── showShareConfirmation - a real, visible signal that a share/save
+// action actually completed, instead of nothing happening at all. Plain
+// DOM manipulation on purpose, not React state - this needs to work
+// identically from five separate components without adding five new
+// pieces of state, each needing its own safely-unique anchor to declare.
+// Honest about what it confirms: that the OS share sheet was completed
+// without being cancelled - the web app has no way to know which
+// specific destination the person chose there, so this says "Shared",
+// not "Saved to Photos", since the app genuinely can't promise that.
+function showShareConfirmation() {
+  const el = document.createElement("div");
+  el.textContent = "Shared";
+  el.style.cssText = "position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,0.95);color:#FFFFFF;padding:12px 24px;border-radius:20px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;z-index:99999;box-shadow:0 8px 24px rgba(0,0,0,0.4);pointer-events:none;opacity:0;transition:opacity 0.2s ease;";
+  document.body.appendChild(el);
+  requestAnimationFrame(() => { el.style.opacity = "1"; });
+  setTimeout(() => {
+    el.style.opacity = "0";
+    setTimeout(() => el.remove(), 250);
+  }, 2000);
+}
