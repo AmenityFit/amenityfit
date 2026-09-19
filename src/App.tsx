@@ -30311,12 +30311,12 @@ const LogMatchScreen = ({
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <input
           type="number" inputMode="numeric" value={myScore} onChange={(e) => setMyScore(e.target.value)}
-          placeholder="You" style={{ flex: 1, boxSizing: "border-box", padding: "12px 14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 16, fontWeight: 800, textAlign: "center", fontFamily: "'Inter', sans-serif" }}
+          placeholder="You" style={{ flex: 1, minWidth: 0, width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 16, fontWeight: 800, textAlign: "center", fontFamily: "'Inter', sans-serif" }}
         />
-        <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 700 }}>-</span>
+        <span style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: 700, flexShrink: 0 }}>-</span>
         <input
           type="number" inputMode="numeric" value={opponentScore} onChange={(e) => setOpponentScore(e.target.value)}
-          placeholder="Them" style={{ flex: 1, boxSizing: "border-box", padding: "12px 14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 16, fontWeight: 800, textAlign: "center", fontFamily: "'Inter', sans-serif" }}
+          placeholder="Them" style={{ flex: 1, minWidth: 0, width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 14, border: `1px solid ${COLORS.border}`, background: COLORS.card, color: COLORS.white, fontSize: 16, fontWeight: 800, textAlign: "center", fontFamily: "'Inter', sans-serif" }}
         />
       </div>
 
