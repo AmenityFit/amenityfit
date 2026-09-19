@@ -30257,7 +30257,7 @@ const LogMatchScreen = ({
 
   return (
     <div style={{ minHeight: "100vh", background: COLORS.background, fontFamily: "'Inter', sans-serif", padding: "calc(24px + env(safe-area-inset-top)) 20px 40px" }}>
-      <button onClick={onBack} style={{ background: "transparent", border: "none", color: COLORS.textSecondary, fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 20 }}>
+      <button onClick={onBack} style={{ display: "flex", alignSelf: "flex-start", alignItems: "center", gap: 6, background: "transparent", border: "none", color: COLORS.textSecondary, fontSize: 16, fontWeight: 700, cursor: "pointer", marginBottom: 20, padding: "8px 0", textAlign: "left" }}>
         ← Back
       </button>
       <h1 style={{ color: COLORS.white, fontSize: 24, fontWeight: 900, margin: "0 0 24px" }}>Log a Match</h1>
